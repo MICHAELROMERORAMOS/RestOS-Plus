@@ -1,0 +1,56 @@
+export const ROLE_PRESETS = [
+  {
+    code: 'owner',
+    name: 'Owner / Super Admin',
+    icon: '👑',
+    description: 'Control total del restaurante, configuración, usuarios, ventas e inventario.',
+    permissions: '*',
+  },
+  {
+    code: 'manager',
+    name: 'Manager / Supervisor',
+    icon: '🧭',
+    description: 'Operación diaria, caja, incidencias, personal operativo y reportes.',
+    permissions: [
+      'dashboard.view', 'tables.view', 'tables.manage', 'orders.view', 'orders.create', 'orders.update', 'orders.cancel',
+      'kitchen.view', 'kitchen.update', 'bar.view', 'bar.update', 'payments.view', 'payments.create', 'payments.refund',
+      'products.view', 'products.manage', 'customers.view', 'customers.manage', 'reservations.view', 'reservations.manage',
+      'inventory.view', 'reports.view', 'display.view', 'display.manage', 'staff.view', 'settings.view',
+    ],
+  },
+  {
+    code: 'waiter',
+    name: 'Waiter / Mesero',
+    icon: '🧾',
+    description: 'Mesas, pedidos, comandas y servicio al cliente.',
+    permissions: ['dashboard.view', 'tables.view', 'orders.view', 'orders.create', 'orders.update', 'products.view'],
+  },
+  {
+    code: 'cashier',
+    name: 'Cashier / Caja',
+    icon: '💳',
+    description: 'Cobros, pagos parciales, cierre de cuentas y consulta de pedidos.',
+    permissions: ['dashboard.view', 'tables.view', 'orders.view', 'payments.view', 'payments.create', 'products.view', 'customers.view'],
+  },
+  {
+    code: 'kitchen',
+    name: 'Kitchen / Cocina',
+    icon: '🍳',
+    description: 'KDS de cocina y estados de preparación.',
+    permissions: ['orders.view', 'products.view', 'kitchen.view', 'kitchen.update'],
+  },
+  {
+    code: 'bar',
+    name: 'Bar',
+    icon: '🍸',
+    description: 'Comandas asignadas a barra y estados de preparación.',
+    permissions: ['orders.view', 'products.view', 'bar.view', 'bar.update'],
+  },
+  {
+    code: 'inventory',
+    name: 'Inventory / Store',
+    icon: '📦',
+    description: 'Stock, movimientos, recetas, proveedores y compras.',
+    permissions: ['products.view', 'inventory.view', 'inventory.manage'],
+  },
+]
