@@ -1,0 +1,2 @@
+import React from 'react'
+export default function ReservationsPage() { return <section className="view active"><div className="hero"><div><h2>Reservas</h2><p>Agenda, número de personas, mesa y estado de confirmación.</p></div><button className="btn primary">＋ Nueva reserva</button></div><div className="card placeholder"><div><div className="icon">📅</div><h3>Agenda de reservas</h3><p>Se conectará directamente con el plano de mesas para bloquear disponibilidad y registrar confirmaciones, cancelaciones y no-shows.</p></div></div></section> }
