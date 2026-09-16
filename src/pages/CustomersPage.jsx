@@ -1,0 +1,2 @@
+import React from 'react'
+export default function CustomersPage() { return <section className="view active"><div className="hero"><div><h2>Clientes</h2><p>Registro, historial, preferencias y fidelización.</p></div><button className="btn primary">＋ Registrar cliente</button></div><div className="card placeholder"><div><div className="icon">👥</div><h3>Base de clientes</h3><p>Esta vista quedará restringida por permisos. Conectará búsquedas, historial de visitas, gasto acumulado, preferencias y consentimiento de datos.</p></div></div></section> }
