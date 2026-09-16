@@ -1,5 +1,7 @@
 export const createInitialDemoState = () => ({
-  tables: Array.from({ length: 12 }, (_, index) => ({ id: index + 1, status: 'free' })),
+  zones: [],
+  tables: [],
+  reservations: [],
   orders: [],
   sales: 0,
   activity: ['Sistema iniciado en modo desarrollo'],
