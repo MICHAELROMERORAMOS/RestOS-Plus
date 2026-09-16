@@ -10,28 +10,59 @@ const roundStatus = (round) => {
   return 'ENVIADA'
 }
 
+const availabilityLabel = {
+  free: 'LIBRE',
+  reserved: 'RESERVADA',
+  occupied: 'OCUPADA',
+  unavailable: 'NO DISPONIBLE',
+}
+
+const availabilityIcon = {
+  free: '🟢',
+  reserved: '🟡',
+  occupied: '🔴',
+  unavailable: '⚫',
+}
+
 export default function OrderPage({ onNavigate }) {
   const restaurant = useRestaurant()
   const {
     products, orderMode, currentTableId, currentOrder, draft, pager, setPager, setOrderMode,
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft, voidSentItem,
     markRoundDelivered, transferCurrentTable, joinTable, state,
+    tableLabel: getTableLabel, getTableTransferStatus,
   } = restaurant
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
   const [noteLine, setNoteLine] = useState(null)
   const [noteText, setNoteText] = useState('')
+  const [tableAction, setTableAction] = useState(null)
+  const [targetZoneId, setTargetZoneId] = useState('')
+  const [targetTableId, setTargetTableId] = useState('')
 
   const filteredProducts = useMemo(() => products.filter((product) => (
     (category === 'all' || product.category === category)
     && product.name.toLowerCase().includes(search.toLowerCase())
   )), [products, category, search])
 
+  const activeZones = useMemo(
+    () => state.zones.filter((zone) => zone.active !== false).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    [state.zones],
+  )
+
+  const targetTables = useMemo(() => state.tables.filter((table) => (
+    table.active !== false
+    && table.zoneId === targetZoneId
+    && table.id !== currentTableId
+    && !(currentOrder?.tableIds || []).includes(table.id)
+  )), [state.tables, targetZoneId, currentTableId, currentOrder])
+
   const draftTotal = draft.reduce((sum, line) => sum + line.price * line.quantity, 0)
   const accountTotal = (currentOrder ? orderTotal(currentOrder) : 0) + draftTotal
-  const tableLabel = currentOrder?.tableIds?.length
-    ? `Mesa ${currentOrder.tableIds.join(' + ')}`
-    : currentTableId ? `Mesa ${currentTableId}` : 'Mesa —'
+  const currentTableLabel = currentTableId ? getTableLabel(currentTableId) : 'Mesa —'
+  const accountTableLabel = currentOrder?.tableIds?.length
+    ? currentOrder.tableIds.map((id) => getTableLabel(id)).join(' + ')
+    : currentTableLabel
 
   function handleSend() {
     const result = sendDraft({ prepaid: false })
@@ -44,25 +75,44 @@ export default function OrderPage({ onNavigate }) {
     onNavigate('kitchen')
   }
 
-  function transferTable() {
-    const destination = window.prompt('Mover la cuenta a la mesa número:')
-    if (!destination) return
-    const result = transferCurrentTable(destination)
-    if (!result.ok) window.alert(result.message)
+  function openTableSelector(action) {
+    if (!currentTableId) return window.alert('Selecciona primero una mesa de origen.')
+    if (action === 'join' && !currentOrder) return window.alert('Abre primero una cuenta antes de unir otra mesa.')
+    setTableAction(action)
+    setTargetZoneId('')
+    setTargetTableId('')
   }
 
-  function joinAnotherTable() {
-    const destination = window.prompt('Número de la mesa libre que quieres unir a esta cuenta:')
-    if (!destination) return
-    const result = joinTable(destination)
-    if (!result.ok) window.alert(result.message)
+  function closeTableSelector() {
+    setTableAction(null)
+    setTargetZoneId('')
+    setTargetTableId('')
+  }
+
+  function confirmTableAction() {
+    if (!targetZoneId || !targetTableId) return window.alert('Selecciona el área y la mesa destino.')
+    const status = getTableTransferStatus(targetTableId)
+    if (status === 'occupied') return window.alert('Esa mesa está ocupada y no puede seleccionarse.')
+    if (status === 'unavailable') return window.alert('Esa mesa no está disponible.')
+
+    if (status === 'reserved') {
+      const accepted = window.confirm('La mesa seleccionada está RESERVADA. ¿Quieres usarla de todas formas?')
+      if (!accepted) return
+    }
+
+    const result = tableAction === 'join'
+      ? joinTable(targetTableId)
+      : transferCurrentTable(targetTableId)
+
+    if (!result.ok) return window.alert(result.message)
+    closeTableSelector()
   }
 
   return (
     <section className="view active">
       <div className="hero">
         <div>
-          <h2>{orderMode === 'quick' ? 'Servicio rápido · Prepago' : currentTableId ? `${currentOrder ? 'Continuar cuenta' : 'Abrir cuenta'} · Mesa ${currentTableId}` : 'Toma de pedido'}</h2>
+          <h2>{orderMode === 'quick' ? 'Servicio rápido · Prepago' : currentTableId ? `${currentOrder ? 'Continuar cuenta' : 'Abrir cuenta'} · ${currentTableLabel}` : 'Toma de pedido'}</h2>
           <p>Una cuenta puede tener varias comandas. Solo los productos nuevos se envían en cada ronda.</p>
         </div>
       </div>
@@ -77,9 +127,9 @@ export default function OrderPage({ onNavigate }) {
           <option value="all">Todas las categorías</option><option>Comida</option><option>Bebidas</option><option>Postres</option>
         </select>
         <input value={search} placeholder="Buscar producto…" onChange={(event) => setSearch(event.target.value)} />
-        {orderMode === 'table' && <button className="btn" onClick={transferTable}>⇄ Cambiar mesa</button>}
+        {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
         {orderMode === 'table' && <button className="btn" onClick={() => onNavigate('cashier')}>✂ Dividir / pago parcial</button>}
-        {orderMode === 'table' && <button className="btn" onClick={joinAnotherTable}>⊕ Unir mesa</button>}
+        {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
       </div>
 
       <div className="order-layout">
@@ -97,7 +147,7 @@ export default function OrderPage({ onNavigate }) {
         </div>
 
         <div className="card order-cart">
-          <div className="section-title"><h3>{orderMode === 'quick' ? 'Nueva orden' : 'Cuenta abierta'}</h3><span className="badge">{orderMode === 'quick' ? 'Prepago' : tableLabel}</span></div>
+          <div className="section-title"><h3>{orderMode === 'quick' ? 'Nueva orden' : 'Cuenta abierta'}</h3><span className="badge">{orderMode === 'quick' ? 'Prepago' : accountTableLabel}</span></div>
           {orderMode === 'quick' && (
             <div className="quickpay"><b>Servicio rápido</b><input value={pager} onChange={(event) => setPager(event.target.value)} placeholder="Pager / turno (opcional)" /></div>
           )}
@@ -158,6 +208,42 @@ export default function OrderPage({ onNavigate }) {
             <p className="muted">Ej.: sin cebolla, término medio, extra queso.</p>
             <textarea value={noteText} onChange={(event) => setNoteText(event.target.value)} />
             <button className="btn primary full" onClick={() => { updateDraftNote(noteLine.draftId, noteText); setNoteLine(null) }}>Guardar nota</button>
+          </div>
+        </div>
+      )}
+
+      {tableAction && (
+        <div className="modal open">
+          <div className="modal-card">
+            <div className="section-title">
+              <div><h3>{tableAction === 'join' ? 'Unir otra mesa' : 'Cambiar de mesa'}</h3><p className="muted">Origen: {currentTableLabel}</p></div>
+              <button className="btn" onClick={closeTableSelector}>×</button>
+            </div>
+
+            <div className="settings-form">
+              <label>
+                <span>1. Salón / área destino</span>
+                <select value={targetZoneId} onChange={(event) => { setTargetZoneId(event.target.value); setTargetTableId('') }}>
+                  <option value="">Selecciona un área</option>
+                  {activeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+                </select>
+              </label>
+
+              <label>
+                <span>2. Mesa destino</span>
+                <select value={targetTableId} disabled={!targetZoneId} onChange={(event) => setTargetTableId(event.target.value)}>
+                  <option value="">Selecciona una mesa</option>
+                  {targetTables.map((table) => {
+                    const status = getTableTransferStatus(table.id)
+                    return <option key={table.id} value={table.id} disabled={status === 'occupied' || status === 'unavailable'}>{availabilityIcon[status]} {table.name} — {availabilityLabel[status]}</option>
+                  })}
+                </select>
+              </label>
+            </div>
+
+            {targetZoneId && !targetTables.length && <div className="empty-inline">No hay otras mesas activas en esta área.</div>}
+            <div className="notice">🟢 Libre: seleccionable · 🟡 Reservada: seleccionable con confirmación · 🔴 Ocupada: visible pero bloqueada</div>
+            <button className="btn primary full" disabled={!targetTableId} onClick={confirmTableAction}>{tableAction === 'join' ? 'Unir mesa seleccionada' : 'Confirmar cambio de mesa'}</button>
           </div>
         </div>
       )}
