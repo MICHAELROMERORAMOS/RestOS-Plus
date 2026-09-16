@@ -3,8 +3,16 @@ import { DEMO_PRODUCTS } from '../data/demoProducts.js'
 import { createInitialDemoState } from '../data/demoState.js'
 
 const RestaurantContext = createContext(null)
-const STORAGE_KEY = 'restos-plus-demo-state-v2'
-const LEGACY_STORAGE_KEY = 'restos-demo'
+const STORAGE_KEY = 'restos-plus-demo-state-v3'
+const OLD_STORAGE_KEYS = ['restos-plus-demo-state-v2', 'restos-demo']
+
+function cleanName(value) {
+  return String(value || '').trim()
+}
+
+function sameName(left, right) {
+  return cleanName(left).localeCompare(cleanName(right), undefined, { sensitivity: 'accent' }) === 0
+}
 
 function makeId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -17,7 +25,22 @@ function normalizeStoredState(raw) {
   return {
     ...initial,
     ...raw,
-    tables: Array.isArray(raw.tables) && raw.tables.length ? raw.tables : initial.tables,
+    zones: Array.isArray(raw.zones) ? raw.zones.map((zone, index) => ({
+      id: zone.id || makeId(),
+      name: cleanName(zone.name),
+      displayOrder: zone.displayOrder ?? index,
+      active: zone.active !== false,
+    })) : initial.zones,
+    tables: Array.isArray(raw.tables) ? raw.tables.map((table) => ({
+      ...table,
+      id: table.id || makeId(),
+      name: cleanName(table.name || table.code),
+      zoneId: table.zoneId || null,
+      capacity: Number(table.capacity || 2),
+      active: table.active !== false,
+      status: table.status || 'free',
+    })) : initial.tables,
+    reservations: Array.isArray(raw.reservations) ? raw.reservations : initial.reservations,
     orders: (raw.orders || []).map((order) => ({
       ...order,
       tableIds: order.tableIds || (order.table ? [order.table] : []),
@@ -45,8 +68,6 @@ function loadInitialState() {
   try {
     const current = localStorage.getItem(STORAGE_KEY)
     if (current) return normalizeStoredState(JSON.parse(current))
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (legacy) return normalizeStoredState(JSON.parse(legacy))
   } catch {
     // Corrupted demo data should never prevent the app from starting.
   }
@@ -109,6 +130,140 @@ export function RestaurantProvider({ children }) {
     [state.orders, currentOrderId],
   )
 
+  const tableLabel = useCallback((tableId, source = state) => {
+    const table = source.tables.find((item) => item.id === tableId)
+    if (!table) return 'Mesa eliminada'
+    const zone = source.zones.find((item) => item.id === table.zoneId)
+    return zone ? `${zone.name} · ${table.name}` : table.name
+  }, [state])
+
+  const reservationForTable = useCallback((tableId, source = state) => (
+    (source.reservations || []).find((reservation) => (
+      reservation.tableId === tableId
+      && ['pending', 'confirmed'].includes(reservation.status)
+    )) || null
+  ), [state])
+
+  const getTableTransferStatus = useCallback((tableId, source = state) => {
+    const table = source.tables.find((item) => item.id === tableId)
+    if (!table || table.active === false) return 'unavailable'
+    if (openOrderForTable(tableId, source)) return 'occupied'
+    if (reservationForTable(tableId, source)) return 'reserved'
+    return 'free'
+  }, [state, openOrderForTable, reservationForTable])
+
+  const getTableVisualStatus = useCallback((tableId, source = state) => {
+    const table = source.tables.find((item) => item.id === tableId)
+    if (!table || table.active === false) return 'unavailable'
+    if (openOrderForTable(tableId, source)) {
+      return ['ready', 'pay'].includes(table.status) ? table.status : 'occupied'
+    }
+    if (reservationForTable(tableId, source)) return 'reserved'
+    return 'free'
+  }, [state, openOrderForTable, reservationForTable])
+
+  const addZone = useCallback((name) => {
+    const cleaned = cleanName(name)
+    if (!cleaned) return { ok: false, message: 'Escribe un nombre para el salón o área.' }
+    const duplicate = state.zones.some((zone) => zone.active !== false && sameName(zone.name, cleaned))
+    if (duplicate) return { ok: false, message: 'Ya existe un salón o área con ese nombre.' }
+
+    const zone = { id: makeId(), name: cleaned, displayOrder: state.zones.length, active: true }
+    updateState((previous) => ({ ...previous, zones: [...previous.zones, zone] }))
+    return { ok: true, zone }
+  }, [state.zones, updateState])
+
+  const updateZone = useCallback((zoneId, name) => {
+    const cleaned = cleanName(name)
+    if (!cleaned) return { ok: false, message: 'El nombre del salón o área no puede quedar vacío.' }
+    const duplicate = state.zones.some((zone) => (
+      zone.id !== zoneId && zone.active !== false && sameName(zone.name, cleaned)
+    ))
+    if (duplicate) return { ok: false, message: 'Ya existe un salón o área con ese nombre.' }
+
+    updateState((previous) => ({
+      ...previous,
+      zones: previous.zones.map((zone) => zone.id === zoneId ? { ...zone, name: cleaned } : zone),
+    }))
+    return { ok: true }
+  }, [state.zones, updateState])
+
+  const deleteZone = useCallback((zoneId) => {
+    const activeTables = state.tables.filter((table) => table.active !== false && table.zoneId === zoneId)
+    if (activeTables.length) {
+      return { ok: false, message: 'No puedes eliminar el área mientras tenga mesas activas. Elimina o mueve primero esas mesas.' }
+    }
+    updateState((previous) => ({
+      ...previous,
+      zones: previous.zones.map((zone) => zone.id === zoneId ? { ...zone, active: false } : zone),
+    }))
+    return { ok: true }
+  }, [state.tables, updateState])
+
+  const addTable = useCallback(({ zoneId, name, capacity = 2 }) => {
+    const cleaned = cleanName(name)
+    const zone = state.zones.find((item) => item.id === zoneId && item.active !== false)
+    if (!zone) return { ok: false, message: 'Selecciona un salón o área válido.' }
+    if (!cleaned) return { ok: false, message: 'Escribe el nombre o número de la mesa.' }
+    const duplicate = state.tables.some((table) => (
+      table.active !== false && table.zoneId === zoneId && sameName(table.name, cleaned)
+    ))
+    if (duplicate) return { ok: false, message: `Ya existe ${cleaned} dentro de ${zone.name}.` }
+
+    const table = {
+      id: makeId(),
+      zoneId,
+      name: cleaned,
+      capacity: Math.max(1, Number(capacity) || 2),
+      active: true,
+      status: 'free',
+    }
+    updateState((previous) => ({ ...previous, tables: [...previous.tables, table] }))
+    return { ok: true, table }
+  }, [state.zones, state.tables, updateState])
+
+  const updateTable = useCallback((tableId, patch) => {
+    const current = state.tables.find((table) => table.id === tableId && table.active !== false)
+    if (!current) return { ok: false, message: 'La mesa no existe o está eliminada.' }
+    const zoneId = patch.zoneId ?? current.zoneId
+    const name = cleanName(patch.name ?? current.name)
+    const zone = state.zones.find((item) => item.id === zoneId && item.active !== false)
+    if (!zone) return { ok: false, message: 'Selecciona un salón o área válido.' }
+    if (!name) return { ok: false, message: 'El nombre de la mesa no puede quedar vacío.' }
+    const duplicate = state.tables.some((table) => (
+      table.id !== tableId
+      && table.active !== false
+      && table.zoneId === zoneId
+      && sameName(table.name, name)
+    ))
+    if (duplicate) return { ok: false, message: `Ya existe ${name} dentro de ${zone.name}.` }
+
+    updateState((previous) => ({
+      ...previous,
+      tables: previous.tables.map((table) => table.id === tableId ? {
+        ...table,
+        zoneId,
+        name,
+        capacity: Math.max(1, Number(patch.capacity ?? table.capacity) || 2),
+      } : table),
+    }))
+    return { ok: true }
+  }, [state.tables, state.zones, updateState])
+
+  const deleteTable = useCallback((tableId) => {
+    const table = state.tables.find((item) => item.id === tableId && item.active !== false)
+    if (!table) return { ok: false, message: 'La mesa no existe o ya fue eliminada.' }
+    if (openOrderForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa con una cuenta abierta.' }
+    if (reservationForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa con una reserva activa.' }
+
+    updateState((previous) => ({
+      ...previous,
+      tables: previous.tables.map((item) => item.id === tableId ? { ...item, active: false, status: 'free' } : item),
+    }))
+    if (currentTableId === tableId) setCurrentTableId(null)
+    return { ok: true }
+  }, [state.tables, openOrderForTable, reservationForTable, currentTableId, updateState])
+
   const setOrderMode = useCallback((mode) => {
     setOrderModeState(mode)
     setDraft([])
@@ -131,7 +286,7 @@ export function RestaurantProvider({ children }) {
   }, [state.orders])
 
   const startNewOrder = useCallback(() => {
-    const free = state.tables.find((table) => table.status === 'free')
+    const free = state.tables.find((table) => table.active !== false && getTableTransferStatus(table.id) === 'free')
     if (free) openTable(free.id)
     else {
       setOrderModeState('table')
@@ -140,7 +295,7 @@ export function RestaurantProvider({ children }) {
       setDraft([])
     }
     return free?.id || null
-  }, [state.tables, openTable])
+  }, [state.tables, openTable, getTableTransferStatus])
 
   const addProduct = useCallback((product) => {
     if (!product?.available) return
@@ -350,11 +505,23 @@ export function RestaurantProvider({ children }) {
   }, [updateState])
 
   const transferCurrentTable = useCallback((destinationId) => {
-    const destination = Number(destinationId)
-    if (!currentTableId || !destination || destination === currentTableId) return { ok: false, message: 'Selecciona una mesa destino válida.' }
-    const destinationTable = state.tables.find((table) => table.id === destination)
-    if (!destinationTable) return { ok: false, message: 'La mesa destino no existe.' }
-    if (openOrderForTable(destination)) return { ok: false, message: 'La mesa destino ya tiene una cuenta abierta.' }
+    const destination = String(destinationId || '')
+    if (!currentTableId || !destination || destination === currentTableId) {
+      return { ok: false, message: 'Selecciona una mesa destino válida.' }
+    }
+    const destinationTable = state.tables.find((table) => table.id === destination && table.active !== false)
+    if (!destinationTable) return { ok: false, message: 'La mesa destino no existe o está desactivada.' }
+
+    const destinationStatus = getTableTransferStatus(destination)
+    if (destinationStatus === 'occupied') {
+      return { ok: false, message: 'La mesa destino está ocupada y no puede seleccionarse.' }
+    }
+    if (destinationStatus === 'unavailable') {
+      return { ok: false, message: 'La mesa destino no está disponible.' }
+    }
+
+    const fromLabel = tableLabel(currentTableId)
+    const toLabel = tableLabel(destination)
 
     updateState((previous) => ({
       ...previous,
@@ -367,19 +534,23 @@ export function RestaurantProvider({ children }) {
         if (table.id === destination && currentOrderId) return { ...table, status: 'occupied' }
         return table
       }),
-      activity: [...previous.activity, `Cuenta movida de Mesa ${currentTableId} a Mesa ${destination}`],
+      activity: [...previous.activity, `Cuenta movida de ${fromLabel} a ${toLabel}`],
     }))
     setCurrentTableId(destination)
-    return { ok: true }
-  }, [currentTableId, currentOrderId, state.tables, openOrderForTable, updateState])
+    return { ok: true, reserved: destinationStatus === 'reserved' }
+  }, [currentTableId, currentOrderId, state.tables, getTableTransferStatus, tableLabel, updateState])
 
   const joinTable = useCallback((destinationId) => {
-    const destination = Number(destinationId)
+    const destination = String(destinationId || '')
     const order = state.orders.find((item) => item.id === currentOrderId)
     if (!order || !destination) return { ok: false, message: 'Abre primero una cuenta de mesa.' }
     if (order.tableIds.includes(destination)) return { ok: false, message: 'Esa mesa ya forma parte de la cuenta.' }
-    const existing = openOrderForTable(destination)
-    if (existing && existing.id !== order.id) return { ok: false, message: 'La mesa destino ya tiene otra cuenta. La fusión de dos cuentas completas se añadirá en Caja.' }
+
+    const status = getTableTransferStatus(destination)
+    if (status === 'occupied') {
+      return { ok: false, message: 'La mesa destino ya tiene otra cuenta abierta.' }
+    }
+    if (status === 'unavailable') return { ok: false, message: 'La mesa destino no está disponible.' }
 
     updateState((previous) => ({
       ...previous,
@@ -388,10 +559,10 @@ export function RestaurantProvider({ children }) {
         tableIds: [...candidate.tableIds, destination],
       } : candidate),
       tables: previous.tables.map((table) => table.id === destination ? { ...table, status: 'occupied' } : table),
-      activity: [...previous.activity, `Mesa ${destination} unida a Orden #${order.id}`],
+      activity: [...previous.activity, `${tableLabel(destination)} unida a Orden #${order.id}`],
     }))
-    return { ok: true }
-  }, [state.orders, currentOrderId, openOrderForTable, updateState])
+    return { ok: true, reserved: status === 'reserved' }
+  }, [state.orders, currentOrderId, getTableTransferStatus, tableLabel, updateState])
 
   const recordPayment = useCallback((orderId, amount, method = 'card') => {
     const numericAmount = Number(amount)
@@ -435,7 +606,7 @@ export function RestaurantProvider({ children }) {
 
   const resetDemo = useCallback(() => {
     const fresh = createInitialDemoState()
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
+    OLD_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key))
     persist(fresh)
     setOrderModeState(fresh.settings.defaultOrderMode)
     setCurrentTableId(null)
@@ -478,6 +649,15 @@ export function RestaurantProvider({ children }) {
     markRoundDelivered,
     transferCurrentTable,
     joinTable,
+    tableLabel,
+    getTableTransferStatus,
+    getTableVisualStatus,
+    addZone,
+    updateZone,
+    deleteZone,
+    addTable,
+    updateTable,
+    deleteTable,
     recordPayment,
     updateSettings,
     resetDemo,
@@ -490,7 +670,9 @@ export function RestaurantProvider({ children }) {
     state, orderMode, currentTableId, currentOrderId, currentOrder, draft, pager,
     setOrderMode, openTable, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, voidSentItem, advanceStationRound, markRoundDelivered,
-    transferCurrentTable, joinTable, recordPayment, updateSettings, resetDemo, stationJobs, openOrderForTable,
+    transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
+    addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
+    recordPayment, updateSettings, resetDemo, stationJobs, openOrderForTable,
   ])
 
   return <RestaurantContext.Provider value={value}>{children}</RestaurantContext.Provider>
