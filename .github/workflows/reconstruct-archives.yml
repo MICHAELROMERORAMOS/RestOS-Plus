@@ -1,0 +1,38 @@
+name: Reconstruct archived sources
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.archive/**'
+      - 'scripts/reconstruct-archives.mjs'
+      - '.github/workflows/reconstruct-archives.yml'
+  workflow_dispatch:
+
+jobs:
+  reconstruct:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct source snapshots
+        run: node scripts/reconstruct-archives.mjs
+
+      - name: Commit reconstructed files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add legacy/restaurant_app.html supabase/migrations/0001_restos_baseline.sql
+          if git diff --cached --quiet; then
+            echo "Reconstructed files are already current."
+            exit 0
+          fi
+          git commit -m "Reconstruct archived RestOS+ sources"
+          git push origin HEAD:main
