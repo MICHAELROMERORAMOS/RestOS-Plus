@@ -2,7 +2,7 @@ import React from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 
 export default function StationPage({ station }) {
-  const { stationJobs, advanceStationRound } = useRestaurant()
+  const { stationJobs, advanceStationRound, tableLabel } = useRestaurant()
   const jobs = stationJobs(station)
   const isBar = station === 'bar'
   const label = isBar ? 'Bar Display' : 'Kitchen Display'
@@ -15,7 +15,7 @@ export default function StationPage({ station }) {
         {jobs.length ? jobs.map(({ order, round, items, status }) => (
           <div className="card ticket" key={`${order.id}-${round.id}`}>
             <div className="section-title">
-              <h3>{order.tableIds?.length ? `Mesa ${order.tableIds.join(' + ')}` : `Orden #${order.id}`}</h3>
+              <h3>{order.tableIds?.length ? order.tableIds.map((id) => tableLabel(id)).join(' + ') : `Orden #${order.id}`}</h3>
               <span className="badge">#{order.id} · C{round.id}</span>
             </div>
             <div className="time">{status === 'new' ? 'NUEVO' : 'PREPARANDO'}</div>
