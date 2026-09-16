@@ -2,7 +2,7 @@ import React from 'react'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 
 export default function CashierPage() {
-  const { state, recordPayment } = useRestaurant()
+  const { state, recordPayment, tableLabel } = useRestaurant()
   const open = state.orders.filter((order) => order.mode === 'table' && !['closed', 'cancelled', 'merged'].includes(order.status) && (order.rounds?.length || 0) > 0)
 
   function charge(order, full = true) {
@@ -25,10 +25,11 @@ export default function CashierPage() {
             const total = orderTotal(order)
             const paid = orderPaidTotal(order)
             const balance = orderBalance(order)
+            const tableText = order.tableIds.map((id) => tableLabel(id)).join(' + ')
             return (
               <div className="row cashier-row" key={order.id}>
                 <div>
-                  <b>Mesa {order.tableIds.join(' + ')} · Orden #{order.id}</b>
+                  <b>{tableText} · Orden #{order.id}</b>
                   <small>{order.rounds.length} comandas · Total €{total.toFixed(2)} · Pagado €{paid.toFixed(2)}</small>
                 </div>
                 <div className="cash-actions">
