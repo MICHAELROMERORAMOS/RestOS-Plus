@@ -39,6 +39,8 @@ function normalizeStoredState(raw) {
       capacity: Number(table.capacity || 2),
       active: table.active !== false,
       status: table.status || 'free',
+      openedAt: table.openedAt || null,
+      releasedAt: table.releasedAt || null,
     })) : initial.tables,
     reservations: Array.isArray(raw.reservations) ? raw.reservations : initial.reservations,
     orders: (raw.orders || []).map((order) => ({
@@ -217,6 +219,8 @@ export function RestaurantProvider({ children }) {
       capacity: Math.max(1, Number(capacity) || 2),
       active: true,
       status: 'free',
+      openedAt: null,
+      releasedAt: Date.now(),
     }
     updateState((previous) => ({ ...previous, tables: [...previous.tables, table] }))
     return { ok: true, table }
@@ -354,7 +358,9 @@ export function RestaurantProvider({ children }) {
         nextOrder: source.nextOrder + 1,
         orders: [...source.orders, order],
         tables: source.tables.map((table) => (
-          order.tableIds.includes(table.id) ? { ...table, status: 'occupied' } : table
+          order.tableIds.includes(table.id)
+            ? { ...table, status: 'occupied', openedAt: order.created, releasedAt: table.releasedAt || null }
+            : table
         )),
       },
     }
@@ -405,7 +411,11 @@ export function RestaurantProvider({ children }) {
       return {
         ...ensured.source,
         orders: ensured.source.orders.map((candidate) => candidate.id === order.id ? updatedOrder : candidate),
-        tables: ensured.source.tables.map((table) => (updatedOrder.tableIds?.includes(table.id) ? { ...table, status: 'occupied' } : table)),
+        tables: ensured.source.tables.map((table) => (
+          updatedOrder.tableIds?.includes(table.id)
+            ? { ...table, status: 'occupied', openedAt: table.openedAt || updatedOrder.created || Date.now() }
+            : table
+        )),
         sales: ensured.source.sales + salesIncrease,
         activity: [
           ...ensured.source.activity,
@@ -530,8 +540,8 @@ export function RestaurantProvider({ children }) {
         tableIds: (order.tableIds || []).map((id) => id === currentTableId ? destination : id),
       }),
       tables: previous.tables.map((table) => {
-        if (table.id === currentTableId) return { ...table, status: 'free' }
-        if (table.id === destination && currentOrderId) return { ...table, status: 'occupied' }
+        if (table.id === currentTableId) return { ...table, status: 'free', releasedAt: Date.now() }
+        if (table.id === destination && currentOrderId) return { ...table, status: 'occupied', openedAt: Date.now() }
         return table
       }),
       activity: [...previous.activity, `Cuenta movida de ${fromLabel} a ${toLabel}`],
@@ -558,7 +568,9 @@ export function RestaurantProvider({ children }) {
         ...candidate,
         tableIds: [...candidate.tableIds, destination],
       } : candidate),
-      tables: previous.tables.map((table) => table.id === destination ? { ...table, status: 'occupied' } : table),
+      tables: previous.tables.map((table) => (
+        table.id === destination ? { ...table, status: 'occupied', openedAt: Date.now() } : table
+      )),
       activity: [...previous.activity, `${tableLabel(destination)} unida a Orden #${order.id}`],
     }))
     return { ok: true, reserved: status === 'reserved' }
@@ -592,7 +604,9 @@ export function RestaurantProvider({ children }) {
         orders,
         sales: previous.sales + applied,
         tables: previous.tables.map((table) => (
-          closed && refreshed.tableIds?.includes(table.id) ? { ...table, status: 'free' } : table
+          closed && refreshed.tableIds?.includes(table.id)
+            ? { ...table, status: 'free', releasedAt: Date.now() }
+            : table
         )),
         activity: [...previous.activity, `${closed ? 'Cuenta cerrada' : 'Pago parcial'} · Orden #${orderId} · €${applied.toFixed(2)}`],
       }
