@@ -381,6 +381,15 @@ export function RestaurantProvider({ children }) {
     }
 
     if (auth.mode === 'authenticated' && restaurantId) {
+      setState((previous) => ({
+        ...previous,
+        orders: [],
+        tables: (previous.tables || []).map((table) => ({
+          ...table,
+          status: 'free',
+          openedAt: null,
+        })),
+      }))
       refreshRemoteData()
     }
   }, [auth.mode, auth.isDesignMode, restaurantId, refreshRemoteData])
@@ -1387,20 +1396,20 @@ export function RestaurantProvider({ children }) {
     if (expectedApplied <= 0.005) return { ok: false, message: 'La cuenta ya está pagada.' }
 
     if (!auth.isDesignMode) {
-      const remoteAllocations = normalized.map((allocation) => {
-        const order = state.orders.find((candidate) => candidate.id === allocation.orderId)
-        if (!order?.serverId) {
-          throw new Error(`La orden #${allocation.orderId} no está sincronizada.`)
-        }
-
-        return {
-          orderId: order.serverId,
-          amount: allocation.amount,
-          itemAllocations: allocation.itemAllocations,
-        }
-      })
-
       try {
+        const remoteAllocations = normalized.map((allocation) => {
+          const order = state.orders.find((candidate) => candidate.id === allocation.orderId)
+          if (!order?.serverId) {
+            throw new Error(`La orden #${allocation.orderId} no está sincronizada.`)
+          }
+
+          return {
+            orderId: order.serverId,
+            amount: allocation.amount,
+            itemAllocations: allocation.itemAllocations,
+          }
+        })
+
         const result = await recordOrderPaymentsRemote(remoteAllocations, method)
         await refreshOperationalData(activeLocation)
         return { ok: true, applied: Number(result?.applied || 0) }
