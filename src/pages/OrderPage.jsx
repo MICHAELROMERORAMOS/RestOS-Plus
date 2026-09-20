@@ -31,7 +31,7 @@ export default function OrderPage({ onNavigate }) {
   const auth = useAuth()
   const canCharge = auth.can('payments.create')
   const {
-    products, orderMode, currentTableId, currentOrder, currentDelivery, draft, pager, setPager, setOrderMode,
+    products, formatMoney, orderMode, currentTableId, currentOrder, currentDelivery, draft, pager, setPager, setOrderMode,
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft, voidSentItem,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
     tableLabel: getTableLabel, getTableTransferStatus,
@@ -159,7 +159,7 @@ export default function OrderPage({ onNavigate }) {
     if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
 
     const confirmed = window.confirm(
-      `¿Confirmar cobro de €${amount.toFixed(2)} para ${accountTableLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`,
+      `¿Confirmar cobro de ${formatMoney(amount)} para ${accountTableLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`,
     )
     if (!confirmed) return
 
@@ -263,7 +263,7 @@ export default function OrderPage({ onNavigate }) {
               <button className="product" key={product.id} onClick={() => addProduct(product)}>
                 <strong>{product.name}</strong>
                 <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
-                <em>€{Number(product.price || 0).toFixed(2)}</em>
+                <em>{formatMoney(product.price)}</em>
               </button>
             )) : (
               <div className="empty-inline">No hay productos activos que coincidan con este filtro.</div>
@@ -306,7 +306,7 @@ export default function OrderPage({ onNavigate }) {
                     {item.note && <small>↳ {item.note}</small>}
                     <span className="station">{item.station === 'bar' ? 'BAR' : 'COCINA'} · {item.prepStatus.toUpperCase()} · bloqueado</span>
                   </div>
-                  <div className="sent-price"><strong>€{(item.price * item.quantity).toFixed(2)}</strong>{!item.voided && <button className="mini danger" onClick={() => window.confirm('Este producto ya fue enviado. Se registrará como ANULADO, no se eliminará del historial.') && voidSentItem(currentOrder.id, round.id, item.lineId)}>Anular</button>}</div>
+                  <div className="sent-price"><strong>{formatMoney(item.price * item.quantity)}</strong>{!item.voided && <button className="mini danger" onClick={() => window.confirm('Este producto ya fue enviado. Se registrará como ANULADO, no se eliminará del historial.') && voidSentItem(currentOrder.id, round.id, item.lineId)}>Anular</button>}</div>
                 </div>
               ))}
               {roundStatus(round) === 'LISTA' && <button className="btn" onClick={() => markRoundDelivered(currentOrder.id, round.id)}>✓ Marcar comanda entregada</button>}
@@ -328,7 +328,7 @@ export default function OrderPage({ onNavigate }) {
                   </div>
                   <div>
                     <div className="qty"><button onClick={() => changeDraftQuantity(line.draftId, -1)}>−</button><b>{line.quantity}</b><button onClick={() => changeDraftQuantity(line.draftId, 1)}>+</button></div>
-                    <strong className="line-total">€{(line.price * line.quantity).toFixed(2)}</strong>
+                    <strong className="line-total">{formatMoney(line.price * line.quantity)}</strong>
                   </div>
                 </div>
               ))}
@@ -336,11 +336,11 @@ export default function OrderPage({ onNavigate }) {
           ) : <div className="empty-inline">No hay productos nuevos por enviar</div>}
 
           <div className="order-summary">
-            <div className="row plain"><b>Total cuenta</b><strong>€{accountTotal.toFixed(2)}</strong></div>
+            <div className="row plain"><b>Total cuenta</b><strong>{formatMoney(accountTotal)}</strong></div>
             {orderMode === 'table' && tableOrders.length > 0 && (
               <>
-                <div className="row plain"><span>Pagado</span><strong>€{tableAccountPaid.toFixed(2)}</strong></div>
-                <div className="row plain"><b>Saldo pendiente</b><strong>€{tableAccountBalance.toFixed(2)}</strong></div>
+                <div className="row plain"><span>Pagado</span><strong>{formatMoney(tableAccountPaid)}</strong></div>
+                <div className="row plain"><b>Saldo pendiente</b><strong>{formatMoney(tableAccountBalance)}</strong></div>
               </>
             )}
           </div>
@@ -377,14 +377,14 @@ export default function OrderPage({ onNavigate }) {
             </div>
 
             <div className="order-payment-totals">
-              <div><span>Total</span><strong>€{tableAccountTotal.toFixed(2)}</strong></div>
-              <div><span>Pagado</span><strong>€{tableAccountPaid.toFixed(2)}</strong></div>
-              <div className="balance"><span>Saldo</span><strong>€{tableAccountBalance.toFixed(2)}</strong></div>
+              <div><span>Total</span><strong>{formatMoney(tableAccountTotal)}</strong></div>
+              <div><span>Pagado</span><strong>{formatMoney(tableAccountPaid)}</strong></div>
+              <div className="balance"><span>Saldo</span><strong>{formatMoney(tableAccountBalance)}</strong></div>
             </div>
 
             {draft.length > 0 && (
               <div className="notice warn">
-                Hay productos sin enviar por €{draftTotal.toFixed(2)}. No están incluidos en este cobro hasta que los envíes a preparación.
+                Hay productos sin enviar por {formatMoney(draftTotal)}. No están incluidos en este cobro hasta que los envíes a preparación.
               </div>
             )}
 
