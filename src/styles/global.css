@@ -1412,6 +1412,43 @@ html, body {
   }
 }
 
+.invoice-origin-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #f8faf9;
+}
+
+.invoice-origin-summary.compact {
+  min-width: 150px;
+  padding: 8px;
+}
+
+.invoice-origin-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.invoice-origin-main strong {
+  font-size: 13px;
+}
+
+.invoice-origin-details {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.origin-badge {
+  background: #e7f0eb;
+  color: var(--brand);
+}
+
 /* Desktop/tablet: collapsible sidebar + independent scrolling */
 .brand-short,
 .logout-icon {
@@ -2422,27 +2459,4 @@ html, body {
   .station-choice-btn {
     min-width: 0;
   }
-}
-.invoice-preview-card {
-  width: min(1100px, 96vw);
-  height: min(900px, 94vh);
-  display: flex;
-  flex-direction: column;
-}
-
-.invoice-preview-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.invoice-preview-frame {
-  width: 100%;
-  flex: 1;
-  min-height: 520px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
 }
