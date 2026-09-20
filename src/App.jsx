@@ -6,6 +6,7 @@ import AppShell from './components/layout/AppShell.jsx'
 import { NAV_ITEMS } from './config/navigation.js'
 import DashboardPage from './pages/DashboardPage.jsx'
 import TablesPage from './pages/TablesPage.jsx'
+import DeliveriesPage from './pages/DeliveriesPage.jsx'
 import OrderPage from './pages/OrderPage.jsx'
 import StationPage from './pages/StationPage.jsx'
 import CashierPage from './pages/CashierPage.jsx'
@@ -58,9 +59,22 @@ function MainApplication() {
     navigate('order')
   }
 
+  function startDelivery(delivery) {
+    const result = restaurant.startDelivery(delivery)
+    if (result.ok) navigate('order')
+    return result
+  }
+
+  function openDelivery(orderId) {
+    const result = restaurant.openDelivery(orderId)
+    if (result.ok) navigate('order')
+    return result
+  }
+
   const pages = {
     dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={() => navigate('tables')} />,
     tables: <TablesPage onOpenTable={openTable} onQuickService={auth.can('orders.create') ? quickService : null} />,
+    deliveries: <DeliveriesPage onStartDelivery={startDelivery} onOpenDelivery={openDelivery} />,
     order: <OrderPage onNavigate={navigate} />,
     kitchen: <StationPage station="kitchen" />,
     bar: <StationPage station="bar" />,
