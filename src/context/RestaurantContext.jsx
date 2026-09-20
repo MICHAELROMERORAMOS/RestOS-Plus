@@ -637,7 +637,17 @@ export function RestaurantProvider({ children }) {
         if (items.length) jobs.push({ order, round, items, status: deriveRoundStatus(round, station) })
       })
     })
-    return jobs
+
+    return jobs.sort((left, right) => {
+      const leftArrival = Number(left.round?.created || left.order?.created || 0)
+      const rightArrival = Number(right.round?.created || right.order?.created || 0)
+
+      if (leftArrival !== rightArrival) return leftArrival - rightArrival
+      if (Number(left.order?.id || 0) !== Number(right.order?.id || 0)) {
+        return Number(left.order?.id || 0) - Number(right.order?.id || 0)
+      }
+      return Number(left.round?.id || 0) - Number(right.round?.id || 0)
+    })
   }, [state.orders])
 
   const value = useMemo(() => ({
