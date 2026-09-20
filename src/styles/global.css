@@ -1278,8 +1278,40 @@ html, body {
   color: var(--brand);
 }
 
+.product-form-modal {
+  padding: 20px;
+}
+
 .product-form-card {
   width: min(760px, 100%);
+  max-height: calc(100dvh - 40px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.product-form-head {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.product-form-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+
+.product-form-footer {
+  flex: 0 0 auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
 }
 
 .product-form-grid {
@@ -1326,6 +1358,19 @@ html, body {
 }
 
 @media (max-width: 700px) {
+  .product-form-modal {
+    padding: 10px;
+  }
+
+  .product-form-card {
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+  }
+
+  .product-form-scroll {
+    padding-right: 2px;
+  }
+
   .products-admin-hero {
     display: grid;
     gap: 12px;
