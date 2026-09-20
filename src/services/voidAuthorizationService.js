@@ -8,7 +8,7 @@ function requireSupabase() {
 }
 
 async function functionErrorMessage(error) {
-  if (!error) return 'No se pudo solicitar la autorización.'
+  if (!error) return 'No se pudo completar la operación.'
 
   try {
     const response = error.context
@@ -17,20 +17,86 @@ async function functionErrorMessage(error) {
       if (payload?.error) return payload.error
     }
   } catch {
-    // Fall back to the generic function error.
+    // Fall through to the generic message.
   }
 
-  return error.message || 'No se pudo solicitar la autorización.'
+  return error.message || 'No se pudo completar la operación.'
 }
 
-export async function requestPaidVoidAuthorization({
+export async function createKitchenVoidRequest({
   restaurantId,
   orderRef,
-  lineRef,
-  itemName,
-  amount,
+  tableLabel,
+  items,
   reason,
-  invoiceIssued = false,
+}) {
+  const client = requireSupabase()
+
+  const { data, error } = await client.rpc('create_kitchen_void_request', {
+    p_restaurant_id: restaurantId,
+    p_order_ref: String(orderRef),
+    p_table_label: tableLabel || null,
+    p_items: items,
+    p_reason: reason,
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function listPendingKitchenVoidRequests(restaurantId) {
+  const client = requireSupabase()
+
+  const { data, error } = await client.rpc('list_pending_kitchen_void_requests', {
+    p_restaurant_id: restaurantId,
+  })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function reviewKitchenVoidRequest(requestId, decision, note = '') {
+  const client = requireSupabase()
+
+  const { data, error } = await client.rpc('review_kitchen_void_request', {
+    p_request_id: requestId,
+    p_decision: decision,
+    p_note: note || null,
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function listMyKitchenVoidRequests(restaurantId, orderRef) {
+  const client = requireSupabase()
+
+  const { data, error } = await client.rpc('list_my_kitchen_void_requests', {
+    p_restaurant_id: restaurantId,
+    p_order_ref: String(orderRef),
+  })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function markKitchenVoidRequestApplied(requestId) {
+  const client = requireSupabase()
+
+  const { error } = await client.rpc('mark_kitchen_void_request_applied', {
+    p_request_id: requestId,
+  })
+
+  if (error) throw error
+  return { ok: true }
+}
+
+export async function requestAccountVoidAuthorization({
+  restaurantId,
+  orderRef,
+  tableLabel,
+  amountPaid,
+  reason,
 }) {
   const client = requireSupabase()
 
@@ -38,11 +104,9 @@ export async function requestPaidVoidAuthorization({
     body: {
       restaurantId,
       orderRef: String(orderRef),
-      lineRef: String(lineRef),
-      itemName,
-      amount: Number(amount || 0),
+      tableLabel,
+      amountPaid: Number(amountPaid || 0),
       reason,
-      invoiceIssued,
     },
   })
 
@@ -51,50 +115,39 @@ export async function requestPaidVoidAuthorization({
   return data
 }
 
-export async function consumePaidVoidAuthorization({
+export async function consumeAccountVoidAuthorization({
   requestId,
   code,
   orderRef,
-  lineRef,
-  itemName,
-  amount,
+  tableLabel,
+  items,
   reason,
+  amountPaid,
 }) {
   const client = requireSupabase()
 
-  const { data, error } = await client.rpc('consume_void_authorization', {
+  const { data, error } = await client.rpc('consume_account_void_authorization', {
     p_request_id: requestId,
     p_code: String(code || '').trim(),
     p_order_ref: String(orderRef),
-    p_line_ref: String(lineRef),
-    p_item_name: itemName,
-    p_amount: Number(amount || 0),
+    p_table_label: tableLabel || null,
+    p_items: items,
     p_reason: reason,
+    p_amount_paid: Number(amountPaid || 0),
   })
 
   if (error) throw error
   return data
 }
 
-export async function logUnpaidKitchenVoid({
-  restaurantId,
-  orderRef,
-  lineRef,
-  itemName,
-  amount,
-  reason,
-}) {
+export async function sendAccountVoidConfirmation(auditId) {
   const client = requireSupabase()
 
-  const { data, error } = await client.rpc('log_unpaid_kitchen_void', {
-    p_restaurant_id: restaurantId,
-    p_order_ref: String(orderRef),
-    p_line_ref: String(lineRef),
-    p_item_name: itemName,
-    p_amount: Number(amount || 0),
-    p_reason: reason,
+  const { data, error } = await client.functions.invoke('confirm-account-void', {
+    body: { auditId },
   })
 
-  if (error) throw error
+  if (error) throw new Error(await functionErrorMessage(error))
+  if (data?.error) throw new Error(data.error)
   return data
 }
