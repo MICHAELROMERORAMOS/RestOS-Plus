@@ -22,17 +22,21 @@ import SettingsPage from './pages/SettingsPage.jsx'
 function MainApplication() {
   const auth = useAuth()
   const restaurant = useRestaurant()
-  const visibleItems = useMemo(
+  const accessibleItems = useMemo(
     () => NAV_ITEMS.filter((item) => auth.can(item.permission)),
     [auth.permissions, auth.isDesignMode],
+  )
+  const visibleItems = useMemo(
+    () => accessibleItems.filter((item) => !item.hidden),
+    [accessibleItems],
   )
   const [activeView, setActiveView] = useState(() => visibleItems[0]?.id || 'dashboard')
 
   useEffect(() => {
-    if (!visibleItems.some((item) => item.id === activeView)) {
+    if (!accessibleItems.some((item) => item.id === activeView)) {
       setActiveView(visibleItems[0]?.id || 'dashboard')
     }
-  }, [visibleItems, activeView])
+  }, [accessibleItems, visibleItems, activeView])
 
   function navigate(view) {
     const meta = NAV_ITEMS.find((item) => item.id === view)
@@ -49,14 +53,14 @@ function MainApplication() {
     navigate('order')
   }
 
-  function newOrder() {
-    restaurant.startNewOrder()
+  function quickService() {
+    restaurant.setOrderMode('quick')
     navigate('order')
   }
 
   const pages = {
-    dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={newOrder} />,
-    tables: <TablesPage onOpenTable={openTable} />,
+    dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={() => navigate('tables')} />,
+    tables: <TablesPage onOpenTable={openTable} onQuickService={auth.can('orders.create') ? quickService : null} />,
     order: <OrderPage onNavigate={navigate} />,
     kitchen: <StationPage station="kitchen" />,
     bar: <StationPage station="bar" />,
@@ -80,8 +84,6 @@ function MainApplication() {
       userContext={auth.userContext}
       onLogout={auth.logout}
       canKitchen={auth.can('kitchen.view')}
-      canOrder={auth.can('orders.create')}
-      onNewOrder={newOrder}
     >
       {pages[activeView] || pages.dashboard}
     </AppShell>
