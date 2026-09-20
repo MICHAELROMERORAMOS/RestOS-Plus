@@ -26,7 +26,7 @@ function mapItemStatus(status) {
 }
 
 function deriveFrontendOrderStatus(raw, rounds) {
-  if (asNumber(raw.refund_due) > 0.005) return 'refund_due'
+  if (asNumber(raw.refund_due) > 0.005 && raw.account_void_scope !== 'paid') return 'refund_due'
   if (raw.status === 'cancelled') return 'cancelled'
   if (raw.status === 'closed') return 'closed'
 
@@ -127,6 +127,7 @@ function mapOperationalOrders(payload) {
       accountVoidReason: raw.account_void_reason || null,
       accountVoidedAt: asTimestamp(raw.account_voided_at),
       accountVoidAuditId: raw.account_void_audit_id || null,
+      accountVoidScope: raw.account_void_scope || null,
     }
   })
 }
