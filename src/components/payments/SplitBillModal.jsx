@@ -79,7 +79,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
     return allocations
   }
 
-  function performPayment(allocations, label, onSuccess) {
+  async function performPayment(allocations, label, onSuccess) {
     const amount = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
     if (amount <= 0.005) return window.alert('No hay importe pendiente para cobrar.')
 
@@ -91,7 +91,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
     )
     if (!confirmed) return
 
-    const result = recordPayments(allocations, method)
+    const result = await recordPayments(allocations, method)
     if (!result.ok) return window.alert(result.message)
 
     onSuccess?.()
