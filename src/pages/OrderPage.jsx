@@ -235,12 +235,36 @@ export default function OrderPage({ onNavigate }) {
         </div>
       </div>
 
+      <div className="order-category-filter" role="group" aria-label="Categorías del menú">
+        <button
+          type="button"
+          className={`order-category-btn ${category === 'all' ? 'active' : ''}`}
+          aria-pressed={category === 'all'}
+          onClick={() => setCategory('all')}
+        >
+          Todas
+        </button>
+
+        {categoryOptions.map((categoryName) => (
+          <button
+            type="button"
+            key={categoryName}
+            className={`order-category-btn ${category === categoryName ? 'active' : ''}`}
+            aria-pressed={category === categoryName}
+            onClick={() => setCategory(categoryName)}
+          >
+            {categoryName}
+          </button>
+        ))}
+      </div>
+
       <div className="order-tools">
-        <select value={category} onChange={(event) => setCategory(event.target.value)}>
-          <option value="all">Todas las categorías</option>
-          {categoryOptions.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}
-        </select>
-        <input value={search} placeholder="Buscar producto…" onChange={(event) => setSearch(event.target.value)} />
+        <input
+          className="order-product-search"
+          value={search}
+          placeholder="Buscar producto…"
+          onChange={(event) => setSearch(event.target.value)}
+        />
         {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
         {orderMode === 'table' && canCharge && (
           <button className="btn pay-inline-btn" disabled={!tableOrders.length || tableAccountBalance <= 0.005} onClick={openChargeModal}>
