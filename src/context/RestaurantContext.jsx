@@ -100,6 +100,13 @@ function deriveRoundStatus(round, station = null) {
   return 'new'
 }
 
+function orderHasPendingPreparation(order) {
+  return (order.rounds || [])
+    .flatMap((round) => round.items || [])
+    .filter((item) => !item.voided)
+    .some((item) => !['ready', 'delivered'].includes(item.prepStatus))
+}
+
 export function RestaurantProvider({ children }) {
   const [state, setState] = useState(loadInitialState)
   const [orderMode, setOrderModeState] = useState(state.settings.defaultOrderMode || 'table')
@@ -158,7 +165,7 @@ export function RestaurantProvider({ children }) {
     const table = source.tables.find((item) => item.id === tableId)
     if (!table || table.active === false) return 'unavailable'
     if (openOrderForTable(tableId, source)) {
-      return ['ready', 'pay'].includes(table.status) ? table.status : 'occupied'
+      return ['ready', 'pay', 'waiting_food'].includes(table.status) ? table.status : 'occupied'
     }
     if (reservationForTable(tableId, source)) return 'reserved'
     return 'free'
@@ -476,16 +483,40 @@ export function RestaurantProvider({ children }) {
         .every((item) => ['ready', 'delivered'].includes(item.prepStatus))
 
       if (allPrepared) {
-        nextOrders = nextOrders.map((order) => order.id === orderId ? {
-          ...order,
-          status: order.status === 'closed' ? 'closed' : (orderBalance(order) <= 0.005 ? 'ready' : 'pay'),
-        } : order)
+        nextOrders = nextOrders.map((order) => {
+          if (order.id !== orderId) return order
+
+          if (order.status === 'waiting_food' && orderBalance(order) <= 0.005) {
+            return {
+              ...order,
+              status: 'closed',
+              closedAt: Date.now(),
+            }
+          }
+
+          return {
+            ...order,
+            status: order.status === 'closed' ? 'closed' : (orderBalance(order) <= 0.005 ? 'ready' : 'pay'),
+          }
+        })
       }
 
       const refreshed = nextOrders.find((order) => order.id === orderId)
       const tables = previous.tables.map((table) => {
         if (!refreshed?.tableIds?.includes(table.id)) return table
-        if (allPrepared) return { ...table, status: orderBalance(refreshed) <= 0.005 ? 'ready' : 'pay' }
+
+        if (allPrepared && refreshed.status === 'closed') {
+          return { ...table, status: 'free', releasedAt: Date.now() }
+        }
+
+        if (allPrepared) {
+          return { ...table, status: orderBalance(refreshed) <= 0.005 ? 'ready' : 'pay' }
+        }
+
+        if (refreshed.status === 'waiting_food') {
+          return { ...table, status: 'waiting_food' }
+        }
+
         return { ...table, status: 'occupied' }
       })
 
@@ -587,28 +618,51 @@ export function RestaurantProvider({ children }) {
     updateState((previous) => {
       const orders = previous.orders.map((order) => {
         if (order.id !== orderId) return order
-        const payments = [...(order.payments || []), { id: makeId(), amount: applied, method, created: Date.now(), type: 'payment' }]
-        const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0)
+
+        const payments = [...(order.payments || []), {
+          id: makeId(),
+          amount: applied,
+          method,
+          created: Date.now(),
+          type: 'payment',
+        }]
+        const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
         const paidInFull = totalPaid + 0.005 >= orderTotal(order)
+        const waitingForFood = paidInFull && orderHasPendingPreparation(order)
+
         return {
           ...order,
           payments,
-          status: paidInFull ? 'closed' : order.status,
-          closedAt: paidInFull ? Date.now() : order.closedAt,
+          status: paidInFull ? (waitingForFood ? 'waiting_food' : 'closed') : order.status,
+          closedAt: paidInFull && !waitingForFood ? Date.now() : order.closedAt,
         }
       })
+
       const refreshed = orders.find((order) => order.id === orderId)
       const closed = refreshed?.status === 'closed'
+      const waitingForFood = refreshed?.status === 'waiting_food'
+
       return {
         ...previous,
         orders,
         sales: previous.sales + applied,
-        tables: previous.tables.map((table) => (
-          closed && refreshed.tableIds?.includes(table.id)
-            ? { ...table, status: 'free', releasedAt: Date.now() }
-            : table
-        )),
-        activity: [...previous.activity, `${closed ? 'Cuenta cerrada' : 'Pago parcial'} · Orden #${orderId} · €${applied.toFixed(2)}`],
+        tables: previous.tables.map((table) => {
+          if (!refreshed?.tableIds?.includes(table.id)) return table
+
+          if (closed) {
+            return { ...table, status: 'free', releasedAt: Date.now() }
+          }
+
+          if (waitingForFood) {
+            return { ...table, status: 'waiting_food' }
+          }
+
+          return table
+        }),
+        activity: [
+          ...previous.activity,
+          `${waitingForFood ? 'Cuenta pagada · esperando comida' : (closed ? 'Cuenta cerrada' : 'Pago parcial')} · Orden #${orderId} · €${applied.toFixed(2)}`,
+        ],
       }
     })
     return { ok: true, applied }
