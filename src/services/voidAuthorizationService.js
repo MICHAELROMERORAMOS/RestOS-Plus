@@ -97,6 +97,7 @@ export async function requestAccountVoidAuthorization({
   tableLabel,
   amountPaid,
   reason,
+  fullyPaid = false,
 }) {
   const client = requireSupabase()
 
@@ -107,6 +108,7 @@ export async function requestAccountVoidAuthorization({
       tableLabel,
       amountPaid: Number(amountPaid || 0),
       reason,
+      fullyPaid: Boolean(fullyPaid),
     },
   })
 
