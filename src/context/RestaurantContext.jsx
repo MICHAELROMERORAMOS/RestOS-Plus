@@ -981,8 +981,6 @@ export function RestaurantProvider({ children }) {
     if (orderMode === 'delivery' && (!currentDelivery?.customerName || !currentDelivery?.address || !currentDelivery?.phone || !currentDelivery?.neighborhood || !currentDelivery?.city)) {
       return { ok: false, message: 'Faltan datos obligatorios del domicilio.' }
     }
-    if (orderMode === 'quick' && !prepaid) return { ok: false, message: 'El servicio rápido debe cobrarse antes de enviar a preparación.' }
-
     if (!auth.isDesignMode) {
       if (!restaurantId || !activeLocation?.id) {
         return { ok: false, message: 'No hay restaurante o sucursal activa.' }
@@ -1048,7 +1046,7 @@ export function RestaurantProvider({ children }) {
       let updatedOrder = {
         ...order,
         rounds: [...(order.rounds || []), newRound],
-        status: prepaid ? 'preparing' : 'open',
+      status: prepaid ? 'preparing' : 'open',
       }
       let salesIncrease = 0
       if (prepaid) {
