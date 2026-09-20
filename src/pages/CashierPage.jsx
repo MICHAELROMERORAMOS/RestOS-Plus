@@ -214,7 +214,7 @@ export default function CashierPage() {
     return allocations
   }
 
-  function performPayment(group, allocations, label) {
+  async function performPayment(group, allocations, label) {
     const total = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
     if (total <= 0.005) return window.alert('No hay importe pendiente para cobrar.')
 
@@ -226,7 +226,7 @@ export default function CashierPage() {
     )
     if (!confirmed) return
 
-    const result = recordPayments(allocations, method)
+    const result = await recordPayments(allocations, method)
     if (!result.ok) window.alert(result.message)
   }
 
@@ -380,7 +380,7 @@ export default function CashierPage() {
         amountPaid: accountVoidGroup.paid,
       })
 
-      const result = voidPaidTableAccount(
+      const result = await voidPaidTableAccount(
         accountVoidGroup.orders.map((order) => order.id),
         {
           reason: accountVoidReason.trim(),
