@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
+import InvoicePreviewModal from '../components/payments/InvoicePreviewModal.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import {
@@ -7,6 +8,7 @@ import {
   listMyKitchenVoidRequests,
   markKitchenVoidRequestApplied,
 } from '../services/voidAuthorizationService.js'
+import { getInvoicePreviewsRemote } from '../services/operationalService.js'
 
 function money(value) {
   return Number(value || 0).toFixed(2)
@@ -53,6 +55,7 @@ export default function CashierPage() {
     recordPayments,
     tableLabel,
     formatMoney,
+    currencyCode,
     applyKitchenApprovedVoidRequest,
   } = useRestaurant()
 
@@ -66,6 +69,7 @@ export default function CashierPage() {
   const [voidSelected, setVoidSelected] = useState({})
   const [voidReason, setVoidReason] = useState('')
   const [voidBusy, setVoidBusy] = useState(false)
+  const [invoicePreviews, setInvoicePreviews] = useState([])
 
 
   const groups = useMemo(() => {
@@ -212,7 +216,22 @@ export default function CashierPage() {
     if (!confirmed) return
 
     const result = await recordPayments(allocations, method)
-    if (!result.ok) window.alert(result.message)
+    if (!result.ok) {
+      window.alert(result.message)
+      return
+    }
+
+    if (!auth.isDesignMode && total + 0.005 >= group.balance) {
+      try {
+        const serverOrderIds = allocations
+          .map((allocation) => group.orders.find((order) => order.id === allocation.orderId)?.serverId)
+          .filter(Boolean)
+        const invoices = await getInvoicePreviewsRemote(serverOrderIds)
+        if (invoices.length) setInvoicePreviews(invoices)
+      } catch (error) {
+        window.alert(`El pago se registró, pero no se pudo abrir la factura: ${error?.message || 'error de vista previa'}.`)
+      }
+    }
   }
 
   function chargeFull(group) {
@@ -349,6 +368,21 @@ export default function CashierPage() {
           orders={splitGroup.orders}
           tableText={splitGroup.tableText}
           onClose={() => setSplitGroupKey(null)}
+          onAccountPaid={async (allocations) => {
+            const paidNow = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
+            if (paidNow + 0.005 < splitGroup.balance || auth.isDesignMode) return
+            const serverOrderIds = splitGroup.orders.map((order) => order.serverId).filter(Boolean)
+            const invoices = await getInvoicePreviewsRemote(serverOrderIds)
+            if (invoices.length) setInvoicePreviews(invoices)
+          }}
+        />
+      )}
+
+      {invoicePreviews.length > 0 && (
+        <InvoicePreviewModal
+          invoices={invoicePreviews}
+          currencyCode={currencyCode}
+          onClose={() => setInvoicePreviews([])}
         />
       )}
 
