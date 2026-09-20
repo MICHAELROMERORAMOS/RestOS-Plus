@@ -22,8 +22,10 @@ create table if not exists public.company_profiles (
 );
 
 alter table public.company_profiles enable row level security;
+drop policy if exists "company profile members can read" on public.company_profiles;
 create policy "company profile members can read" on public.company_profiles for select to authenticated
   using (exists (select 1 from public.memberships m where m.restaurant_id = company_profiles.restaurant_id and m.user_id = auth.uid() and m.status = 'active'));
+drop policy if exists "company profile managers can write" on public.company_profiles;
 create policy "company profile managers can write" on public.company_profiles for all to authenticated
   using (exists (select 1 from public.memberships m join public.role_permissions rp on rp.role_id = m.role_id where m.restaurant_id = company_profiles.restaurant_id and m.user_id = auth.uid() and m.status = 'active' and rp.permission_code = 'settings.manage'))
   with check (exists (select 1 from public.memberships m join public.role_permissions rp on rp.role_id = m.role_id where m.restaurant_id = company_profiles.restaurant_id and m.user_id = auth.uid() and m.status = 'active' and rp.permission_code = 'settings.manage'));
