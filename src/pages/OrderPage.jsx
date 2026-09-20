@@ -1,7 +1,11 @@
 import React, { useMemo, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
-import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
+import { useRestaurant, orderBalance, orderHasInvoice, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import {
+  consumePaidVoidAuthorization,
+  requestPaidVoidAuthorization,
+} from '../services/voidAuthorizationService.js'
 
 const roundStatus = (round) => {
   const items = round.items.filter((item) => !item.voided)
@@ -30,6 +34,8 @@ export default function OrderPage({ onNavigate }) {
   const restaurant = useRestaurant()
   const auth = useAuth()
   const canCharge = auth.can('payments.create')
+  const canAuthorizedVoid = auth.can('orders.void.authorized')
+  const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const {
     products, formatMoney, orderMode, currentTableId, currentOrder, currentDelivery, draft, pager, setPager, setOrderMode,
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft, voidSentItem,
@@ -47,6 +53,12 @@ export default function OrderPage({ onNavigate }) {
   const [showSplit, setShowSplit] = useState(false)
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeMethod, setChargeMethod] = useState('card')
+  const [paidVoidTarget, setPaidVoidTarget] = useState(null)
+  const [paidVoidReason, setPaidVoidReason] = useState('')
+  const [paidVoidRequestId, setPaidVoidRequestId] = useState(null)
+  const [paidVoidCode, setPaidVoidCode] = useState('')
+  const [paidVoidExpiresAt, setPaidVoidExpiresAt] = useState(null)
+  const [paidVoidBusy, setPaidVoidBusy] = useState(false)
 
   const categoryOptions = useMemo(
     () => Array.from(new Set(
@@ -97,6 +109,11 @@ export default function OrderPage({ onNavigate }) {
   const tableAccountTotal = tableOrders.reduce((sum, order) => sum + orderTotal(order), 0)
   const tableAccountPaid = tableOrders.reduce((sum, order) => sum + orderPaidTotal(order), 0)
   const tableAccountBalance = tableOrders.reduce((sum, order) => sum + orderBalance(order), 0)
+  const tableRefundDue = tableOrders.reduce((sum, order) => sum + Number(order.refundDue || 0), 0)
+  const currentOrderPaid = currentOrder ? orderPaidTotal(currentOrder) : 0
+  const accountHasPayment = orderMode === 'table'
+    ? tableAccountPaid > 0.005
+    : currentOrderPaid > 0.005
   const accountTotal = (orderMode === 'table' ? tableAccountTotal : currentOrderTotal) + draftTotal
 
   function allocateTablePayment(requestedAmount) {
@@ -146,6 +163,120 @@ export default function OrderPage({ onNavigate }) {
 
     setShowCharge(false)
     setShowSplit(true)
+  }
+
+  function openPaidVoid(round, item) {
+    if (!currentOrder || item.voided) return
+
+    if (orderHasInvoice(currentOrder)) {
+      return window.alert(
+        'Esta orden ya tiene factura emitida. No se puede anular desde el pedido; requiere corrección fiscal / nota de crédito.',
+      )
+    }
+
+    if (!accountHasPayment) {
+      return window.alert(
+        'La orden todavía no tiene pagos. Una vez enviado a preparación, este producto solo puede ser anulado desde Cocina.',
+      )
+    }
+
+    if (!canAuthorizedVoid) {
+      return window.alert(
+        'Este producto ya tiene un pago asociado. Solo Mesero/Caja pueden ejecutar la anulación con un código del Owner / Super Admin.',
+      )
+    }
+
+    setPaidVoidTarget({ round, item })
+    setPaidVoidReason('')
+    setPaidVoidRequestId(null)
+    setPaidVoidCode('')
+    setPaidVoidExpiresAt(null)
+  }
+
+  function closePaidVoid() {
+    if (paidVoidBusy) return
+    setPaidVoidTarget(null)
+    setPaidVoidReason('')
+    setPaidVoidRequestId(null)
+    setPaidVoidCode('')
+    setPaidVoidExpiresAt(null)
+  }
+
+  async function requestPaidVoidCode() {
+    if (!paidVoidTarget || !currentOrder || !restaurantId) return
+
+    const reason = paidVoidReason.trim()
+    if (reason.length < 4) {
+      return window.alert('Escribe un motivo claro para la anulación.')
+    }
+
+    setPaidVoidBusy(true)
+    try {
+      const { item } = paidVoidTarget
+      const result = await requestPaidVoidAuthorization({
+        restaurantId,
+        orderRef: currentOrder.id,
+        lineRef: item.lineId,
+        itemName: item.name,
+        amount: Number(item.price || 0) * Number(item.quantity || 0),
+        reason,
+        invoiceIssued: orderHasInvoice(currentOrder),
+      })
+
+      setPaidVoidRequestId(result.requestId)
+      setPaidVoidExpiresAt(result.expiresAt || null)
+      setPaidVoidCode('')
+    } catch (error) {
+      window.alert(error?.message || 'No se pudo enviar el código al administrador.')
+    } finally {
+      setPaidVoidBusy(false)
+    }
+  }
+
+  async function confirmPaidVoidCode() {
+    if (!paidVoidTarget || !currentOrder || !paidVoidRequestId) return
+
+    const code = paidVoidCode.trim()
+    if (!/^\d{6}$/.test(code)) {
+      return window.alert('Introduce el código de 6 dígitos enviado al administrador.')
+    }
+
+    setPaidVoidBusy(true)
+    try {
+      const { round, item } = paidVoidTarget
+      const reason = paidVoidReason.trim()
+      const auditId = await consumePaidVoidAuthorization({
+        requestId: paidVoidRequestId,
+        code,
+        orderRef: currentOrder.id,
+        lineRef: item.lineId,
+        itemName: item.name,
+        amount: Number(item.price || 0) * Number(item.quantity || 0),
+        reason,
+      })
+
+      const result = voidSentItem(currentOrder.id, round.id, item.lineId, {
+        method: 'admin_code',
+        reason,
+        auditId,
+        authorizationRequestId: paidVoidRequestId,
+        accountPaid: true,
+      })
+
+      if (!result.ok) throw new Error(result.message)
+
+      closePaidVoid()
+
+      if (result.refundDue > 0.005) {
+        window.alert(
+          `Producto anulado con autorización. Queda un reembolso pendiente de ${formatMoney(result.refundDue)}.`,
+        )
+      }
+    } catch (error) {
+      window.alert(error?.message || 'El código no pudo validar la anulación.')
+    } finally {
+      setPaidVoidBusy(false)
+    }
   }
 
   function confirmCharge() {
@@ -330,7 +461,31 @@ export default function OrderPage({ onNavigate }) {
                     {item.note && <small>↳ {item.note}</small>}
                     <span className="station">{item.station === 'bar' ? 'BAR' : 'COCINA'} · {item.prepStatus.toUpperCase()} · bloqueado</span>
                   </div>
-                  <div className="sent-price"><strong>{formatMoney(item.price * item.quantity)}</strong>{!item.voided && <button className="mini danger" onClick={() => window.confirm('Este producto ya fue enviado. Se registrará como ANULADO, no se eliminará del historial.') && voidSentItem(currentOrder.id, round.id, item.lineId)}>Anular</button>}</div>
+                  <div className="sent-price">
+                    <strong>{formatMoney(item.price * item.quantity)}</strong>
+
+                    {!item.voided && orderHasInvoice(currentOrder) && (
+                      <span className="void-lock critical">🔒 Facturada</span>
+                    )}
+
+                    {!item.voided && !orderHasInvoice(currentOrder) && accountHasPayment && canAuthorizedVoid && (
+                      <button className="mini danger" onClick={() => openPaidVoid(round, item)}>
+                        Anular con autorización
+                      </button>
+                    )}
+
+                    {!item.voided && !orderHasInvoice(currentOrder) && accountHasPayment && !canAuthorizedVoid && (
+                      <span className="void-lock">🔒 Requiere administrador</span>
+                    )}
+
+                    {!item.voided && !orderHasInvoice(currentOrder) && !accountHasPayment && (
+                      <span className="void-lock">Anulación solo en Cocina</span>
+                    )}
+
+                    {item.voided && item.voidReason && (
+                      <small className="voided-reason">Motivo: {item.voidReason}</small>
+                    )}
+                  </div>
                 </div>
               ))}
               {roundStatus(round) === 'LISTA' && <button className="btn" onClick={() => markRoundDelivered(currentOrder.id, round.id)}>✓ Marcar comanda entregada</button>}
@@ -365,6 +520,9 @@ export default function OrderPage({ onNavigate }) {
               <>
                 <div className="row plain"><span>Pagado</span><strong>{formatMoney(tableAccountPaid)}</strong></div>
                 <div className="row plain"><b>Saldo pendiente</b><strong>{formatMoney(tableAccountBalance)}</strong></div>
+                {tableRefundDue > 0.005 && (
+                  <div className="row plain refund-due-row"><b>Reembolso pendiente</b><strong>{formatMoney(tableRefundDue)}</strong></div>
+                )}
               </>
             )}
           </div>
@@ -388,6 +546,77 @@ export default function OrderPage({ onNavigate }) {
           {orderMode === 'delivery' && <div className="notice">El domicilio quedará identificado con los datos del cliente en Cocina/Bar y en el módulo Domicilios.</div>}
         </div>
       </div>
+
+      {paidVoidTarget && currentOrder && (
+        <div className="modal open controlled-void-modal" onClick={closePaidVoid}>
+          <div className="modal-card controlled-void-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title">
+              <div>
+                <h3>🔐 Anulación con autorización</h3>
+                <p className="muted">Producto pagado · requiere código del Owner / Super Admin.</p>
+              </div>
+              <button className="btn" disabled={paidVoidBusy} onClick={closePaidVoid}>×</button>
+            </div>
+
+            <div className="controlled-void-product">
+              <div>
+                <b>{paidVoidTarget.item.quantity} × {paidVoidTarget.item.name}</b>
+                <small>Orden #{currentOrder.id} · Comanda {paidVoidTarget.round.id}</small>
+              </div>
+              <strong>{formatMoney(Number(paidVoidTarget.item.price || 0) * Number(paidVoidTarget.item.quantity || 0))}</strong>
+            </div>
+
+            <label className="controlled-void-reason">
+              <span>Motivo de la anulación *</span>
+              <textarea
+                value={paidVoidReason}
+                disabled={Boolean(paidVoidRequestId) || paidVoidBusy}
+                onChange={(event) => setPaidVoidReason(event.target.value)}
+                placeholder="Explica por qué debe anularse este producto"
+                autoFocus
+              />
+            </label>
+
+            {!paidVoidRequestId ? (
+              <>
+                <div className="notice warn">
+                  Al continuar se enviará un código de 6 dígitos al correo del administrador. El código caduca en 10 minutos, es de un solo uso y solo puede utilizarlo quien hizo esta solicitud.
+                </div>
+                <button className="btn primary full" disabled={paidVoidBusy} onClick={requestPaidVoidCode}>
+                  {paidVoidBusy ? 'Enviando código…' : 'Enviar código al administrador'}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="notice">
+                  Código enviado al administrador.
+                  {paidVoidExpiresAt ? ` Válido hasta ${new Date(paidVoidExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
+                </div>
+
+                <label className="void-code-field">
+                  <span>Código de autorización</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength="6"
+                    value={paidVoidCode}
+                    onChange={(event) => setPaidVoidCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                  />
+                </label>
+
+                <div className="notice warn">
+                  Si la anulación genera dinero a favor del cliente, RestOS+ marcará la cuenta como <b>Reembolso pendiente</b>. No registra un reembolso automáticamente.
+                </div>
+
+                <button className="btn primary full" disabled={paidVoidBusy || paidVoidCode.length !== 6} onClick={confirmPaidVoidCode}>
+                  {paidVoidBusy ? 'Validando…' : 'Validar código y anular'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {showCharge && (
         <div className="modal open" onClick={() => setShowCharge(false)}>
