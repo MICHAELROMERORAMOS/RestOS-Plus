@@ -26,6 +26,7 @@ export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
   const activeTables = state.tables.filter((table) => table.active !== false)
   const activeZones = state.zones.filter((zone) => zone.active !== false)
   const zoneNameById = Object.fromEntries(activeZones.map((zone) => [zone.id, zone.name]))
+  const nonFreeTables = activeTables.filter((table) => getTableVisualStatus(table.id) !== 'free')
   const occupied = activeTables.filter((table) => ['occupied', 'ready', 'pay', 'waiting_food', 'refund_due'].includes(getTableVisualStatus(table.id))).length
   const activeOrders = state.orders.filter((order) => !['closed', 'cancelled', 'merged'].includes(order.status)).length
   const toPay = state.orders.filter((order) => order.mode === 'table' && orderBalance(order) > 0.005 && (order.rounds?.length || 0) > 0).length
@@ -49,8 +50,10 @@ export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
       <div className="grid two" style={{ marginTop: 16 }}>
         <div className="card">
           <div className="section-title"><h3>Estado del salón</h3><button className="btn" onClick={() => onNavigate('tables')}>Ver mesas</button></div>
-          {activeTables.length ? (
-            <div className="tables">{activeTables.slice(0, 8).map((table) => <TableButton key={table.id} table={table} zoneName={zoneNameById[table.zoneId] || 'Sin área'} status={getTableVisualStatus(table.id)} onOpen={onOpenTable} />)}</div>
+          {nonFreeTables.length ? (
+            <div className="tables">{nonFreeTables.slice(0, 8).map((table) => <TableButton key={table.id} table={table} zoneName={zoneNameById[table.zoneId] || 'Sin área'} status={getTableVisualStatus(table.id)} onOpen={onOpenTable} />)}</div>
+          ) : activeTables.length ? (
+            <div className="empty-inline">Todas las mesas están libres.</div>
           ) : (
             <div className="empty-inline">No hay mesas configuradas. Créelas desde Configuración.</div>
           )}
