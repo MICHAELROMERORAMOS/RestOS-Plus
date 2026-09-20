@@ -1082,6 +1082,13 @@ export function RestaurantProvider({ children }) {
   }, [auth.isDesignMode, auth.permissions, restaurantId, updateSettings])
 
   const resetDemo = useCallback(() => {
+    if (!auth.isDesignMode) {
+      return {
+        ok: false,
+        message: 'Restablecer demo está deshabilitado en una sesión real para proteger los datos del restaurante.',
+      }
+    }
+
     const fresh = createInitialDemoState()
     OLD_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key))
     persist(fresh)
@@ -1091,11 +1098,10 @@ export function RestaurantProvider({ children }) {
     setDraft([])
     setPager('')
     setCurrentDelivery(null)
-    if (auth.isDesignMode) {
-      setProducts(DEMO_PRODUCTS)
-      setMenuCategories([])
-      setMenuStations([])
-    }
+    setProducts(DEMO_PRODUCTS)
+    setMenuCategories([])
+    setMenuStations([])
+    return { ok: true }
   }, [persist, auth.isDesignMode])
 
   const stationJobs = useCallback((station) => {
