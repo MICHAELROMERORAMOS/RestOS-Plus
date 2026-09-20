@@ -132,7 +132,7 @@ export default function StationPage({ station }) {
             <div>
               <h3>⚠ Solicitudes de anulación</h3>
               <p className="muted">
-                Mesero/Caja solicita. Cocina aprueba o rechaza únicamente cuentas sin pagos.
+                Mesero/Caja/Admin solicita. Cocina o el Owner autorizado aprueba o rechaza únicamente cuentas sin pagos.
               </p>
             </div>
             <div className="kitchen-void-request-actions">
