@@ -74,7 +74,8 @@ export default function CashierPage() {
         (round.items || [])
           .filter((item) => !item.voided)
           .map((item) => {
-            const alreadyAssigned = (order.payments || [])
+            const alreadyAssigned = activeGroup.orders
+              .flatMap((candidate) => candidate.payments || [])
               .flatMap((payment) => payment.itemAllocations || [])
               .filter((allocation) => allocation.lineId === item.lineId)
               .reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0)
@@ -197,42 +198,29 @@ export default function CashierPage() {
   }
 
   const selectedProductData = useMemo(() => {
-    if (!activeGroup || !split) return { total: 0, allocations: [], invalidOrderIds: [] }
+    if (!activeGroup || !split) return { total: 0, itemAllocations: [] }
 
-    const byOrder = new Map()
+    const itemAllocations = []
 
     productLines.forEach((line) => {
       const quantity = Number(split.selected?.[line.key] || 0)
       if (quantity <= 0) return
 
-      const existing = byOrder.get(line.orderId) || {
-        orderId: line.orderId,
-        amount: 0,
-        itemAllocations: [],
-      }
-
-      existing.amount += quantity * line.price
-      existing.itemAllocations.push({
+      itemAllocations.push({
         lineId: line.lineId,
+        sourceOrderId: line.orderId,
         quantity,
         unitPrice: line.price,
         name: line.name,
       })
-      byOrder.set(line.orderId, existing)
     })
 
-    const allocations = Array.from(byOrder.values())
-    const invalidOrderIds = allocations
-      .filter((allocation) => {
-        const order = activeGroup.orders.find((candidate) => candidate.id === allocation.orderId)
-        return !order || allocation.amount > orderBalance(order) + 0.005
-      })
-      .map((allocation) => allocation.orderId)
-
     return {
-      total: allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
-      allocations,
-      invalidOrderIds,
+      total: itemAllocations.reduce(
+        (sum, allocation) => sum + (Number(allocation.quantity || 0) * Number(allocation.unitPrice || 0)),
+        0,
+      ),
+      itemAllocations,
     }
   }, [activeGroup, productLines, split])
 
@@ -240,15 +228,22 @@ export default function CashierPage() {
     if (!activeGroup || !split) return
     if (selectedProductData.total <= 0.005) return window.alert('Selecciona al menos un producto.')
     if (selectedProductData.total > activeGroup.balance + 0.005) {
-      return window.alert('Los productos seleccionados superan el saldo pendiente.')
+      return window.alert('Los productos seleccionados superan el saldo pendiente de la mesa.')
     }
-    if (selectedProductData.invalidOrderIds.length) {
-      return window.alert('Hay pagos previos en esta cuenta que impiden asignar esos productos exactamente. Reduce la selección o usa división por importe.')
+
+    const allocations = allocateAcrossOrders(activeGroup, selectedProductData.total)
+    if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
+
+    // Product selection belongs to the consolidated table account, not to one legacy internal order.
+    // Store the selected lines once on the first monetary allocation to prevent double charging them.
+    allocations[0] = {
+      ...allocations[0],
+      itemAllocations: selectedProductData.itemAllocations,
     }
 
     performPayment(
       activeGroup,
-      selectedProductData.allocations,
+      allocations,
       `Productos seleccionados · €${money(selectedProductData.total)}.`,
       () => setSplit((current) => current ? { ...current, selected: {} } : current),
     )
@@ -377,7 +372,7 @@ export default function CashierPage() {
 
                 <button
                   className="btn primary full"
-                  disabled={selectedProductData.total <= 0.005 || selectedProductData.total > activeGroup.balance + 0.005 || selectedProductData.invalidOrderIds.length > 0}
+                  disabled={selectedProductData.total <= 0.005 || selectedProductData.total > activeGroup.balance + 0.005}
                   onClick={chargeSelectedProducts}
                 >
                   Cobrar productos seleccionados
