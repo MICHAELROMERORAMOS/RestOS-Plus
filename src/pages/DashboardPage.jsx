@@ -1,5 +1,6 @@
 import React from 'react'
 import { useRestaurant, orderBalance } from '../context/RestaurantContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 function TableButton({ table, zoneName, status, onOpen }) {
   const labels = { free: 'LIBRE', reserved: 'RESERVADA', occupied: 'CUENTA ABIERTA', ready: 'PEDIDO LISTO', pay: 'POR COBRAR' }
@@ -20,6 +21,7 @@ function TableButton({ table, zoneName, status, onOpen }) {
 }
 
 export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
+  const auth = useAuth()
   const { state, resetDemo, getTableVisualStatus, formatMoney } = useRestaurant()
   const activeTables = state.tables.filter((table) => table.active !== false)
   const activeZones = state.zones.filter((zone) => zone.active !== false)
@@ -32,7 +34,11 @@ export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
     <section className="view active">
       <div className="hero">
         <div><h2>Buenos días 👋</h2><p>Vista general de la operación del restaurante.</p></div>
-        <button className="btn" onClick={() => window.confirm('¿Restablecer todos los datos de demostración?') && resetDemo()}>Restablecer demo</button>
+        {auth.isDesignMode && (
+          <button className="btn" onClick={() => window.confirm('¿Restablecer todos los datos de demostración?') && resetDemo()}>
+            Restablecer demo
+          </button>
+        )}
       </div>
       <div className="grid stats">
         <div className="card stat"><span className="label">Mesas ocupadas</span><strong>{occupied} / {activeTables.length}</strong><small>Estado en tiempo real</small></div>
