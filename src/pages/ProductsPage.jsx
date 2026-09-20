@@ -278,20 +278,58 @@ export default function ProductsPage() {
                 <input value={form.name} onChange={(event) => updateField('name', event.target.value)} autoFocus />
               </label>
 
-              <label>
-                <span>Categoría</span>
-                <select value={form.categoryId} onChange={(event) => updateField('categoryId', event.target.value)}>
-                  <option value="">Sin categoría</option>
-                  {activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                </select>
-              </label>
+              <div className="product-choice-field wide">
+                <span className="product-choice-label">Categoría</span>
+                <div className="product-choice-buttons" role="group" aria-label="Categoría del producto">
+                  <button
+                    type="button"
+                    className={`product-choice-btn ${form.categoryId === '' ? 'active' : ''}`}
+                    aria-pressed={form.categoryId === ''}
+                    onClick={() => updateField('categoryId', '')}
+                  >
+                    Sin categoría
+                  </button>
+                  {activeCategories.map((category) => (
+                    <button
+                      type="button"
+                      key={category.id}
+                      className={`product-choice-btn ${form.categoryId === category.id ? 'active' : ''}`}
+                      aria-pressed={form.categoryId === category.id}
+                      onClick={() => updateField('categoryId', category.id)}
+                    >
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <label>
-                <span>Preparación *</span>
-                <select value={form.station} onChange={(event) => updateField('station', event.target.value)}>
-                  {stationTypes.map((station) => <option key={station.value} value={station.value}>{station.label}</option>)}
-                </select>
-              </label>
+              <div className="product-choice-field wide">
+                <span className="product-choice-label">Preparación *</span>
+                <div className="product-choice-buttons product-station-buttons" role="group" aria-label="Zona de preparación">
+                  {stationTypes.map((station) => (
+                    <button
+                      type="button"
+                      key={station.value}
+                      className={`product-choice-btn station-choice-btn ${form.station === station.value ? 'active' : ''}`}
+                      aria-pressed={form.station === station.value}
+                      onClick={() => updateField('station', station.value)}
+                    >
+                      <span className="product-choice-icon">
+                        {station.value === 'kitchen'
+                          ? '🍳'
+                          : station.value === 'bar'
+                            ? '🍸'
+                            : station.value === 'dessert'
+                              ? '🍰'
+                              : station.value === 'coffee'
+                                ? '☕'
+                                : '📍'}
+                      </span>
+                      {station.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <label>
                 <span>Precio ({currencyCode}) *</span>
