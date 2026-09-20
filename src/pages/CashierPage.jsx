@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
-import InvoicePreviewModal from '../components/payments/InvoicePreviewModal.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import {
@@ -8,7 +7,6 @@ import {
   listMyKitchenVoidRequests,
   markKitchenVoidRequestApplied,
 } from '../services/voidAuthorizationService.js'
-import { getInvoicePreviewsRemote } from '../services/operationalService.js'
 
 function money(value) {
   return Number(value || 0).toFixed(2)
@@ -55,7 +53,6 @@ export default function CashierPage() {
     recordPayments,
     tableLabel,
     formatMoney,
-    currencyCode,
     applyKitchenApprovedVoidRequest,
   } = useRestaurant()
 
@@ -69,7 +66,6 @@ export default function CashierPage() {
   const [voidSelected, setVoidSelected] = useState({})
   const [voidReason, setVoidReason] = useState('')
   const [voidBusy, setVoidBusy] = useState(false)
-  const [invoicePreviews, setInvoicePreviews] = useState([])
 
 
   const groups = useMemo(() => {
@@ -77,7 +73,7 @@ export default function CashierPage() {
 
     state.orders
       .filter((order) => (
-        order.mode === 'table'
+        ['table', 'quick', 'delivery'].includes(order.mode)
         && !['closed', 'cancelled', 'merged'].includes(order.status)
         && (order.rounds?.length || 0) > 0
         && (orderBalance(order) > 0.005 || Number(order.refundDue || 0) > 0.005)
@@ -105,7 +101,11 @@ export default function CashierPage() {
           paid: orders.reduce((sum, order) => sum + orderPaidTotal(order), 0),
           balance: orders.reduce((sum, order) => sum + orderBalance(order), 0),
           refundDue: orders.reduce((sum, order) => sum + Number(order.refundDue || 0), 0),
-          tableText: group.tableIds.map((id) => tableLabel(id)).join(' + '),
+          tableText: group.tableIds.length
+            ? group.tableIds.map((id) => tableLabel(id)).join(' + ')
+            : group.orders[0]?.mode === 'delivery'
+              ? `Domicilio · ${group.orders[0]?.delivery?.customerName || 'Sin cliente'}`
+              : `Servicio rápido · Orden #${group.orders[0]?.id || ''}`,
         }
       })
       .sort((a, b) => (a.orders[0]?.created || 0) - (b.orders[0]?.created || 0))
@@ -216,22 +216,7 @@ export default function CashierPage() {
     if (!confirmed) return
 
     const result = await recordPayments(allocations, method)
-    if (!result.ok) {
-      window.alert(result.message)
-      return
-    }
-
-    if (!auth.isDesignMode && total + 0.005 >= group.balance) {
-      try {
-        const serverOrderIds = allocations
-          .map((allocation) => group.orders.find((order) => order.id === allocation.orderId)?.serverId)
-          .filter(Boolean)
-        const invoices = await getInvoicePreviewsRemote(serverOrderIds)
-        if (invoices.length) setInvoicePreviews(invoices)
-      } catch (error) {
-        window.alert(`El pago se registró, pero no se pudo abrir la factura: ${error?.message || 'error de vista previa'}.`)
-      }
-    }
+    if (!result.ok) window.alert(result.message)
   }
 
   function chargeFull(group) {
@@ -368,21 +353,6 @@ export default function CashierPage() {
           orders={splitGroup.orders}
           tableText={splitGroup.tableText}
           onClose={() => setSplitGroupKey(null)}
-          onAccountPaid={async (allocations) => {
-            const paidNow = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
-            if (paidNow + 0.005 < splitGroup.balance || auth.isDesignMode) return
-            const serverOrderIds = splitGroup.orders.map((order) => order.serverId).filter(Boolean)
-            const invoices = await getInvoicePreviewsRemote(serverOrderIds)
-            if (invoices.length) setInvoicePreviews(invoices)
-          }}
-        />
-      )}
-
-      {invoicePreviews.length > 0 && (
-        <InvoicePreviewModal
-          invoices={invoicePreviews}
-          currencyCode={currencyCode}
-          onClose={() => setInvoicePreviews([])}
         />
       )}
 
