@@ -261,9 +261,9 @@ export default function ProductsPage() {
       </div>
 
       {showProduct && (
-        <div className="modal open" onClick={() => !saving && setShowProduct(false)}>
+        <div className="modal open product-form-modal" onClick={() => !saving && setShowProduct(false)}>
           <form className="modal-card product-form-card" onSubmit={saveProduct} onClick={(event) => event.stopPropagation()}>
-            <div className="section-title">
+            <div className="section-title product-form-head">
               <div>
                 <h3>{form.id ? 'Editar producto' : 'Nuevo producto'}</h3>
                 <p className="muted">Datos que aparecerán en el menú y en las comandas.</p>
@@ -271,7 +271,8 @@ export default function ProductsPage() {
               <button type="button" className="btn" disabled={saving} onClick={() => setShowProduct(false)}>×</button>
             </div>
 
-            <div className="product-form-grid">
+            <div className="product-form-scroll">
+              <div className="product-form-grid">
               <label className="wide">
                 <span>Nombre *</span>
                 <input value={form.name} onChange={(event) => updateField('name', event.target.value)} autoFocus />
@@ -321,11 +322,14 @@ export default function ProductsPage() {
                 <span>Producto activo / disponible</span>
                 <input type="checkbox" checked={form.active} onChange={(event) => updateField('active', event.target.checked)} />
               </label>
+              </div>
             </div>
 
-            <button className="btn primary full" type="submit" disabled={saving}>
-              {saving ? 'Guardando en Supabase…' : 'Guardar producto'}
-            </button>
+            <div className="product-form-footer">
+              <button className="btn primary full" type="submit" disabled={saving}>
+                {saving ? 'Guardando en Supabase…' : 'Guardar producto'}
+              </button>
+            </div>
           </form>
         </div>
       )}
