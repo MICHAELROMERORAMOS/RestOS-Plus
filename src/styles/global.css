@@ -752,3 +752,73 @@ html, body {
     text-align: left;
   }
 }
+
+/* Role-based payment from order screen */
+.pay-inline-btn,
+.payment-from-order {
+  border-color: #b8cfc4;
+}
+
+.payment-from-order {
+  margin: 10px 0 0;
+}
+
+.order-payment-modal {
+  width: min(620px, 100%);
+}
+
+.order-payment-totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+
+.order-payment-totals > div {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8faf9;
+  padding: 14px;
+  display: grid;
+  gap: 5px;
+}
+
+.order-payment-totals span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.order-payment-totals strong {
+  font-size: 22px;
+}
+
+.order-payment-totals .balance {
+  background: #edf4f0;
+}
+
+.order-payment-totals .balance strong {
+  color: var(--brand);
+}
+
+.order-payment-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+@media (max-width: 650px) {
+  .order-payment-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .order-payment-shortcuts {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .order-payment-shortcuts .btn {
+    width: 100%;
+  }
+}
