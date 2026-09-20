@@ -63,8 +63,17 @@ export default function StationPage({ station }) {
           <article className="card ticket kds-ticket" key={`${order.id}-${round.id}`}>
             <div className="section-title kds-ticket-head">
               <div>
-                <h3>{order.tableIds?.length ? order.tableIds.map((id) => tableLabel(id)).join(' + ') : `Orden #${order.id}`}</h3>
-                <small>Orden #{order.id} · Comanda {round.id} · {items.length} producto{items.length === 1 ? '' : 's'}</small>
+                <h3>{
+                  order.tableIds?.length
+                    ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
+                    : order.mode === 'delivery'
+                      ? `🚚 Domicilio · ${order.delivery?.customerName || `Orden #${order.id}`}`
+                      : `Orden #${order.id}`
+                }</h3>
+                <small>
+                  Orden #{order.id} · Comanda {round.id} · {items.length} producto{items.length === 1 ? '' : 's'}
+                  {order.mode === 'delivery' && order.delivery?.address ? ` · ${order.delivery.address}` : ''}
+                </small>
               </div>
               <span className="badge">#{order.id} · C{round.id}</span>
             </div>
