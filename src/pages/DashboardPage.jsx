@@ -3,7 +3,7 @@ import { useRestaurant, orderBalance } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
 function TableButton({ table, zoneName, status, onOpen }) {
-  const labels = { free: 'LIBRE', reserved: 'RESERVADA', occupied: 'CUENTA ABIERTA', ready: 'PEDIDO LISTO', pay: 'POR COBRAR' }
+  const labels = { free: 'LIBRE', reserved: 'RESERVADA', occupied: 'CUENTA ABIERTA', ready: 'PEDIDO LISTO', pay: 'POR COBRAR', waiting_food: 'PAGADA · ESPERANDO COMIDA', refund_due: 'REEMBOLSO PENDIENTE' }
   const style = status === 'free'
     ? { borderColor: '#22c55e' }
     : status === 'reserved'
@@ -26,7 +26,7 @@ export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
   const activeTables = state.tables.filter((table) => table.active !== false)
   const activeZones = state.zones.filter((zone) => zone.active !== false)
   const zoneNameById = Object.fromEntries(activeZones.map((zone) => [zone.id, zone.name]))
-  const occupied = activeTables.filter((table) => ['occupied', 'ready', 'pay'].includes(getTableVisualStatus(table.id))).length
+  const occupied = activeTables.filter((table) => ['occupied', 'ready', 'pay', 'waiting_food', 'refund_due'].includes(getTableVisualStatus(table.id))).length
   const activeOrders = state.orders.filter((order) => !['closed', 'cancelled', 'merged'].includes(order.status)).length
   const toPay = state.orders.filter((order) => order.mode === 'table' && orderBalance(order) > 0.005 && (order.rounds?.length || 0) > 0).length
 
