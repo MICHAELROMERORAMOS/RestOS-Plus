@@ -17,6 +17,7 @@ import {
   advanceStationRoundRemote,
   createDeliveryOrderRemote,
   joinOrderTableRemote,
+  loadOperationalOrdersByIds,
   loadOperationalState,
   markRoundServedRemote,
   recordOrderPaymentsRemote,
@@ -142,6 +143,52 @@ function orderHasPendingPreparation(order) {
     .some((item) => !['ready', 'delivered'].includes(item.prepStatus))
 }
 
+function syncOperationalTableStatuses(tables, orders) {
+  const now = Date.now()
+
+  return (tables || []).map((table) => {
+    const related = (orders || [])
+      .filter((order) => order.mode === 'table' && (order.tableIds || []).includes(table.id))
+      .slice()
+      .sort((a, b) => (b.created || 0) - (a.created || 0))
+
+    const open = related.find((order) => !['closed', 'cancelled', 'merged'].includes(order.status))
+
+    if (open) {
+      const status = ['pay', 'waiting_food', 'refund_due', 'ready'].includes(open.status)
+        ? open.status
+        : 'occupied'
+
+      return {
+        ...table,
+        status,
+        openedAt: open.created || table.openedAt || now,
+        releasedAt: table.releasedAt || null,
+      }
+    }
+
+    const lastClosed = related.find((order) => ['closed', 'cancelled'].includes(order.status))
+    return {
+      ...table,
+      status: 'free',
+      openedAt: null,
+      releasedAt: lastClosed?.closedAt || table.releasedAt || null,
+    }
+  })
+}
+
+function orderIdFromRealtimePayload(payload) {
+  const row = payload?.new && Object.keys(payload.new).length ? payload.new : payload?.old
+  if (!row) return null
+
+  if (payload.table === 'orders') return row.id || null
+  if (['order_table_links', 'order_rounds', 'order_items', 'payments'].includes(payload.table)) {
+    return row.order_id || null
+  }
+
+  return null
+}
+
 export function RestaurantProvider({ children }) {
   const auth = useAuth()
   const [state, setState] = useState(loadInitialState)
@@ -150,6 +197,7 @@ export function RestaurantProvider({ children }) {
     tables: state.tables || [],
   })
   const operationalRefreshTimer = useRef(null)
+  const pendingOperationalOrderIds = useRef(new Set())
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
   const [menuStations, setMenuStations] = useState([])
@@ -219,39 +267,10 @@ export function RestaurantProvider({ children }) {
 
   const applyOperationalOrders = useCallback((orders) => {
     setState((previous) => {
-      const now = Date.now()
-      const nextTables = previous.tables.map((table) => {
-        const related = orders
-          .filter((order) => order.mode === 'table' && (order.tableIds || []).includes(table.id))
-          .slice()
-          .sort((a, b) => (b.created || 0) - (a.created || 0))
-
-        const open = related.find((order) => !['closed', 'cancelled', 'merged'].includes(order.status))
-        if (open) {
-          const status = ['pay', 'waiting_food', 'refund_due', 'ready'].includes(open.status)
-            ? open.status
-            : 'occupied'
-          return {
-            ...table,
-            status,
-            openedAt: open.created || table.openedAt || now,
-            releasedAt: table.releasedAt || null,
-          }
-        }
-
-        const lastClosed = related.find((order) => ['closed', 'cancelled'].includes(order.status))
-        return {
-          ...table,
-          status: 'free',
-          openedAt: null,
-          releasedAt: lastClosed?.closedAt || table.releasedAt || null,
-        }
-      })
-
       const next = {
         ...previous,
         orders,
-        tables: nextTables,
+        tables: syncOperationalTableStatuses(previous.tables, orders),
         sales: orders.reduce((sum, order) => sum + orderPaidTotal(order), 0),
       }
 
@@ -262,6 +281,36 @@ export function RestaurantProvider({ children }) {
       return next
     })
   }, [auth.isDesignMode])
+
+  const applyOperationalOrderPatches = useCallback((patches) => {
+    if (!patches?.length) return
+
+    setState((previous) => {
+      const patchByServerId = new Map(
+        patches.map((order) => [String(order.serverId), order]),
+      )
+      const seen = new Set()
+      const orders = previous.orders.map((order) => {
+        const patch = patchByServerId.get(String(order.serverId))
+        if (!patch) return order
+        seen.add(String(order.serverId))
+        return patch
+      })
+
+      patches.forEach((order) => {
+        if (!seen.has(String(order.serverId))) orders.push(order)
+      })
+
+      orders.sort((a, b) => (a.created || 0) - (b.created || 0))
+
+      return {
+        ...previous,
+        orders,
+        tables: syncOperationalTableStatuses(previous.tables, orders),
+        sales: orders.reduce((sum, order) => sum + orderPaidTotal(order), 0),
+      }
+    })
+  }, [])
 
   const refreshOperationalData = useCallback(async (locationOverride = null) => {
     if (auth.isDesignMode) return { ok: true }
@@ -282,6 +331,33 @@ export function RestaurantProvider({ children }) {
       return { ok: false, message }
     }
   }, [auth.isDesignMode, restaurantId, activeLocation, applyOperationalOrders])
+
+  const refreshOperationalOrdersByIds = useCallback(async (orderIds, locationOverride = null) => {
+    if (auth.isDesignMode) return { ok: true }
+
+    const location = locationOverride || activeLocation
+    const ids = Array.from(new Set((orderIds || []).filter(Boolean)))
+
+    if (!ids.length) return { ok: true, orders: [] }
+    if (!restaurantId || !location?.id) {
+      return { ok: false, message: 'No hay sucursal activa.' }
+    }
+
+    try {
+      const operational = await loadOperationalOrdersByIds(restaurantId, location.id, ids)
+      applyOperationalOrderPatches(operational.orders)
+      return { ok: true, orders: operational.orders }
+    } catch (error) {
+      const message = error?.message || 'No se pudo actualizar la orden desde Supabase.'
+      setRemoteError(message)
+      return { ok: false, message }
+    }
+  }, [
+    auth.isDesignMode,
+    restaurantId,
+    activeLocation,
+    applyOperationalOrderPatches,
+  ])
 
   const refreshMenu = useCallback(async (locationOverride = null) => {
     if (auth.isDesignMode) {
@@ -404,13 +480,20 @@ export function RestaurantProvider({ children }) {
       return undefined
     }
 
-    const channel = subscribeOperationalChanges(activeLocation.id, () => {
+    const channel = subscribeOperationalChanges(activeLocation.id, (payload) => {
+      const orderId = orderIdFromRealtimePayload(payload)
+      if (!orderId) return
+
+      pendingOperationalOrderIds.current.add(orderId)
+
       if (operationalRefreshTimer.current) {
         window.clearTimeout(operationalRefreshTimer.current)
       }
 
       operationalRefreshTimer.current = window.setTimeout(() => {
-        refreshOperationalData(activeLocation).catch(() => {})
+        const orderIds = Array.from(pendingOperationalOrderIds.current)
+        pendingOperationalOrderIds.current.clear()
+        refreshOperationalOrdersByIds(orderIds, activeLocation).catch(() => {})
       }, 180)
     })
 
@@ -419,6 +502,7 @@ export function RestaurantProvider({ children }) {
         window.clearTimeout(operationalRefreshTimer.current)
         operationalRefreshTimer.current = null
       }
+      pendingOperationalOrderIds.current.clear()
       unsubscribeOperationalChanges(channel).catch(() => {})
     }
   }, [
@@ -426,7 +510,7 @@ export function RestaurantProvider({ children }) {
     auth.mode,
     restaurantId,
     activeLocation?.id,
-    refreshOperationalData,
+    refreshOperationalOrdersByIds,
   ])
 
   const openOrderForTable = useCallback((tableId, source = state) => source.orders.find((order) => (
@@ -1590,6 +1674,7 @@ export function RestaurantProvider({ children }) {
     refreshMenu,
     refreshRemoteData,
     refreshOperationalData,
+    refreshOperationalOrdersByIds,
     currencyCode,
     formatMoney,
     setCurrency,
@@ -1637,7 +1722,7 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    refreshMenu, refreshRemoteData, refreshOperationalData, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    refreshMenu, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
