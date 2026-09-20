@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { CURRENCY_OPTIONS } from '../lib/currency.js'
+import { loadCompanyProfile, saveCompanyProfile } from '../services/invoiceRegisterService.js'
 
 export default function SettingsPage() {
   const {
@@ -15,6 +16,11 @@ export default function SettingsPage() {
   const canManageTables = auth.can('tables.manage')
   const canManageSettings = auth.can('settings.manage')
   const settings = state.settings
+  const companyRestaurantId = auth.userContext?.membership?.restaurant_id || null
+  const [company, setCompany] = useState({ restaurant_id: companyRestaurantId, legal_name: '', trade_name: '', nit: '', verification_digit: '', tax_regime: '', tax_responsibilities: '', address: '', city: '', department: '', phone: '', email: '', invoice_prefix: 'FAC', resolution_number: '', resolution_date: '', resolution_range_start: '', resolution_range_end: '', footer_text: '' })
+  const [companySaving, setCompanySaving] = useState(false)
+  useEffect(() => { if (companyRestaurantId) loadCompanyProfile(companyRestaurantId).then((saved) => saved && setCompany(saved)).catch(() => {}) }, [companyRestaurantId])
+  async function saveCompany() { if (!canManageSettings || !companyRestaurantId) return; setCompanySaving(true); try { setCompany(await saveCompanyProfile({ ...company, restaurant_id: companyRestaurantId })) } catch (e) { window.alert(e.message) } finally { setCompanySaving(false) } }
 
   const activeZones = useMemo(
     () => state.zones.filter((zone) => zone.active !== false).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
@@ -137,6 +143,8 @@ export default function SettingsPage() {
           <div className="notice warn">Que el cliente Supabase esté configurado no significa que Auth esté listo: todavía debes activar plantillas OTP, URLs y Google desde el panel de Supabase.</div>
         </div>
       </div>
+
+      <div className="card section-gap"><div className="section-title"><div><h3>Datos de empresa — Colombia</h3><p className="muted">Se utilizarán en la vista previa y en el registro interno de facturas.</p></div><span className="badge">Configuración fiscal interna</span></div><div className="grid two settings-form"><label><span>Razón social</span><input value={company.legal_name} onChange={e=>setCompany({...company,legal_name:e.target.value})}/></label><label><span>Nombre comercial</span><input value={company.trade_name} onChange={e=>setCompany({...company,trade_name:e.target.value})}/></label><label><span>NIT</span><input value={company.nit} onChange={e=>setCompany({...company,nit:e.target.value})}/></label><label><span>Dígito de verificación</span><input value={company.verification_digit} onChange={e=>setCompany({...company,verification_digit:e.target.value})}/></label><label><span>Régimen</span><input value={company.tax_regime} onChange={e=>setCompany({...company,tax_regime:e.target.value})}/></label><label><span>Responsabilidades tributarias</span><input value={company.tax_responsibilities} onChange={e=>setCompany({...company,tax_responsibilities:e.target.value})}/></label><label><span>Dirección</span><input value={company.address} onChange={e=>setCompany({...company,address:e.target.value})}/></label><label><span>Ciudad</span><input value={company.city} onChange={e=>setCompany({...company,city:e.target.value})}/></label><label><span>Departamento</span><input value={company.department} onChange={e=>setCompany({...company,department:e.target.value})}/></label><label><span>Teléfono</span><input value={company.phone} onChange={e=>setCompany({...company,phone:e.target.value})}/></label><label><span>Correo</span><input type="email" value={company.email} onChange={e=>setCompany({...company,email:e.target.value})}/></label><label><span>Prefijo interno</span><input value={company.invoice_prefix} onChange={e=>setCompany({...company,invoice_prefix:e.target.value})}/></label><label><span>Resolución / autorización</span><input value={company.resolution_number} onChange={e=>setCompany({...company,resolution_number:e.target.value})}/></label><label><span>Fecha de resolución</span><input type="date" value={company.resolution_date||''} onChange={e=>setCompany({...company,resolution_date:e.target.value})}/></label><label><span>Consecutivo inicial</span><input type="number" value={company.resolution_range_start||''} onChange={e=>setCompany({...company,resolution_range_start:e.target.value})}/></label><label><span>Consecutivo final</span><input type="number" value={company.resolution_range_end||''} onChange={e=>setCompany({...company,resolution_range_end:e.target.value})}/></label><label className="span-two"><span>Texto del pie de factura</span><textarea value={company.footer_text} onChange={e=>setCompany({...company,footer_text:e.target.value})}/></label></div><button className="btn primary" disabled={!canManageSettings||companySaving} onClick={saveCompany}>{companySaving?'Guardando…':'Guardar datos de empresa'}</button></div>
 
       {!canManageTables && (
         <div className="notice section-gap">Tu rol puede consultar mesas, pero no crear ni modificar zonas o mesas.</div>
