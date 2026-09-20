@@ -1,6 +1,16 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { DEMO_PRODUCTS } from '../data/demoProducts.js'
 import { createInitialDemoState } from '../data/demoState.js'
+import { useAuth } from './AuthContext.jsx'
+import {
+  createTable as createRemoteTable,
+  createZone as createRemoteZone,
+  importLocalStructure,
+  loadRestaurantStructure,
+  updateTable as updateRemoteTable,
+  updateZone as updateRemoteZone,
+} from '../services/restaurantStructureService.js'
+import { loadMenuCatalog } from '../services/menuService.js'
 
 const RestaurantContext = createContext(null)
 const STORAGE_KEY = 'restos-plus-demo-state-v3'
@@ -108,7 +118,18 @@ function orderHasPendingPreparation(order) {
 }
 
 export function RestaurantProvider({ children }) {
+  const auth = useAuth()
   const [state, setState] = useState(loadInitialState)
+  const initialLocalStructure = useRef({
+    zones: state.zones || [],
+    tables: state.tables || [],
+  })
+  const [products, setProducts] = useState(DEMO_PRODUCTS)
+  const [menuCategories, setMenuCategories] = useState([])
+  const [menuStations, setMenuStations] = useState([])
+  const [activeLocation, setActiveLocation] = useState(null)
+  const [remoteLoading, setRemoteLoading] = useState(false)
+  const [remoteError, setRemoteError] = useState('')
   const [orderMode, setOrderModeState] = useState(state.settings.defaultOrderMode || 'table')
   const [currentTableId, setCurrentTableId] = useState(null)
   const [currentOrderId, setCurrentOrderId] = useState(null)
@@ -128,6 +149,120 @@ export function RestaurantProvider({ children }) {
       return next
     })
   }, [])
+
+  const restaurantId = auth.userContext?.membership?.restaurant_id || null
+
+  const applyRemoteStructure = useCallback((structure) => {
+    setState((previous) => {
+      const previousById = new Map((previous.tables || []).map((table) => [table.id, table]))
+      const next = {
+        ...previous,
+        zones: structure.zones,
+        tables: structure.tables.map((table) => {
+          const existing = previousById.get(table.id)
+          return {
+            ...table,
+            status: existing?.status || 'free',
+            openedAt: existing?.openedAt || null,
+            releasedAt: existing?.releasedAt || null,
+          }
+        }),
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const refreshMenu = useCallback(async (locationOverride = null) => {
+    if (auth.isDesignMode) {
+      setProducts(DEMO_PRODUCTS)
+      setMenuCategories([])
+      setMenuStations([])
+      return { ok: true }
+    }
+
+    const location = locationOverride || activeLocation
+    if (!restaurantId || !location?.id) {
+      setProducts([])
+      setMenuCategories([])
+      setMenuStations([])
+      return { ok: false, message: 'No hay restaurante o sucursal activa.' }
+    }
+
+    try {
+      const catalog = await loadMenuCatalog(restaurantId, location.id)
+      setProducts(catalog.products)
+      setMenuCategories(catalog.categories)
+      setMenuStations(catalog.stations)
+      return { ok: true, catalog }
+    } catch (error) {
+      setRemoteError(error?.message || 'No se pudo cargar el menú desde Supabase.')
+      return { ok: false, message: error?.message || 'No se pudo cargar el menú.' }
+    }
+  }, [auth.isDesignMode, restaurantId, activeLocation])
+
+  const refreshRemoteData = useCallback(async () => {
+    if (auth.isDesignMode) {
+      setProducts(DEMO_PRODUCTS)
+      setRemoteError('')
+      return { ok: true }
+    }
+
+    if (auth.mode !== 'authenticated' || !restaurantId) return { ok: false }
+
+    setRemoteLoading(true)
+    setRemoteError('')
+
+    try {
+      let structure = await loadRestaurantStructure(restaurantId)
+
+      const localZones = initialLocalStructure.current.zones.filter((zone) => zone.active !== false)
+      const localTables = initialLocalStructure.current.tables.filter((table) => table.active !== false)
+
+      if (
+        structure.location
+        && structure.zones.length === 0
+        && structure.tables.length === 0
+        && localZones.length > 0
+      ) {
+        await importLocalStructure(structure.location.id, localZones, localTables)
+        structure = await loadRestaurantStructure(restaurantId)
+      }
+
+      setActiveLocation(structure.location)
+      applyRemoteStructure(structure)
+
+      if (structure.location) {
+        const catalog = await loadMenuCatalog(restaurantId, structure.location.id)
+        setProducts(catalog.products)
+        setMenuCategories(catalog.categories)
+        setMenuStations(catalog.stations)
+      } else {
+        setProducts([])
+        setMenuCategories([])
+        setMenuStations([])
+      }
+
+      return { ok: true }
+    } catch (error) {
+      const message = error?.message || 'No se pudieron cargar los datos operativos desde Supabase.'
+      setRemoteError(message)
+      return { ok: false, message }
+    } finally {
+      setRemoteLoading(false)
+    }
+  }, [auth.isDesignMode, auth.mode, restaurantId, applyRemoteStructure])
+
+  useEffect(() => {
+    if (auth.isDesignMode) {
+      setProducts(DEMO_PRODUCTS)
+      return
+    }
+
+    if (auth.mode === 'authenticated' && restaurantId) {
+      refreshRemoteData()
+    }
+  }, [auth.mode, auth.isDesignMode, restaurantId, refreshRemoteData])
 
   const openOrderForTable = useCallback((tableId, source = state) => source.orders.find((order) => (
     order.mode === 'table'
@@ -172,76 +307,144 @@ export function RestaurantProvider({ children }) {
     return 'free'
   }, [state, openOrderForTable, reservationForTable])
 
-  const addZone = useCallback((name) => {
+  const addZone = useCallback(async (name) => {
     const cleaned = cleanName(name)
     if (!cleaned) return { ok: false, message: 'Escribe un nombre para el salón o área.' }
+
     const duplicate = state.zones.some((zone) => zone.active !== false && sameName(zone.name, cleaned))
     if (duplicate) return { ok: false, message: 'Ya existe un salón o área con ese nombre.' }
 
-    const zone = { id: makeId(), name: cleaned, displayOrder: state.zones.length, active: true }
-    updateState((previous) => ({ ...previous, zones: [...previous.zones, zone] }))
-    return { ok: true, zone }
-  }, [state.zones, updateState])
+    if (auth.isDesignMode || !activeLocation?.id) {
+      const zone = { id: makeId(), name: cleaned, displayOrder: state.zones.length, active: true }
+      updateState((previous) => ({ ...previous, zones: [...previous.zones, zone] }))
+      return { ok: true, zone }
+    }
 
-  const updateZone = useCallback((zoneId, name) => {
+    try {
+      const zone = await createRemoteZone(activeLocation.id, cleaned, state.zones.length)
+      updateState((previous) => ({ ...previous, zones: [...previous.zones, zone] }))
+      return { ok: true, zone }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.code === '23505'
+          ? 'Ya existe un salón o área con ese nombre.'
+          : (error?.message || 'No se pudo guardar el área en Supabase.'),
+      }
+    }
+  }, [state.zones, updateState, auth.isDesignMode, activeLocation])
+
+  const updateZone = useCallback(async (zoneId, name) => {
     const cleaned = cleanName(name)
     if (!cleaned) return { ok: false, message: 'El nombre del salón o área no puede quedar vacío.' }
+
     const duplicate = state.zones.some((zone) => (
       zone.id !== zoneId && zone.active !== false && sameName(zone.name, cleaned)
     ))
     if (duplicate) return { ok: false, message: 'Ya existe un salón o área con ese nombre.' }
 
-    updateState((previous) => ({
-      ...previous,
-      zones: previous.zones.map((zone) => zone.id === zoneId ? { ...zone, name: cleaned } : zone),
-    }))
-    return { ok: true }
-  }, [state.zones, updateState])
+    if (auth.isDesignMode || !activeLocation?.id) {
+      updateState((previous) => ({
+        ...previous,
+        zones: previous.zones.map((zone) => zone.id === zoneId ? { ...zone, name: cleaned } : zone),
+      }))
+      return { ok: true }
+    }
 
-  const deleteZone = useCallback((zoneId) => {
+    try {
+      const zone = await updateRemoteZone(zoneId, { name: cleaned })
+      updateState((previous) => ({
+        ...previous,
+        zones: previous.zones.map((item) => item.id === zoneId ? { ...item, ...zone } : item),
+      }))
+      return { ok: true, zone }
+    } catch (error) {
+      return { ok: false, message: error?.message || 'No se pudo actualizar el área.' }
+    }
+  }, [state.zones, updateState, auth.isDesignMode, activeLocation])
+
+  const deleteZone = useCallback(async (zoneId) => {
     const activeTables = state.tables.filter((table) => table.active !== false && table.zoneId === zoneId)
     if (activeTables.length) {
       return { ok: false, message: 'No puedes eliminar el área mientras tenga mesas activas. Elimina o mueve primero esas mesas.' }
     }
+
+    if (!auth.isDesignMode && activeLocation?.id) {
+      try {
+        await updateRemoteZone(zoneId, { active: false })
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo desactivar el área.' }
+      }
+    }
+
     updateState((previous) => ({
       ...previous,
       zones: previous.zones.map((zone) => zone.id === zoneId ? { ...zone, active: false } : zone),
     }))
     return { ok: true }
-  }, [state.tables, updateState])
+  }, [state.tables, updateState, auth.isDesignMode, activeLocation])
 
-  const addTable = useCallback(({ zoneId, name, capacity = 2 }) => {
+  const addTable = useCallback(async ({ zoneId, name, capacity = 2 }) => {
     const cleaned = cleanName(name)
     const zone = state.zones.find((item) => item.id === zoneId && item.active !== false)
+
     if (!zone) return { ok: false, message: 'Selecciona un salón o área válido.' }
     if (!cleaned) return { ok: false, message: 'Escribe el nombre o número de la mesa.' }
+
     const duplicate = state.tables.some((table) => (
       table.active !== false && table.zoneId === zoneId && sameName(table.name, cleaned)
     ))
     if (duplicate) return { ok: false, message: `Ya existe ${cleaned} dentro de ${zone.name}.` }
 
-    const table = {
-      id: makeId(),
-      zoneId,
-      name: cleaned,
-      capacity: Math.max(1, Number(capacity) || 2),
-      active: true,
+    let table
+    if (auth.isDesignMode || !activeLocation?.id) {
+      table = {
+        id: makeId(),
+        zoneId,
+        name: cleaned,
+        capacity: Math.max(1, Number(capacity) || 2),
+        active: true,
+      }
+    } else {
+      try {
+        table = await createRemoteTable({
+          locationId: activeLocation.id,
+          zoneId,
+          name: cleaned,
+          capacity,
+        })
+      } catch (error) {
+        return {
+          ok: false,
+          message: error?.code === '23505'
+            ? `Ya existe ${cleaned} dentro de ${zone.name}.`
+            : (error?.message || 'No se pudo guardar la mesa en Supabase.'),
+        }
+      }
+    }
+
+    table = {
+      ...table,
       status: 'free',
       openedAt: null,
       releasedAt: Date.now(),
     }
+
     updateState((previous) => ({ ...previous, tables: [...previous.tables, table] }))
     return { ok: true, table }
-  }, [state.zones, state.tables, updateState])
+  }, [state.zones, state.tables, updateState, auth.isDesignMode, activeLocation])
 
-  const updateTable = useCallback((tableId, patch) => {
+  const updateTable = useCallback(async (tableId, patch) => {
     const current = state.tables.find((table) => table.id === tableId && table.active !== false)
     if (!current) return { ok: false, message: 'La mesa no existe o está eliminada.' }
+
     const zoneId = patch.zoneId ?? current.zoneId
     const name = cleanName(patch.name ?? current.name)
     const zone = state.zones.find((item) => item.id === zoneId && item.active !== false)
+
     if (!zone) return { ok: false, message: 'Selecciona un salón o área válido.' }
     if (!name) return { ok: false, message: 'El nombre de la mesa no puede quedar vacío.' }
+
     const duplicate = state.tables.some((table) => (
       table.id !== tableId
       && table.active !== false
@@ -250,31 +453,59 @@ export function RestaurantProvider({ children }) {
     ))
     if (duplicate) return { ok: false, message: `Ya existe ${name} dentro de ${zone.name}.` }
 
+    let remotePatch = {
+      zoneId,
+      name,
+      capacity: Math.max(1, Number(patch.capacity ?? current.capacity) || 2),
+    }
+
+    if (!auth.isDesignMode && activeLocation?.id) {
+      try {
+        remotePatch = await updateRemoteTable(tableId, remotePatch)
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo actualizar la mesa.' }
+      }
+    }
+
     updateState((previous) => ({
       ...previous,
       tables: previous.tables.map((table) => table.id === tableId ? {
         ...table,
+        ...remotePatch,
         zoneId,
         name,
         capacity: Math.max(1, Number(patch.capacity ?? table.capacity) || 2),
       } : table),
     }))
-    return { ok: true }
-  }, [state.tables, state.zones, updateState])
 
-  const deleteTable = useCallback((tableId) => {
+    return { ok: true }
+  }, [state.tables, state.zones, updateState, auth.isDesignMode, activeLocation])
+
+  const deleteTable = useCallback(async (tableId) => {
     const table = state.tables.find((item) => item.id === tableId && item.active !== false)
     if (!table) return { ok: false, message: 'La mesa no existe o ya fue eliminada.' }
     if (openOrderForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa con una cuenta abierta.' }
     if (reservationForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa con una reserva activa.' }
 
+    if (!auth.isDesignMode && activeLocation?.id) {
+      try {
+        await updateRemoteTable(tableId, { active: false })
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo desactivar la mesa.' }
+      }
+    }
+
     updateState((previous) => ({
       ...previous,
       tables: previous.tables.map((item) => item.id === tableId ? { ...item, active: false, status: 'free' } : item),
     }))
+
     if (currentTableId === tableId) setCurrentTableId(null)
     return { ok: true }
-  }, [state.tables, openOrderForTable, reservationForTable, currentTableId, updateState])
+  }, [
+    state.tables, openOrderForTable, reservationForTable, currentTableId, updateState,
+    auth.isDesignMode, activeLocation,
+  ])
 
   const setOrderMode = useCallback((mode) => {
     setOrderModeState(mode)
@@ -806,7 +1037,12 @@ export function RestaurantProvider({ children }) {
     setDraft([])
     setPager('')
     setCurrentDelivery(null)
-  }, [persist])
+    if (auth.isDesignMode) {
+      setProducts(DEMO_PRODUCTS)
+      setMenuCategories([])
+      setMenuStations([])
+    }
+  }, [persist, auth.isDesignMode])
 
   const stationJobs = useCallback((station) => {
     const jobs = []
@@ -831,7 +1067,14 @@ export function RestaurantProvider({ children }) {
 
   const value = useMemo(() => ({
     state,
-    products: DEMO_PRODUCTS,
+    products,
+    menuCategories,
+    menuStations,
+    activeLocation,
+    remoteLoading,
+    remoteError,
+    refreshMenu,
+    refreshRemoteData,
     orderMode,
     currentTableId,
     currentOrderId,
@@ -874,7 +1117,8 @@ export function RestaurantProvider({ children }) {
     orderPaidTotal,
     orderBalance,
   }), [
-    state, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
+    refreshMenu, refreshRemoteData, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, voidSentItem, advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
