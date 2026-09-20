@@ -18,7 +18,7 @@ function askPaymentMethod() {
   return method
 }
 
-export default function SplitBillModal({ orders, tableText, onClose }) {
+export default function SplitBillModal({ orders, tableText, onClose, onAccountPaid }) {
   const { recordPayments, formatMoney } = useRestaurant()
   const [mode, setMode] = useState('choose')
   const [parts, setParts] = useState(2)
@@ -94,6 +94,11 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
     const result = await recordPayments(allocations, method)
     if (!result.ok) return window.alert(result.message)
 
+    try {
+      await onAccountPaid?.(allocations)
+    } catch (error) {
+      window.alert(`El pago se registró, pero no se pudo abrir la factura: ${error?.message || 'error de vista previa'}.`)
+    }
     onSuccess?.()
   }
 

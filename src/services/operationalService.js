@@ -288,6 +288,15 @@ export async function recordOrderPaymentsRemote(allocations, method) {
   return data || { applied: 0 }
 }
 
+export async function getInvoicePreviewsRemote(orderIds) {
+  const client = requireSupabase()
+  const ids = [...new Set((orderIds || []).filter(Boolean))]
+  if (!ids.length) return []
+  const { data, error } = await client.rpc('get_invoice_previews', { p_order_ids: ids })
+  if (error) throw error
+  return Array.isArray(data) ? data : []
+}
+
 export function subscribeOperationalChanges(locationId, onChange) {
   const client = requireSupabase()
   const channel = client.channel(`restos-operational:${locationId}`)
