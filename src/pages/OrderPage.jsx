@@ -31,7 +31,7 @@ export default function OrderPage({ onNavigate }) {
   const auth = useAuth()
   const canCharge = auth.can('payments.create')
   const {
-    products, orderMode, currentTableId, currentOrder, draft, pager, setPager, setOrderMode,
+    products, orderMode, currentTableId, currentOrder, currentDelivery, draft, pager, setPager, setOrderMode,
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft, voidSentItem,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
     tableLabel: getTableLabel, getTableTransferStatus,
@@ -68,6 +68,7 @@ export default function OrderPage({ onNavigate }) {
   const draftTotal = draft.reduce((sum, line) => sum + line.price * line.quantity, 0)
   const currentOrderTotal = currentOrder ? orderTotal(currentOrder) : 0
   const currentTableLabel = currentTableId ? getTableLabel(currentTableId) : 'Mesa —'
+  const deliveryInfo = currentOrder?.delivery || currentDelivery
   const accountTableLabel = currentOrder?.tableIds?.length
     ? currentOrder.tableIds.map((id) => getTableLabel(id)).join(' + ')
     : currentTableLabel
@@ -207,8 +208,20 @@ export default function OrderPage({ onNavigate }) {
     <section className="view active">
       <div className="hero">
         <div>
-          <h2>{orderMode === 'quick' ? 'Servicio rápido · Prepago' : currentTableId ? `${currentOrder ? 'Continuar cuenta' : 'Abrir cuenta'} · ${currentTableLabel}` : 'Toma de pedido'}</h2>
-          <p>Una cuenta puede tener varias comandas. Solo los productos nuevos se envían en cada ronda.</p>
+          <h2>{
+            orderMode === 'quick'
+              ? 'Servicio rápido · Prepago'
+              : orderMode === 'delivery'
+                ? `Domicilio · ${deliveryInfo?.customerName || 'Nuevo cliente'}`
+                : currentTableId
+                  ? `${currentOrder ? 'Continuar cuenta' : 'Abrir cuenta'} · ${currentTableLabel}`
+                  : 'Pedido'
+          }</h2>
+          <p>{
+            orderMode === 'delivery'
+              ? 'Pedido a domicilio. Los productos se envían a Cocina/Bar y conservan los datos de entrega.'
+              : 'Una cuenta puede tener varias comandas. Solo los productos nuevos se envían en cada ronda.'
+          }</p>
         </div>
       </div>
 
@@ -246,9 +259,28 @@ export default function OrderPage({ onNavigate }) {
         </div>
 
         <div className="card order-cart">
-          <div className="section-title"><h3>{orderMode === 'quick' ? 'Nueva orden' : 'Cuenta abierta'}</h3><span className="badge">{orderMode === 'quick' ? 'Prepago' : accountTableLabel}</span></div>
+          <div className="section-title">
+            <h3>{orderMode === 'quick' ? 'Nueva orden' : orderMode === 'delivery' ? 'Pedido a domicilio' : 'Cuenta abierta'}</h3>
+            <span className="badge">
+              {orderMode === 'quick' ? 'Prepago' : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
+            </span>
+          </div>
           {orderMode === 'quick' && (
             <div className="quickpay"><b>Servicio rápido</b><input value={pager} onChange={(event) => setPager(event.target.value)} placeholder="Pager / turno (opcional)" /></div>
+          )}
+
+          {orderMode === 'delivery' && deliveryInfo && (
+            <div className="delivery-order-summary">
+              <div>
+                <b>🚚 {deliveryInfo.customerName}</b>
+                <span>{deliveryInfo.address}</span>
+                <small>{deliveryInfo.neighborhood} · {deliveryInfo.city}</small>
+              </div>
+              <div>
+                <b>📱 {deliveryInfo.phone}</b>
+                {deliveryInfo.email && <small>✉ {deliveryInfo.email}</small>}
+              </div>
+            </div>
           )}
 
           {(currentOrder?.rounds || []).map((round) => (
@@ -308,12 +340,15 @@ export default function OrderPage({ onNavigate }) {
               💳 Cobrar mesa desde esta pantalla
             </button>
           )}
-          {orderMode === 'table' ? (
-            <button className="btn primary full action-main" disabled={!draft.length} onClick={handleSend}>Enviar nuevos productos</button>
-          ) : (
+          {orderMode === 'quick' ? (
             <button className="btn primary full action-main" disabled={!draft.length} onClick={handleQuickPay}>💳 Cobrar y enviar a preparación</button>
+          ) : (
+            <button className="btn primary full action-main" disabled={!draft.length} onClick={handleSend}>
+              {orderMode === 'delivery' ? '🚚 Enviar domicilio a preparación' : 'Enviar nuevos productos'}
+            </button>
           )}
           {orderMode === 'quick' && <div className="notice">En servicio rápido el pedido se cobra antes de enviarse a Cocina/Bar.</div>}
+          {orderMode === 'delivery' && <div className="notice">El domicilio quedará identificado con los datos del cliente en Cocina/Bar y en el módulo Domicilios.</div>}
         </div>
       </div>
 
