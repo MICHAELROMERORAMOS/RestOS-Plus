@@ -130,7 +130,7 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
 
       if (!customer) throw new Error('No se pudo guardar el cliente.')
 
-      const result = onStartDelivery({
+      const result = await onStartDelivery({
         ...form,
         customerId: customer.id,
       })
