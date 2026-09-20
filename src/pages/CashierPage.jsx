@@ -7,6 +7,7 @@ export default function CashierPage() {
     order.mode === 'table'
     && !['closed', 'cancelled', 'merged'].includes(order.status)
     && (order.rounds?.length || 0) > 0
+    && orderBalance(order) > 0.005
   ))
 
   function charge(order, full = true) {
@@ -36,7 +37,7 @@ export default function CashierPage() {
     if (full) {
       const tableText = order.tableIds.map((id) => tableLabel(id)).join(' + ')
       const confirmed = window.confirm(
-        `¿Confirmar cobro de €${Math.min(amount, balance).toFixed(2)} y cerrar ${tableText || `Orden #${order.id}`}?`,
+        `¿Confirmar cobro de €${Math.min(amount, balance).toFixed(2)} para ${tableText || `Orden #${order.id}`}? Si todavía hay productos pendientes, la mesa quedará como Esperando comida.`,
       )
       if (!confirmed) return
     }
@@ -50,7 +51,7 @@ export default function CashierPage() {
       <div className="hero">
         <div>
           <h2>Caja · Cobrar mesa</h2>
-          <p>Permite pago total o parcial. La mesa solo se libera cuando la cuenta queda completamente pagada.</p>
+          <p>Permite pago total o parcial. Si la cuenta queda pagada pero aún hay comida pendiente, la mesa seguirá ocupada como “Esperando comida”.</p>
         </div>
       </div>
 
@@ -71,7 +72,7 @@ export default function CashierPage() {
                 <div className="cash-actions">
                   <strong>Saldo €{balance.toFixed(2)}</strong>
                   <button className="btn" onClick={() => charge(order, false)}>Pago parcial</button>
-                  <button className="btn primary" onClick={() => charge(order, true)}>Cobrar saldo y cerrar</button>
+                  <button className="btn primary" onClick={() => charge(order, true)}>Cobrar saldo</button>
                 </div>
               </div>
             )
