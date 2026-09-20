@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
 import { useRestaurant, orderBalance, orderHasInvoice, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -70,6 +70,7 @@ export default function OrderPage({ onNavigate }) {
   const [accountVoidCode, setAccountVoidCode] = useState('')
   const [accountVoidExpiresAt, setAccountVoidExpiresAt] = useState(null)
   const [accountVoidBusy, setAccountVoidBusy] = useState(false)
+  const tableAccountLifecycleRef = useRef(null)
 
   const categoryOptions = useMemo(
     () => Array.from(new Set(
@@ -129,11 +130,60 @@ export default function OrderPage({ onNavigate }) {
   const tableAccountFullyPaid = orderMode === 'table'
     && tableAccountTotal > 0.005
     && tableAccountBalance <= 0.005
+  const tableAccountItems = useMemo(() => (
+    tableOrders.flatMap((order) => (
+      (order.rounds || []).flatMap((round) => (
+        (round.items || []).filter((item) => !item.voided)
+      ))
+    ))
+  ), [tableOrders])
+  const tableAccountFullyDelivered = tableAccountItems.length > 0
+    && tableAccountItems.every((item) => item.prepStatus === 'delivered')
   const tableAccountPartiallyPaid = orderMode === 'table'
     && tableAccountPaid > 0.005
     && tableAccountBalance > 0.005
   const tableAccountUnpaid = orderMode === 'table'
     && tableAccountPaid <= 0.005
+
+  useEffect(() => {
+    if (orderMode !== 'table' || !currentTableId) {
+      tableAccountLifecycleRef.current = null
+      return
+    }
+
+    if (tableOrders.length > 0) {
+      tableAccountLifecycleRef.current = {
+        tableId: currentTableId,
+        fullyPaid: tableAccountFullyPaid,
+        fullyDelivered: tableAccountFullyDelivered,
+      }
+
+      if (tableAccountFullyPaid && tableAccountFullyDelivered && draft.length === 0) {
+        tableAccountLifecycleRef.current = null
+        onNavigate('tables')
+      }
+      return
+    }
+
+    const previousAccount = tableAccountLifecycleRef.current
+    const completedAfterLastUpdate = previousAccount?.tableId === currentTableId
+      && (previousAccount.fullyPaid || previousAccount.fullyDelivered)
+
+    if (completedAfterLastUpdate && draft.length === 0) {
+      tableAccountLifecycleRef.current = null
+      onNavigate('tables')
+    } else if (previousAccount?.tableId !== currentTableId) {
+      tableAccountLifecycleRef.current = null
+    }
+  }, [
+    orderMode,
+    currentTableId,
+    tableOrders,
+    tableAccountFullyPaid,
+    tableAccountFullyDelivered,
+    draft.length,
+    onNavigate,
+  ])
 
   const requestableItems = useMemo(() => (
     (currentOrder?.rounds || []).flatMap((round) => (
