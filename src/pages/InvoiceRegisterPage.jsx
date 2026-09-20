@@ -14,7 +14,7 @@ function serviceLabel(row) {
   const mode = serviceMode(row)
   if (mode === 'table') return 'Mesa'
   if (mode === 'delivery') return 'Domicilio'
-  return 'Servicio rÃ¡pido'
+  return 'Servicio rápido'
 }
 
 function tableText(row) {
@@ -47,10 +47,10 @@ function OriginSummary({ invoice, compact = false }) {
       </div>
       {!compact && (
         <div className="invoice-origin-details">
-          {table && <span>ðª Mesa: {table}</span>}
-          {name && <span>ð¤ Cliente: {name}</span>}
-          {serviceMode(invoice) === 'delivery' && delivery.address && <span>ð {delivery.address}{delivery.neighborhood ? ` Â· ${delivery.neighborhood}` : ''}{delivery.city ? ` Â· ${delivery.city}` : ''}</span>}
-          {serviceMode(invoice) === 'delivery' && delivery.phone && <span>ð± {delivery.phone}</span>}
+          {table && <span>🪑 Mesa: {table}</span>}
+          {name && <span>👤 Cliente: {name}</span>}
+          {serviceMode(invoice) === 'delivery' && delivery.address && <span>📍 {delivery.address}{delivery.neighborhood ? ` · ${delivery.neighborhood}` : ''}{delivery.city ? ` · ${delivery.city}` : ''}</span>}
+          {serviceMode(invoice) === 'delivery' && delivery.phone && <span>📱 {delivery.phone}</span>}
         </div>
       )}
     </div>
@@ -86,7 +86,7 @@ export default function InvoiceRegisterPage() {
       <div className="hero">
         <div>
           <h2>Facturas cobradas</h2>
-          <p>Consulta las facturas vÃ¡lidas y anuladas, identificando mesa, domicilio o servicio rÃ¡pido antes de abrir el detalle.</p>
+          <p>Consulta las facturas válidas y anuladas, identificando mesa, domicilio o servicio rápido antes de abrir el detalle.</p>
         </div>
       </div>
 
@@ -100,8 +100,8 @@ export default function InvoiceRegisterPage() {
       </div>
 
       <div className="card section-gap">
-        <div className="section-title"><div><h3>Registro de facturas</h3><p className="muted">El origen del pedido aparece en la columna âServicioâ.</p></div><span className="badge">{rows.length} resultados</span></div>
-        {loading ? <div className="empty-inline">Cargandoâ¦</div> : rows.length ? (
+        <div className="section-title"><div><h3>Registro de facturas</h3><p className="muted">El origen del pedido aparece en la columna “Servicio”.</p></div><span className="badge">{rows.length} resultados</span></div>
+        {loading ? <div className="empty-inline">Cargando…</div> : rows.length ? (
           <div className="table-wrap">
             <table>
               <thead><tr><th>Factura</th><th>Servicio / origen</th><th>Fecha</th><th>Productos</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th /></tr></thead>
@@ -115,7 +115,7 @@ export default function InvoiceRegisterPage() {
                     <td>{formatMoney(row.subtotal)}</td>
                     <td>{formatMoney(row.taxTotal)}</td>
                     <td><b>{formatMoney(row.total)}</b><small>Pagado {formatMoney(row.paidTotal || row.total)}</small></td>
-                    <td><span className={`badge ${row.voided ? 'danger-badge' : 'ok-badge'}`}>{row.voided ? 'Anulada' : 'VÃ¡lida'}</span></td>
+                    <td><span className={`badge ${row.voided ? 'danger-badge' : 'ok-badge'}`}>{row.voided ? 'Anulada' : 'Válida'}</span></td>
                     <td><button className="mini" onClick={() => setSelected(row)}>Ver detalle</button></td>
                   </tr>
                 ))}
@@ -128,9 +128,9 @@ export default function InvoiceRegisterPage() {
       {selected && (
         <div className="modal open" onClick={() => setSelected(null)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="section-title"><div><h3>{selected.invoiceNumber}</h3><p className="muted">Orden #{selected.orderNumber} Â· {new Date(selected.issuedAt).toLocaleString('es-CO')} Â· {selected.voided ? 'Anulada' : 'VÃ¡lida'}</p></div><button className="btn" onClick={() => setSelected(null)}>Ã</button></div>
+            <div className="section-title"><div><h3>{selected.invoiceNumber}</h3><p className="muted">Orden #{selected.orderNumber} · {new Date(selected.issuedAt).toLocaleString('es-CO')} · {selected.voided ? 'Anulada' : 'Válida'}</p></div><button className="btn" onClick={() => setSelected(null)}>×</button></div>
             <OriginSummary invoice={selected} />
-            <div className="list">{(selected.items || []).map((item, index) => <div className="row" key={index}><span>{item.quantity} Ã {item.name}<small>IVA {item.taxRate || 0}% Â· {formatMoney(item.unitPrice)} c/u</small></span><b>{formatMoney(item.amount)}</b></div>)}</div>
+            <div className="list">{(selected.items || []).map((item, index) => <div className="row" key={index}><span>{item.quantity} × {item.name}<small>IVA {item.taxRate || 0}% · {formatMoney(item.unitPrice)} c/u</small></span><b>{formatMoney(item.amount)}</b></div>)}</div>
             <div className="totals"><div>Subtotal <b>{formatMoney(selected.subtotal)}</b></div><div>IVA <b>{formatMoney(selected.taxTotal)}</b></div><div>Total <b>{formatMoney(selected.total)}</b></div><div>Valor pagado <b>{formatMoney(selected.paidTotal || selected.total)}</b></div></div>
           </div>
         </div>
