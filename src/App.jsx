@@ -12,7 +12,6 @@ import StationPage from './pages/StationPage.jsx'
 import CashierPage from './pages/CashierPage.jsx'
 import InvoiceVoidPage from './pages/InvoiceVoidPage.jsx'
 import InvoiceRegisterPage from './pages/InvoiceRegisterPage.jsx'
-import OrdersPage from './pages/OrdersPage.jsx'
 import InventoryPage from './pages/InventoryPage.jsx'
 import ProductsPage from './pages/ProductsPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
@@ -83,7 +82,6 @@ function MainApplication() {
     cashier: <CashierPage />,
     'void-invoice': <InvoiceVoidPage />,
     'invoice-register': <InvoiceRegisterPage />,
-    orders: <OrdersPage />,
     inventory: <InventoryPage />,
     products: <ProductsPage />,
     customers: <CustomersPage />,
