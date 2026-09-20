@@ -114,6 +114,7 @@ export function RestaurantProvider({ children }) {
   const [currentOrderId, setCurrentOrderId] = useState(null)
   const [draft, setDraft] = useState([])
   const [pager, setPager] = useState('')
+  const [currentDelivery, setCurrentDelivery] = useState(null)
 
   const persist = useCallback((next) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -280,7 +281,8 @@ export function RestaurantProvider({ children }) {
     setDraft([])
     setPager('')
     setCurrentOrderId(null)
-    if (mode === 'quick') setCurrentTableId(null)
+    if (mode !== 'table') setCurrentTableId(null)
+    if (mode !== 'delivery') setCurrentDelivery(null)
   }, [])
 
   const openTable = useCallback((tableId) => {
@@ -294,6 +296,42 @@ export function RestaurantProvider({ children }) {
     setCurrentOrderId(existing?.id || null)
     setDraft([])
     setPager('')
+  }, [state.orders])
+
+  const startDelivery = useCallback((delivery) => {
+    const normalized = {
+      customerName: cleanName(delivery?.customerName),
+      address: cleanName(delivery?.address),
+      phone: cleanName(delivery?.phone),
+      email: cleanName(delivery?.email) || null,
+      neighborhood: cleanName(delivery?.neighborhood),
+      city: cleanName(delivery?.city),
+    }
+
+    if (!normalized.customerName || !normalized.address || !normalized.phone || !normalized.neighborhood || !normalized.city) {
+      return { ok: false, message: 'Completa nombre, dirección, celular, barrio y ciudad.' }
+    }
+
+    setOrderModeState('delivery')
+    setCurrentTableId(null)
+    setCurrentOrderId(null)
+    setDraft([])
+    setPager('')
+    setCurrentDelivery(normalized)
+    return { ok: true }
+  }, [])
+
+  const openDelivery = useCallback((orderId) => {
+    const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
+    if (!order) return { ok: false, message: 'El domicilio no existe.' }
+
+    setOrderModeState('delivery')
+    setCurrentTableId(null)
+    setCurrentOrderId(order.id)
+    setDraft([])
+    setPager('')
+    setCurrentDelivery(order.delivery || null)
+    return { ok: true }
   }, [state.orders])
 
   const startNewOrder = useCallback(() => {
@@ -361,6 +399,8 @@ export function RestaurantProvider({ children }) {
       mode: orderMode,
       tableIds: orderMode === 'table' && currentTableId ? [currentTableId] : [],
       pager: orderMode === 'quick' ? (pager.trim() || null) : null,
+      delivery: orderMode === 'delivery' ? currentDelivery : null,
+      deliveryStatus: orderMode === 'delivery' ? 'pending' : null,
       rounds: [],
       status: prepaid ? 'preparing' : 'open',
       created: Date.now(),
@@ -381,11 +421,14 @@ export function RestaurantProvider({ children }) {
         )),
       },
     }
-  }, [currentOrderId, currentTableId, orderMode, pager])
+  }, [currentOrderId, currentTableId, orderMode, pager, currentDelivery])
 
   const sendDraft = useCallback(({ prepaid = false, paymentMethod = 'cash' } = {}) => {
     if (!draft.length) return { ok: false, message: 'Añade productos nuevos antes de enviar.' }
     if (orderMode === 'table' && !currentTableId) return { ok: false, message: 'Selecciona una mesa.' }
+    if (orderMode === 'delivery' && (!currentDelivery?.customerName || !currentDelivery?.address || !currentDelivery?.phone || !currentDelivery?.neighborhood || !currentDelivery?.city)) {
+      return { ok: false, message: 'Faltan datos obligatorios del domicilio.' }
+    }
     if (orderMode === 'quick' && !prepaid) return { ok: false, message: 'El servicio rápido debe cobrarse antes de enviar a preparación.' }
 
     let createdOrderId = currentOrderId
@@ -436,7 +479,7 @@ export function RestaurantProvider({ children }) {
         sales: ensured.source.sales + salesIncrease,
         activity: [
           ...ensured.source.activity,
-          `Comanda ${newRound.id} · Orden #${order.id}${order.tableIds?.length ? ` · Mesa ${order.tableIds.join(' + ')}` : ''}${prepaid ? ' · cobrada' : ''}`,
+          `Comanda ${newRound.id} · Orden #${order.id}${order.tableIds?.length ? ` · Mesa ${order.tableIds.join(' + ')}` : order.mode === 'delivery' ? ` · Domicilio ${order.delivery?.customerName || ''}` : ''}${prepaid ? ' · cobrada' : ''}`,
         ],
       }
     })
@@ -735,6 +778,7 @@ export function RestaurantProvider({ children }) {
     setCurrentOrderId(null)
     setDraft([])
     setPager('')
+    setCurrentDelivery(null)
   }, [persist])
 
   const stationJobs = useCallback((station) => {
@@ -765,11 +809,14 @@ export function RestaurantProvider({ children }) {
     currentTableId,
     currentOrderId,
     currentOrder,
+    currentDelivery,
     draft,
     pager,
     setPager,
     setOrderMode,
     openTable,
+    startDelivery,
+    openDelivery,
     startNewOrder,
     addProduct,
     changeDraftQuantity,
@@ -800,8 +847,8 @@ export function RestaurantProvider({ children }) {
     orderPaidTotal,
     orderBalance,
   }), [
-    state, orderMode, currentTableId, currentOrderId, currentOrder, draft, pager,
-    setOrderMode, openTable, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    state, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, voidSentItem, advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
