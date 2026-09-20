@@ -7,8 +7,10 @@ export default function SettingsPage() {
     state, updateSettings,
     addZone, updateZone, deleteZone,
     addTable, updateTable, deleteTable,
+    activeLocation, remoteLoading, remoteError,
   } = useRestaurant()
   const auth = useAuth()
+  const canManageTables = auth.can('tables.manage')
   const settings = state.settings
 
   const activeZones = useMemo(
@@ -27,30 +29,30 @@ export default function SettingsPage() {
   const [editingZone, setEditingZone] = useState(null)
   const [editingTable, setEditingTable] = useState(null)
 
-  function submitZone(event) {
+  async function submitZone(event) {
     event.preventDefault()
-    const result = addZone(zoneName)
+    const result = await addZone(zoneName)
     if (!result.ok) return window.alert(result.message)
     setZoneName('')
     if (!tableZoneId) setTableZoneId(result.zone.id)
   }
 
-  function submitTable(event) {
+  async function submitTable(event) {
     event.preventDefault()
-    const result = addTable({ zoneId: tableZoneId, name: tableName, capacity: tableCapacity })
+    const result = await addTable({ zoneId: tableZoneId, name: tableName, capacity: tableCapacity })
     if (!result.ok) return window.alert(result.message)
     setTableName('')
     setTableCapacity(2)
   }
 
-  function saveZoneEdit() {
-    const result = updateZone(editingZone.id, editingZone.name)
+  async function saveZoneEdit() {
+    const result = await updateZone(editingZone.id, editingZone.name)
     if (!result.ok) return window.alert(result.message)
     setEditingZone(null)
   }
 
-  function saveTableEdit() {
-    const result = updateTable(editingTable.id, {
+  async function saveTableEdit() {
+    const result = await updateTable(editingTable.id, {
       name: editingTable.name,
       zoneId: editingTable.zoneId,
       capacity: editingTable.capacity,
@@ -59,15 +61,15 @@ export default function SettingsPage() {
     setEditingTable(null)
   }
 
-  function confirmDeleteZone(zone) {
+  async function confirmDeleteZone(zone) {
     if (!window.confirm(`¿Eliminar el área “${zone.name}”? Solo se eliminará de la operación; su ID histórico se conserva.`)) return
-    const result = deleteZone(zone.id)
+    const result = await deleteZone(zone.id)
     if (!result.ok) window.alert(result.message)
   }
 
-  function confirmDeleteTable(table) {
+  async function confirmDeleteTable(table) {
     if (!window.confirm(`¿Eliminar “${table.name}”? Los pedidos históricos seguirán vinculados a su ID.`)) return
-    const result = deleteTable(table.id)
+    const result = await deleteTable(table.id)
     if (!result.ok) window.alert(result.message)
   }
 
@@ -93,7 +95,9 @@ export default function SettingsPage() {
           <div className="list">
             <div className="row"><b>Impresoras</b><span className="badge">Pendiente</span></div>
             <div className="row"><b>Instagram / Facebook</b><span className="badge">Pendiente API</span></div>
-            <div className="row"><b>Base de datos</b><span className="badge">Supabase · RestOS+</span></div>
+            <div className="row"><b>Base de datos</b><span className="badge ok-badge">Supabase · conectado</span></div>
+            <div className="row"><b>Sucursal operativa</b><span className="badge">{activeLocation?.name || (remoteLoading ? 'Cargando…' : 'Sin sucursal')}</span></div>
+            <div className="row"><b>Mesas / zonas</b><span className={`badge ${!remoteError ? 'ok-badge' : ''}`}>{remoteError ? 'Error de sincronización' : 'Guardado en Supabase'}</span></div>
             <div className="row"><b>Usuarios y login</b><span className={`badge ${auth.isSupabaseConfigured ? 'ok-badge' : ''}`}>{auth.isSupabaseConfigured ? 'Cliente configurado' : 'Pendiente .env'}</span></div>
             <div className="row"><b>Aprobación de usuarios</b><span className="badge">Por rol y membresía</span></div>
           </div>
@@ -101,12 +105,16 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {!canManageTables && (
+        <div className="notice section-gap">Tu rol puede consultar mesas, pero no crear ni modificar zonas o mesas.</div>
+      )}
+
       <div className="grid two section-gap">
         <div className="card">
           <div className="section-title"><div><h3>Salones / áreas</h3><p className="muted">Ej.: Terraza, Salón 1, Salón 2. El nombre del área no se puede repetir.</p></div><span className="badge">{activeZones.length} activas</span></div>
           <form className="settings-form" onSubmit={submitZone}>
-            <label><span>Nueva área</span><input value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ej. Terraza" /></label>
-            <button className="btn primary" type="submit">＋ Agregar área</button>
+            <label><span>Nueva área</span><input disabled={!canManageTables || remoteLoading} value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ej. Terraza" /></label>
+            <button className="btn primary" type="submit" disabled={!canManageTables || remoteLoading}>＋ Agregar área</button>
           </form>
           <div className="list section-gap">
             {activeZones.length ? activeZones.map((zone) => {
@@ -115,8 +123,8 @@ export default function SettingsPage() {
                 <div className="row" key={zone.id}>
                   <div><b>{zone.name}</b><small>{tableCount} {tableCount === 1 ? 'mesa' : 'mesas'}</small></div>
                   <div className="line-actions">
-                    <button className="mini" onClick={() => setEditingZone({ ...zone })}>Editar</button>
-                    <button className="mini danger" onClick={() => confirmDeleteZone(zone)}>Eliminar</button>
+                    {canManageTables && <button className="mini" onClick={() => setEditingZone({ ...zone })}>Editar</button>}
+                    {canManageTables && <button className="mini danger" onClick={() => confirmDeleteZone(zone)}>Eliminar</button>}
                   </div>
                 </div>
               )
@@ -127,10 +135,10 @@ export default function SettingsPage() {
         <div className="card">
           <div className="section-title"><div><h3>Mesas</h3><p className="muted">El nombre puede repetirse en áreas diferentes. Cada mesa conserva un ID interno permanente.</p></div><span className="badge">{activeTables.length} activas</span></div>
           <form className="settings-form" onSubmit={submitTable}>
-            <label><span>Área</span><select value={tableZoneId} onChange={(event) => setTableZoneId(event.target.value)}><option value="">Selecciona un área</option>{activeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label>
-            <label><span>Nombre o número de mesa</span><input value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="Ej. Mesa 3" /></label>
-            <label><span>Capacidad</span><input type="number" min="1" value={tableCapacity} onChange={(event) => setTableCapacity(event.target.value)} /></label>
-            <button className="btn primary" type="submit" disabled={!activeZones.length}>＋ Agregar mesa</button>
+            <label><span>Área</span><select disabled={!canManageTables || remoteLoading} value={tableZoneId} onChange={(event) => setTableZoneId(event.target.value)}><option value="">Selecciona un área</option>{activeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label>
+            <label><span>Nombre o número de mesa</span><input disabled={!canManageTables || remoteLoading} value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="Ej. Mesa 3" /></label>
+            <label><span>Capacidad</span><input disabled={!canManageTables || remoteLoading} type="number" min="1" value={tableCapacity} onChange={(event) => setTableCapacity(event.target.value)} /></label>
+            <button className="btn primary" type="submit" disabled={!canManageTables || remoteLoading || !activeZones.length}>＋ Agregar mesa</button>
           </form>
           {!activeZones.length && <div className="notice warn">Crea primero un salón o área para poder agregar mesas.</div>}
         </div>
@@ -147,8 +155,8 @@ export default function SettingsPage() {
                 <div className="row" key={table.id}>
                   <div><b>{table.name}</b><small>{table.capacity} puestos · ID {table.id.slice(0, 8)}…</small></div>
                   <div className="line-actions">
-                    <button className="mini" onClick={() => setEditingTable({ ...table })}>Editar</button>
-                    <button className="mini danger" onClick={() => confirmDeleteTable(table)}>Eliminar</button>
+                    {canManageTables && <button className="mini" onClick={() => setEditingTable({ ...table })}>Editar</button>}
+                    {canManageTables && <button className="mini danger" onClick={() => confirmDeleteTable(table)}>Eliminar</button>}
                   </div>
                 </div>
               ))}</div> : <div className="empty-inline">Esta área todavía no tiene mesas.</div>}
