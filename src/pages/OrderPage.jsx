@@ -464,7 +464,7 @@ export default function OrderPage({ onNavigate }) {
   }
 
   async function handleQuickPay() {
-    const result = await sendDraft({ prepaid: true, paymentMethod: 'cash/card' })
+    const result = await sendDraft({ prepaid: false })
     if (!result.ok) return window.alert(result.message)
     onNavigate('kitchen')
   }
@@ -702,13 +702,13 @@ export default function OrderPage({ onNavigate }) {
             </button>
           )}
           {orderMode === 'quick' ? (
-            <button className="btn primary full action-main" disabled={!draft.length} onClick={handleQuickPay}>💳 Cobrar y enviar a preparación</button>
+            <button className="btn primary full action-main" disabled={!draft.length} onClick={handleQuickPay}>🍳 Enviar a preparación</button>
           ) : (
             <button className="btn primary full action-main" disabled={!draft.length} onClick={handleSend}>
               {orderMode === 'delivery' ? '🚚 Enviar domicilio a preparación' : 'Enviar nuevos productos'}
             </button>
           )}
-          {orderMode === 'quick' && <div className="notice">En servicio rápido el pedido se cobra antes de enviarse a Cocina/Bar.</div>}
+          {orderMode === 'quick' && <div className="notice">El servicio rápido se envía a preparación y luego se cobra desde Caja, igual que una cuenta de mesa.</div>}
           {orderMode === 'delivery' && <div className="notice">El domicilio quedará identificado con los datos del cliente en Cocina/Bar y en el módulo Domicilios.</div>}
         </div>
       </div>
