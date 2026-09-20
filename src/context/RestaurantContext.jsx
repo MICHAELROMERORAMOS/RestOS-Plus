@@ -13,6 +13,18 @@ import {
 import { loadMenuCatalog } from '../services/menuService.js'
 import { formatMoneyValue } from '../lib/currency.js'
 import { loadRestaurantSettings, saveRestaurantCurrency } from '../services/settingsService.js'
+import {
+  advanceStationRoundRemote,
+  createDeliveryOrderRemote,
+  joinOrderTableRemote,
+  loadOperationalState,
+  markRoundServedRemote,
+  recordOrderPaymentsRemote,
+  sendOrderRoundRemote,
+  subscribeOperationalChanges,
+  transferOrderTableRemote,
+  unsubscribeOperationalChanges,
+} from '../services/operationalService.js'
 
 const RestaurantContext = createContext(null)
 const STORAGE_KEY = 'restos-plus-demo-state-v3'
@@ -96,6 +108,9 @@ export function orderTotal(order) {
 }
 
 export function orderPaidTotal(order) {
+  if (order?.paidTotal != null && Number.isFinite(Number(order.paidTotal))) {
+    return Number(order.paidTotal)
+  }
   return (order.payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
 }
 
@@ -130,6 +145,7 @@ export function RestaurantProvider({ children }) {
     zones: state.zones || [],
     tables: state.tables || [],
   })
+  const operationalRefreshTimer = useRef(null)
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
   const [menuStations, setMenuStations] = useState([])
@@ -197,6 +213,72 @@ export function RestaurantProvider({ children }) {
     })
   }, [])
 
+  const applyOperationalOrders = useCallback((orders) => {
+    setState((previous) => {
+      const now = Date.now()
+      const nextTables = previous.tables.map((table) => {
+        const related = orders
+          .filter((order) => order.mode === 'table' && (order.tableIds || []).includes(table.id))
+          .slice()
+          .sort((a, b) => (b.created || 0) - (a.created || 0))
+
+        const open = related.find((order) => !['closed', 'cancelled', 'merged'].includes(order.status))
+        if (open) {
+          const status = ['pay', 'waiting_food', 'refund_due', 'ready'].includes(open.status)
+            ? open.status
+            : 'occupied'
+          return {
+            ...table,
+            status,
+            openedAt: open.created || table.openedAt || now,
+            releasedAt: table.releasedAt || null,
+          }
+        }
+
+        const lastClosed = related.find((order) => ['closed', 'cancelled'].includes(order.status))
+        return {
+          ...table,
+          status: 'free',
+          openedAt: null,
+          releasedAt: lastClosed?.closedAt || table.releasedAt || null,
+        }
+      })
+
+      const next = {
+        ...previous,
+        orders,
+        tables: nextTables,
+        sales: orders.reduce((sum, order) => sum + orderPaidTotal(order), 0),
+      }
+
+      if (auth.isDesignMode) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      }
+
+      return next
+    })
+  }, [auth.isDesignMode])
+
+  const refreshOperationalData = useCallback(async (locationOverride = null) => {
+    if (auth.isDesignMode) return { ok: true }
+
+    const location = locationOverride || activeLocation
+    if (!restaurantId || !location?.id) {
+      applyOperationalOrders([])
+      return { ok: false, message: 'No hay sucursal activa.' }
+    }
+
+    try {
+      const operational = await loadOperationalState(restaurantId, location.id)
+      applyOperationalOrders(operational.orders)
+      return { ok: true, operational }
+    } catch (error) {
+      const message = error?.message || 'No se pudieron sincronizar los pedidos con Supabase.'
+      setRemoteError(message)
+      return { ok: false, message }
+    }
+  }, [auth.isDesignMode, restaurantId, activeLocation, applyOperationalOrders])
+
   const refreshMenu = useCallback(async (locationOverride = null) => {
     if (auth.isDesignMode) {
       setProducts(DEMO_PRODUCTS)
@@ -263,14 +345,19 @@ export function RestaurantProvider({ children }) {
       applyRemoteStructure(structure)
 
       if (structure.location) {
-        const catalog = await loadMenuCatalog(restaurantId, structure.location.id)
+        const [catalog, operational] = await Promise.all([
+          loadMenuCatalog(restaurantId, structure.location.id),
+          loadOperationalState(restaurantId, structure.location.id),
+        ])
         setProducts(catalog.products)
         setMenuCategories(catalog.categories)
         setMenuStations(catalog.stations)
+        applyOperationalOrders(operational.orders)
       } else {
         setProducts([])
         setMenuCategories([])
         setMenuStations([])
+        applyOperationalOrders([])
       }
 
       return { ok: true }
@@ -281,7 +368,7 @@ export function RestaurantProvider({ children }) {
     } finally {
       setRemoteLoading(false)
     }
-  }, [auth.isDesignMode, auth.mode, auth.permissions, restaurantId, applyRemoteStructure, applyRemoteSettings])
+  }, [auth.isDesignMode, auth.mode, auth.permissions, restaurantId, applyRemoteStructure, applyRemoteSettings, applyOperationalOrders])
 
   useEffect(() => {
     if (auth.isDesignMode) {
@@ -293,6 +380,41 @@ export function RestaurantProvider({ children }) {
       refreshRemoteData()
     }
   }, [auth.mode, auth.isDesignMode, restaurantId, refreshRemoteData])
+
+  useEffect(() => {
+    if (
+      auth.isDesignMode
+      || auth.mode !== 'authenticated'
+      || !restaurantId
+      || !activeLocation?.id
+    ) {
+      return undefined
+    }
+
+    const channel = subscribeOperationalChanges(activeLocation.id, () => {
+      if (operationalRefreshTimer.current) {
+        window.clearTimeout(operationalRefreshTimer.current)
+      }
+
+      operationalRefreshTimer.current = window.setTimeout(() => {
+        refreshOperationalData(activeLocation).catch(() => {})
+      }, 180)
+    })
+
+    return () => {
+      if (operationalRefreshTimer.current) {
+        window.clearTimeout(operationalRefreshTimer.current)
+        operationalRefreshTimer.current = null
+      }
+      unsubscribeOperationalChanges(channel).catch(() => {})
+    }
+  }, [
+    auth.isDesignMode,
+    auth.mode,
+    restaurantId,
+    activeLocation?.id,
+    refreshOperationalData,
+  ])
 
   const openOrderForTable = useCallback((tableId, source = state) => source.orders.find((order) => (
     order.mode === 'table'
