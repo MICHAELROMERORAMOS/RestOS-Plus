@@ -130,7 +130,7 @@ export default function OrdersPage() {
         amountPaid: voidTarget.paid,
       })
 
-      const result = voidPaidTableAccount(
+      const result = await voidPaidTableAccount(
         [voidTarget.order.id],
         {
           reason: voidReason.trim(),
