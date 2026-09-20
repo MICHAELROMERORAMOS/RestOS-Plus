@@ -10,6 +10,7 @@ import DeliveriesPage from './pages/DeliveriesPage.jsx'
 import OrderPage from './pages/OrderPage.jsx'
 import StationPage from './pages/StationPage.jsx'
 import CashierPage from './pages/CashierPage.jsx'
+import InvoiceVoidPage from './pages/InvoiceVoidPage.jsx'
 import OrdersPage from './pages/OrdersPage.jsx'
 import InventoryPage from './pages/InventoryPage.jsx'
 import ProductsPage from './pages/ProductsPage.jsx'
@@ -79,6 +80,7 @@ function MainApplication() {
     kitchen: <StationPage station="kitchen" />,
     bar: <StationPage station="bar" />,
     cashier: <CashierPage />,
+    'void-invoice': <InvoiceVoidPage />,
     orders: <OrdersPage />,
     inventory: <InventoryPage />,
     products: <ProductsPage />,

@@ -153,3 +153,46 @@ export async function sendAccountVoidConfirmation(auditId) {
   if (data?.error) throw new Error(data.error)
   return data
 }
+
+export async function findPaidInvoiceForVoid(restaurantId, invoiceNumber) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('find_paid_invoice_for_void', {
+    p_restaurant_id: restaurantId,
+    p_invoice_number: String(invoiceNumber || '').trim(),
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function requestInvoiceVoidAuthorization({
+  restaurantId,
+  invoiceNumber,
+  reason,
+  comment,
+}) {
+  const client = requireSupabase()
+  const { data, error } = await client.functions.invoke('request-void-authorization', {
+    body: {
+      restaurantId,
+      invoiceNumber: String(invoiceNumber || '').trim(),
+      reason: String(reason || '').trim(),
+      comment: String(comment || '').trim(),
+    },
+  })
+
+  if (error) throw new Error(await functionErrorMessage(error))
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+export async function consumeInvoiceVoidAuthorization({ requestId, code }) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('consume_invoice_void_authorization', {
+    p_request_id: requestId,
+    p_code: String(code || '').trim(),
+  })
+
+  if (error) throw error
+  return data
+}

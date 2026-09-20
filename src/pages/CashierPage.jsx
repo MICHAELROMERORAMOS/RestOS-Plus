@@ -1,14 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useRestaurant, orderBalance, orderHasInvoice, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
+import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import {
-  consumeAccountVoidAuthorization,
   createKitchenVoidRequest,
   listMyKitchenVoidRequests,
   markKitchenVoidRequestApplied,
-  requestAccountVoidAuthorization,
-  sendAccountVoidConfirmation,
 } from '../services/voidAuthorizationService.js'
 
 function money(value) {
@@ -57,12 +54,10 @@ export default function CashierPage() {
     tableLabel,
     formatMoney,
     applyKitchenApprovedVoidRequest,
-    voidPaidTableAccount,
   } = useRestaurant()
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const canRequestUnpaidVoid = auth.can('orders.void.request_unpaid')
-  const canVoidPartialAccount = auth.can('orders.account_void.authorized')
 
   const [splitGroupKey, setSplitGroupKey] = useState(null)
   const [myVoidRequests, setMyVoidRequests] = useState([])
@@ -72,12 +67,6 @@ export default function CashierPage() {
   const [voidReason, setVoidReason] = useState('')
   const [voidBusy, setVoidBusy] = useState(false)
 
-  const [accountVoidGroupKey, setAccountVoidGroupKey] = useState(null)
-  const [accountVoidReason, setAccountVoidReason] = useState('')
-  const [accountVoidRequestId, setAccountVoidRequestId] = useState(null)
-  const [accountVoidCode, setAccountVoidCode] = useState('')
-  const [accountVoidExpiresAt, setAccountVoidExpiresAt] = useState(null)
-  const [accountVoidBusy, setAccountVoidBusy] = useState(false)
 
   const groups = useMemo(() => {
     const grouped = new Map()
@@ -124,10 +113,6 @@ export default function CashierPage() {
 
   const voidRequestGroup = voidRequestGroupKey
     ? groups.find((group) => group.key === voidRequestGroupKey) || null
-    : null
-
-  const accountVoidGroup = accountVoidGroupKey
-    ? groups.find((group) => group.key === accountVoidGroupKey) || null
     : null
 
   const latestRequestByLine = useMemo(() => {
@@ -308,118 +293,12 @@ export default function CashierPage() {
     }
   }
 
-  function openAccountVoid(group) {
-    if (!canVoidPartialAccount) return
-    if (!(group.paid > 0.005 && group.balance > 0.005)) return
-    if (group.orders.some((order) => orderHasInvoice(order))) {
-      return window.alert('La cuenta tiene una factura emitida y requiere el flujo fiscal correspondiente.')
-    }
-
-    setAccountVoidGroupKey(group.key)
-    setAccountVoidReason('')
-    setAccountVoidRequestId(null)
-    setAccountVoidCode('')
-    setAccountVoidExpiresAt(null)
-  }
-
-  function closeAccountVoid() {
-    if (accountVoidBusy) return
-    setAccountVoidGroupKey(null)
-    setAccountVoidReason('')
-    setAccountVoidRequestId(null)
-    setAccountVoidCode('')
-    setAccountVoidExpiresAt(null)
-  }
-
-  async function requestAccountCode() {
-    if (!accountVoidGroup || !restaurantId) return
-    if (!(accountVoidGroup.paid > 0.005 && accountVoidGroup.balance > 0.005)) {
-      return window.alert('La cuenta ya no está parcialmente pagada.')
-    }
-    if (accountVoidReason.trim().length < 4) return window.alert('Escribe un motivo claro.')
-
-    setAccountVoidBusy(true)
-    try {
-      const result = await requestAccountVoidAuthorization({
-        restaurantId,
-        orderRef: accountVoidGroup.orders.map((order) => order.id).join('+'),
-        tableLabel: accountVoidGroup.tableText,
-        amountPaid: accountVoidGroup.paid,
-        reason: accountVoidReason.trim(),
-      })
-
-      setAccountVoidRequestId(result.requestId)
-      setAccountVoidExpiresAt(result.expiresAt || null)
-      setAccountVoidCode('')
-    } catch (error) {
-      window.alert(error?.message || 'No se pudo enviar el código al administrador.')
-    } finally {
-      setAccountVoidBusy(false)
-    }
-  }
-
-  async function confirmAccountCode() {
-    if (!accountVoidGroup || !accountVoidRequestId) return
-
-    const code = accountVoidCode.trim()
-    if (!/^\d{6}$/.test(code)) return window.alert('Introduce el código de 6 dígitos.')
-
-    const items = groupItems(accountVoidGroup)
-    const orderRef = accountVoidGroup.orders.map((order) => order.id).join('+')
-
-    setAccountVoidBusy(true)
-
-    try {
-      const auditId = await consumeAccountVoidAuthorization({
-        requestId: accountVoidRequestId,
-        code,
-        orderRef,
-        tableLabel: accountVoidGroup.tableText,
-        items,
-        reason: accountVoidReason.trim(),
-        amountPaid: accountVoidGroup.paid,
-      })
-
-      const result = await voidPaidTableAccount(
-        accountVoidGroup.orders.map((order) => order.id),
-        {
-          reason: accountVoidReason.trim(),
-          auditId,
-          authorizationRequestId: accountVoidRequestId,
-        },
-      )
-
-      if (!result.ok) throw new Error(result.message)
-
-      let emailWarning = ''
-      try {
-        await sendAccountVoidConfirmation(auditId)
-      } catch (error) {
-        emailWarning = `\n\nLa cuenta fue anulada, pero falló el correo de confirmación: ${error?.message || 'error de correo'}`
-      }
-
-      setAccountVoidBusy(false)
-      setAccountVoidGroupKey(null)
-      setAccountVoidReason('')
-      setAccountVoidRequestId(null)
-      setAccountVoidCode('')
-      setAccountVoidExpiresAt(null)
-
-      window.alert(
-        `Cuenta anulada. Reembolso pendiente: ${formatMoney(result.refundDue)}.${emailWarning}`,
-      )
-    } catch (error) {
-      window.alert(error?.message || 'No se pudo validar la autorización.')
-      setAccountVoidBusy(false)
-    }
-  }
-
   return (
     <section className="view active">
       <div className="hero">
         <div>
           <h2>Caja · Cobrar mesa</h2>
-          <p>Una mesa se cobra como una sola cuenta. Las anulaciones sin pago pasan por Cocina; las cuentas parcialmente pagadas requieren autorización del administrador.</p>
+          <p>Una mesa se cobra como una sola cuenta. Las anulaciones sin pago pasan por Cocina; las facturas pagadas se anulan desde el módulo Anular factura.</p>
         </div>
       </div>
 
@@ -427,7 +306,6 @@ export default function CashierPage() {
         <div className="list cashier-groups">
           {groups.length ? groups.map((group) => {
             const unpaid = group.paid <= 0.005 && group.refundDue <= 0.005
-            const partiallyPaid = group.paid > 0.005 && group.balance > 0.005 && group.refundDue <= 0.005
             const refundPending = group.refundDue > 0.005
 
             return (
@@ -457,11 +335,6 @@ export default function CashierPage() {
                         </button>
                       )}
 
-                      {partiallyPaid && canVoidPartialAccount && (
-                        <button className="btn danger-outline" onClick={() => openAccountVoid(group)}>
-                          🔐 Anular cuenta
-                        </button>
-                      )}
                     </>
                   )}
                 </div>
@@ -531,77 +404,6 @@ export default function CashierPage() {
         </div>
       )}
 
-      {accountVoidGroup && (
-        <div className="modal open" onClick={closeAccountVoid}>
-          <div className="modal-card controlled-void-card" onClick={(event) => event.stopPropagation()}>
-            <div className="section-title">
-              <div>
-                <h3>🔐 Anular cuenta completa</h3>
-                <p className="muted">{accountVoidGroup.tableText} · pago parcial</p>
-              </div>
-              <button className="btn" disabled={accountVoidBusy} onClick={closeAccountVoid}>×</button>
-            </div>
-
-            <div className="account-void-summary">
-              <div><span>Total</span><strong>{formatMoney(accountVoidGroup.total)}</strong></div>
-              <div><span>Pagado</span><strong>{formatMoney(accountVoidGroup.paid)}</strong></div>
-              <div><span>Saldo</span><strong>{formatMoney(accountVoidGroup.balance)}</strong></div>
-              <div className="refund"><span>Reembolso</span><strong>{formatMoney(accountVoidGroup.paid)}</strong></div>
-            </div>
-
-            <div className="account-void-products">
-              {groupItems(accountVoidGroup).map((item) => (
-                <div key={`${item.orderId}:${item.lineId}`}>
-                  <span>{item.quantity} × {item.name}</span>
-                  <strong>{formatMoney(item.amount)}</strong>
-                </div>
-              ))}
-            </div>
-
-            <label className="controlled-void-reason">
-              <span>Motivo *</span>
-              <textarea
-                value={accountVoidReason}
-                disabled={Boolean(accountVoidRequestId) || accountVoidBusy}
-                onChange={(event) => setAccountVoidReason(event.target.value)}
-                placeholder="Motivo para anular la cuenta completa"
-              />
-            </label>
-
-            {!accountVoidRequestId ? (
-              <button className="btn primary full" disabled={accountVoidBusy} onClick={requestAccountCode}>
-                {accountVoidBusy ? 'Enviando código…' : 'Enviar código al administrador'}
-              </button>
-            ) : (
-              <>
-                <div className="notice">
-                  Código enviado al administrador.
-                  {accountVoidExpiresAt ? ` Válido hasta ${new Date(accountVoidExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
-                </div>
-
-                <label className="void-code-field">
-                  <span>Código de autorización</span>
-                  <input
-                    inputMode="numeric"
-                    maxLength="6"
-                    value={accountVoidCode}
-                    onChange={(event) => setAccountVoidCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="000000"
-                  />
-                </label>
-
-                <div className="notice warn">
-                  Al confirmar se anularán todos los productos y el importe pagado quedará como reembolso pendiente.
-                </div>
-
-                <button className="btn primary full" disabled={accountVoidBusy || accountVoidCode.length !== 6} onClick={confirmAccountCode}>
-                  {accountVoidBusy ? 'Validando…' : 'Validar código y anular cuenta'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </section>
   )
 }
