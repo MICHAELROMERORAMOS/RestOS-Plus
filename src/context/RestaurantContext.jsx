@@ -101,6 +101,10 @@ function loadInitialState() {
 }
 
 export function orderTotal(order) {
+  if (order?.serverTotal != null && Number.isFinite(Number(order.serverTotal))) {
+    return Number(order.serverTotal)
+  }
+
   return (order.rounds || [])
     .flatMap((round) => round.items || [])
     .filter((item) => !item.voided)
@@ -682,7 +686,7 @@ export function RestaurantProvider({ children }) {
     setCurrentDelivery(null)
   }, [state.orders])
 
-  const startDelivery = useCallback((delivery) => {
+  const startDelivery = useCallback(async (delivery) => {
     const normalized = {
       customerId: delivery?.customerId || null,
       customerName: cleanName(delivery?.customerName),
@@ -695,6 +699,39 @@ export function RestaurantProvider({ children }) {
 
     if (!normalized.customerName || !normalized.address || !normalized.phone || !normalized.neighborhood || !normalized.city) {
       return { ok: false, message: 'Completa nombre, dirección, celular, barrio y ciudad.' }
+    }
+
+    if (!auth.isDesignMode) {
+      if (!restaurantId || !activeLocation?.id) {
+        return { ok: false, message: 'No hay restaurante o sucursal activa.' }
+      }
+
+      try {
+        const created = await createDeliveryOrderRemote({
+          restaurantId,
+          locationId: activeLocation.id,
+          customerId: normalized.customerId,
+          customerName: normalized.customerName,
+          delivery: normalized,
+        })
+
+        const orderNumber = Number(created?.order_number)
+        if (!Number.isFinite(orderNumber)) {
+          throw new Error('Supabase no devolvió un número de pedido válido.')
+        }
+
+        setOrderModeState('delivery')
+        setCurrentTableId(null)
+        setCurrentOrderId(orderNumber)
+        setDraft([])
+        setPager('')
+        setCurrentDelivery(normalized)
+        await refreshOperationalData(activeLocation)
+
+        return { ok: true, orderId: orderNumber }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo crear el domicilio en Supabase.' }
+      }
     }
 
     let createdOrderId = null
@@ -732,7 +769,13 @@ export function RestaurantProvider({ children }) {
     setPager('')
     setCurrentDelivery(normalized)
     return { ok: true, orderId: createdOrderId }
-  }, [updateState])
+  }, [
+    auth.isDesignMode,
+    restaurantId,
+    activeLocation,
+    refreshOperationalData,
+    updateState,
+  ])
 
   const openDelivery = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
@@ -839,13 +882,53 @@ export function RestaurantProvider({ children }) {
     }
   }, [currentOrderId, currentTableId, orderMode, pager, currentDelivery])
 
-  const sendDraft = useCallback(({ prepaid = false, paymentMethod = 'cash' } = {}) => {
+  const sendDraft = useCallback(async ({ prepaid = false, paymentMethod = 'cash' } = {}) => {
     if (!draft.length) return { ok: false, message: 'Añade productos nuevos antes de enviar.' }
     if (orderMode === 'table' && !currentTableId) return { ok: false, message: 'Selecciona una mesa.' }
     if (orderMode === 'delivery' && (!currentDelivery?.customerName || !currentDelivery?.address || !currentDelivery?.phone || !currentDelivery?.neighborhood || !currentDelivery?.city)) {
       return { ok: false, message: 'Faltan datos obligatorios del domicilio.' }
     }
     if (orderMode === 'quick' && !prepaid) return { ok: false, message: 'El servicio rápido debe cobrarse antes de enviar a preparación.' }
+
+    if (!auth.isDesignMode) {
+      if (!restaurantId || !activeLocation?.id) {
+        return { ok: false, message: 'No hay restaurante o sucursal activa.' }
+      }
+
+      const existingOrder = state.orders.find((order) => order.id === currentOrderId)
+        || (orderMode === 'table' && currentTableId ? openOrderForTable(currentTableId) : null)
+
+      try {
+        const result = await sendOrderRoundRemote({
+          orderServerId: existingOrder?.serverId || null,
+          restaurantId,
+          locationId: activeLocation.id,
+          mode: orderMode,
+          tableIds: orderMode === 'table'
+            ? (existingOrder?.tableIds?.length ? existingOrder.tableIds : [currentTableId])
+            : [],
+          customerId: currentDelivery?.customerId || null,
+          customerName: currentDelivery?.customerName || null,
+          delivery: orderMode === 'delivery' ? currentDelivery : null,
+          pager: orderMode === 'quick' ? (pager.trim() || null) : null,
+          items: draft,
+          prepaid,
+          paymentMethod,
+        })
+
+        const orderNumber = Number(result?.order_number)
+        if (!Number.isFinite(orderNumber)) {
+          throw new Error('Supabase no devolvió un número de pedido válido.')
+        }
+
+        setCurrentOrderId(orderNumber)
+        setDraft([])
+        await refreshOperationalData(activeLocation)
+        return { ok: true, orderId: orderNumber }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo enviar la comanda a Supabase.' }
+      }
+    }
 
     let createdOrderId = currentOrderId
     updateState((previous) => {
@@ -902,7 +985,11 @@ export function RestaurantProvider({ children }) {
     setCurrentOrderId(createdOrderId)
     setDraft([])
     return { ok: true, orderId: createdOrderId }
-  }, [draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder])
+  }, [
+    draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
+    auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager,
+    openOrderForTable, refreshOperationalData,
+  ])
 
   const applyKitchenApprovedVoidRequest = useCallback((orderId, request) => {
     const order = state.orders.find((candidate) => candidate.id === orderId)
@@ -912,6 +999,14 @@ export function RestaurantProvider({ children }) {
     }
     if (orderHasInvoice(order)) {
       return { ok: false, message: 'La orden ya tiene factura emitida.' }
+    }
+
+    if (!auth.isDesignMode) {
+      return {
+        ok: true,
+        appliedCount: (request?.items || []).length,
+        remote: true,
+      }
     }
 
     const lineIds = new Set((request?.items || []).map((item) => String(item.lineId || '')))
@@ -952,9 +1047,9 @@ export function RestaurantProvider({ children }) {
     }))
 
     return { ok: true, appliedCount }
-  }, [state.orders, updateState])
+  }, [state.orders, updateState, auth.isDesignMode])
 
-  const voidPaidTableAccount = useCallback((orderIds, options = {}) => {
+  const voidPaidTableAccount = useCallback(async (orderIds, options = {}) => {
     const targetIds = new Set((orderIds || []).map((id) => id))
     const orders = state.orders.filter((order) => targetIds.has(order.id))
     if (!orders.length) return { ok: false, message: 'No se encontró la cuenta.' }
@@ -982,6 +1077,11 @@ export function RestaurantProvider({ children }) {
 
     const reason = cleanName(options.reason)
     if (!reason) return { ok: false, message: 'Debes registrar el motivo de la anulación.' }
+
+    if (!auth.isDesignMode) {
+      await refreshOperationalData(activeLocation)
+      return { ok: true, refundDue: paid, remote: true }
+    }
 
     const affectedTables = new Set(orders.flatMap((order) => order.tableIds || []))
 
@@ -1030,9 +1130,29 @@ export function RestaurantProvider({ children }) {
     }))
 
     return { ok: true, refundDue: paid }
-  }, [state.orders, updateState, formatMoney])
+  }, [
+    state.orders, updateState, formatMoney, auth.isDesignMode,
+    refreshOperationalData, activeLocation,
+  ])
 
-  const advanceStationRound = useCallback((orderId, roundId, station) => {
+  const advanceStationRound = useCallback(async (orderId, roundId, station) => {
+    if (!auth.isDesignMode) {
+      const order = state.orders.find((candidate) => candidate.id === orderId)
+      const round = order?.rounds?.find((candidate) => candidate.id === roundId)
+
+      if (!order?.serverId || !round?.serverId) {
+        return { ok: false, message: 'No se encontró la comanda sincronizada.' }
+      }
+
+      try {
+        await advanceStationRoundRemote(order.serverId, round.serverId, station)
+        await refreshOperationalData(activeLocation)
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo actualizar la preparación.' }
+      }
+    }
+
     updateState((previous) => {
       let nextOrders = previous.orders.map((order) => {
         if (order.id !== orderId) return order
@@ -1112,9 +1232,28 @@ export function RestaurantProvider({ children }) {
           : previous.activity,
       }
     })
-  }, [updateState])
+  }, [
+    updateState, auth.isDesignMode, state.orders, refreshOperationalData, activeLocation,
+  ])
 
-  const markRoundDelivered = useCallback((orderId, roundId) => {
+  const markRoundDelivered = useCallback(async (orderId, roundId) => {
+    if (!auth.isDesignMode) {
+      const order = state.orders.find((candidate) => candidate.id === orderId)
+      const round = order?.rounds?.find((candidate) => candidate.id === roundId)
+
+      if (!order?.serverId || !round?.serverId) {
+        return { ok: false, message: 'No se encontró la comanda sincronizada.' }
+      }
+
+      try {
+        await markRoundServedRemote(order.serverId, round.serverId)
+        await refreshOperationalData(activeLocation)
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo marcar la comanda como entregada.' }
+      }
+    }
+
     updateState((previous) => ({
       ...previous,
       orders: previous.orders.map((order) => order.id !== orderId ? order : {
@@ -1126,9 +1265,11 @@ export function RestaurantProvider({ children }) {
       }),
       activity: [...previous.activity, `Comanda ${roundId} entregada · Orden #${orderId}`],
     }))
-  }, [updateState])
+  }, [
+    updateState, auth.isDesignMode, state.orders, refreshOperationalData, activeLocation,
+  ])
 
-  const transferCurrentTable = useCallback((destinationId) => {
+  const transferCurrentTable = useCallback(async (destinationId) => {
     const destination = String(destinationId || '')
     if (!currentTableId || !destination || destination === currentTableId) {
       return { ok: false, message: 'Selecciona una mesa destino válida.' }
@@ -1147,6 +1288,20 @@ export function RestaurantProvider({ children }) {
     const fromLabel = tableLabel(currentTableId)
     const toLabel = tableLabel(destination)
 
+    if (!auth.isDesignMode) {
+      const order = state.orders.find((item) => item.id === currentOrderId)
+      if (!order?.serverId) return { ok: false, message: 'No hay una cuenta sincronizada para mover.' }
+
+      try {
+        await transferOrderTableRemote(order.serverId, currentTableId, destination)
+        setCurrentTableId(destination)
+        await refreshOperationalData(activeLocation)
+        return { ok: true, reserved: destinationStatus === 'reserved' }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo mover la cuenta en Supabase.' }
+      }
+    }
+
     updateState((previous) => ({
       ...previous,
       orders: previous.orders.map((order) => order.id !== currentOrderId ? order : {
@@ -1162,9 +1317,12 @@ export function RestaurantProvider({ children }) {
     }))
     setCurrentTableId(destination)
     return { ok: true, reserved: destinationStatus === 'reserved' }
-  }, [currentTableId, currentOrderId, state.tables, getTableTransferStatus, tableLabel, updateState])
+  }, [
+    currentTableId, currentOrderId, state.tables, state.orders, getTableTransferStatus,
+    tableLabel, updateState, auth.isDesignMode, refreshOperationalData, activeLocation,
+  ])
 
-  const joinTable = useCallback((destinationId) => {
+  const joinTable = useCallback(async (destinationId) => {
     const destination = String(destinationId || '')
     const order = state.orders.find((item) => item.id === currentOrderId)
     if (!order || !destination) return { ok: false, message: 'Abre primero una cuenta de mesa.' }
@@ -1175,6 +1333,18 @@ export function RestaurantProvider({ children }) {
       return { ok: false, message: 'La mesa destino ya tiene otra cuenta abierta.' }
     }
     if (status === 'unavailable') return { ok: false, message: 'La mesa destino no está disponible.' }
+
+    if (!auth.isDesignMode) {
+      if (!order.serverId) return { ok: false, message: 'La cuenta todavía no está sincronizada.' }
+
+      try {
+        await joinOrderTableRemote(order.serverId, destination)
+        await refreshOperationalData(activeLocation)
+        return { ok: true, reserved: status === 'reserved' }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo unir la mesa en Supabase.' }
+      }
+    }
 
     updateState((previous) => ({
       ...previous,
@@ -1188,9 +1358,12 @@ export function RestaurantProvider({ children }) {
       activity: [...previous.activity, `${tableLabel(destination)} unida a Orden #${order.id}`],
     }))
     return { ok: true, reserved: status === 'reserved' }
-  }, [state.orders, currentOrderId, getTableTransferStatus, tableLabel, updateState])
+  }, [
+    state.orders, currentOrderId, getTableTransferStatus, tableLabel, updateState,
+    auth.isDesignMode, refreshOperationalData, activeLocation,
+  ])
 
-  const recordPayments = useCallback((allocations, method = 'card') => {
+  const recordPayments = useCallback(async (allocations, method = 'card') => {
     const normalized = (Array.isArray(allocations) ? allocations : [])
       .map((allocation) => ({
         orderId: allocation.orderId,
@@ -1212,6 +1385,29 @@ export function RestaurantProvider({ children }) {
     }
 
     if (expectedApplied <= 0.005) return { ok: false, message: 'La cuenta ya está pagada.' }
+
+    if (!auth.isDesignMode) {
+      const remoteAllocations = normalized.map((allocation) => {
+        const order = state.orders.find((candidate) => candidate.id === allocation.orderId)
+        if (!order?.serverId) {
+          throw new Error(`La orden #${allocation.orderId} no está sincronizada.`)
+        }
+
+        return {
+          orderId: order.serverId,
+          amount: allocation.amount,
+          itemAllocations: allocation.itemAllocations,
+        }
+      })
+
+      try {
+        const result = await recordOrderPaymentsRemote(remoteAllocations, method)
+        await refreshOperationalData(activeLocation)
+        return { ok: true, applied: Number(result?.applied || 0) }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo registrar el pago en Supabase.' }
+      }
+    }
 
     updateState((previous) => {
       let appliedTotal = 0
@@ -1289,7 +1485,10 @@ export function RestaurantProvider({ children }) {
     })
 
     return { ok: true, applied: expectedApplied }
-  }, [state.orders, updateState, formatMoney])
+  }, [
+    state.orders, updateState, formatMoney, auth.isDesignMode,
+    refreshOperationalData, activeLocation,
+  ])
 
   const recordPayment = useCallback((orderId, amount, method = 'card') => (
     recordPayments([{ orderId, amount }], method)
@@ -1381,6 +1580,7 @@ export function RestaurantProvider({ children }) {
     remoteError,
     refreshMenu,
     refreshRemoteData,
+    refreshOperationalData,
     currencyCode,
     formatMoney,
     setCurrency,
@@ -1428,7 +1628,7 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    refreshMenu, refreshRemoteData, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    refreshMenu, refreshRemoteData, refreshOperationalData, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
