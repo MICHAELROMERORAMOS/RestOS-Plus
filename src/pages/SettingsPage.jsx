@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { CURRENCY_OPTIONS } from '../lib/currency.js'
 
 export default function SettingsPage() {
   const {
@@ -8,9 +9,11 @@ export default function SettingsPage() {
     addZone, updateZone, deleteZone,
     addTable, updateTable, deleteTable,
     activeLocation, remoteLoading, remoteError,
+    setCurrency,
   } = useRestaurant()
   const auth = useAuth()
   const canManageTables = auth.can('tables.manage')
+  const canManageSettings = auth.can('settings.manage')
   const settings = state.settings
 
   const activeZones = useMemo(
@@ -28,6 +31,15 @@ export default function SettingsPage() {
   const [tableCapacity, setTableCapacity] = useState(2)
   const [editingZone, setEditingZone] = useState(null)
   const [editingTable, setEditingTable] = useState(null)
+  const [currencySaving, setCurrencySaving] = useState(false)
+
+  async function changeCurrency(event) {
+    const code = event.target.value
+    setCurrencySaving(true)
+    const result = await setCurrency(code)
+    setCurrencySaving(false)
+    if (!result.ok) window.alert(result.message)
+  }
 
   async function submitZone(event) {
     event.preventDefault()
@@ -82,7 +94,27 @@ export default function SettingsPage() {
           <h3>Operación</h3>
           <div className="settings-form">
             <label><span>Nombre del restaurante</span><input value={settings.restaurantName} onChange={(event) => updateSettings({ restaurantName: event.target.value })} /></label>
-            <label><span>Moneda</span><select value={settings.currency} onChange={(event) => updateSettings({ currency: event.target.value, currencySymbol: event.target.value === 'EUR' ? '€' : event.target.value === 'USD' ? '$' : '£' })}><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option><option value="GBP">GBP (£)</option></select></label>
+            <label>
+              <span>Moneda del restaurante</span>
+              <select
+                value={settings.currency || 'EUR'}
+                onChange={changeCurrency}
+                disabled={!canManageSettings || currencySaving}
+              >
+                {CURRENCY_OPTIONS.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} · {currency.name}
+                  </option>
+                ))}
+              </select>
+              <small>
+                {currencySaving
+                  ? 'Guardando en Supabase…'
+                  : canManageSettings
+                    ? 'Se aplica a precios, caja, pagos, reportes y pedidos.'
+                    : 'Solo Owner / usuarios con settings.manage pueden cambiarla.'}
+              </small>
+            </label>
             <label><span>Modo predeterminado</span><select value={settings.defaultOrderMode} onChange={(event) => updateSettings({ defaultOrderMode: event.target.value })}><option value="table">Servicio de mesa / cuenta abierta</option><option value="quick">Servicio rápido / prepago</option></select></label>
             <label><span>Identificador servicio rápido</span><select value={settings.quickIdentifier} onChange={(event) => updateSettings({ quickIdentifier: event.target.value })}><option value="order">Número consecutivo de orden</option><option value="pager">Pager / vibrador</option><option value="turn">Número de turno</option><option value="name">Nombre del cliente</option></select></label>
             <label className="toggle-row"><span>Permitir pager / turno manual</span><input type="checkbox" checked={settings.allowPager} onChange={(event) => updateSettings({ allowPager: event.target.checked })} /></label>
@@ -98,6 +130,7 @@ export default function SettingsPage() {
             <div className="row"><b>Base de datos</b><span className="badge ok-badge">Supabase · conectado</span></div>
             <div className="row"><b>Sucursal operativa</b><span className="badge">{activeLocation?.name || (remoteLoading ? 'Cargando…' : 'Sin sucursal')}</span></div>
             <div className="row"><b>Mesas / zonas</b><span className={`badge ${!remoteError ? 'ok-badge' : ''}`}>{remoteError ? 'Error de sincronización' : 'Guardado en Supabase'}</span></div>
+            <div className="row"><b>Moneda</b><span className="badge ok-badge">{settings.currency || 'EUR'} · Supabase</span></div>
             <div className="row"><b>Usuarios y login</b><span className={`badge ${auth.isSupabaseConfigured ? 'ok-badge' : ''}`}>{auth.isSupabaseConfigured ? 'Cliente configurado' : 'Pendiente .env'}</span></div>
             <div className="row"><b>Aprobación de usuarios</b><span className="badge">Por rol y membresía</span></div>
           </div>
