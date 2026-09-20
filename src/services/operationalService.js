@@ -81,7 +81,9 @@ function mapOperationalOrders(payload) {
         type: payment.status === 'refunded' ? 'refund' : 'payment',
         itemAllocations: (payment.item_allocations || []).map((allocation) => ({
           lineId: allocation.line_id,
-          sourceOrderId: numberByServerId.get(String(allocation.source_order_id)) || allocation.source_order_id,
+          sourceOrderId: Number(allocation.source_order_number)
+            || numberByServerId.get(String(allocation.source_order_id))
+            || allocation.source_order_id,
           quantity: asNumber(allocation.quantity),
           unitPrice: asNumber(allocation.unit_price),
           name: allocation.name,
