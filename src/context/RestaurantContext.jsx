@@ -301,6 +301,7 @@ export function RestaurantProvider({ children }) {
 
   const startDelivery = useCallback((delivery) => {
     const normalized = {
+      customerId: delivery?.customerId || null,
       customerName: cleanName(delivery?.customerName),
       address: cleanName(delivery?.address),
       phone: cleanName(delivery?.phone),
