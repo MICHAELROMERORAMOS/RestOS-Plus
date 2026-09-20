@@ -211,6 +211,7 @@ export default function CustomersPage() {
                   value={form.phone}
                   onChange={(event) => updateField('phone', event.target.value)}
                   placeholder="Número de contacto"
+                  disabled={Boolean(form.id)}
                 />
               </label>
 
