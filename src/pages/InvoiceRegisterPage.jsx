@@ -126,11 +126,11 @@ export default function InvoiceRegisterPage() {
       </div>
 
       {selected && (
-        <div className="modal open" onClick={() => setSelected(null)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="modal open invoice-detail-modal" onClick={() => setSelected(null)}>
+          <div className="modal-card invoice-detail-card" onClick={(event) => event.stopPropagation()}>
             <div className="section-title"><div><h3>{selected.invoiceNumber}</h3><p className="muted">Orden #{selected.orderNumber} · {new Date(selected.issuedAt).toLocaleString('es-CO')} · {selected.voided ? 'Anulada' : 'Válida'}</p></div><button className="btn" onClick={() => setSelected(null)}>×</button></div>
             <OriginSummary invoice={selected} />
-            <div className="list">{(selected.items || []).map((item, index) => <div className="row" key={index}><span>{item.quantity} × {item.name}<small>IVA {item.taxRate || 0}% · {formatMoney(item.unitPrice)} c/u</small></span><b>{formatMoney(item.amount)}</b></div>)}</div>
+            <div className="list invoice-detail-lines">{(selected.items || []).map((item, index) => <div className="row" key={index}><span>{item.quantity} × {item.name}<small>IVA {item.taxRate || 0}% · {formatMoney(item.unitPrice)} c/u</small></span><b>{formatMoney(item.amount)}</b></div>)}</div>
             <div className="totals"><div>Subtotal <b>{formatMoney(selected.subtotal)}</b></div><div>IVA <b>{formatMoney(selected.taxTotal)}</b></div><div>Total <b>{formatMoney(selected.total)}</b></div><div>Valor pagado <b>{formatMoney(selected.paidTotal || selected.total)}</b></div></div>
           </div>
         </div>
