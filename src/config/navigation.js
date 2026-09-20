@@ -1,6 +1,7 @@
 export const NAV_ITEMS = [
   { id: 'dashboard', icon: '▦', label: 'Resumen', permission: 'dashboard.view' },
   { id: 'tables', icon: '▣', label: 'Mesas', permission: 'tables.view' },
+  { id: 'deliveries', icon: '🚚', label: 'Domicilios', permission: 'orders.create' },
   { id: 'order', icon: '🧾', label: 'Pedido', permission: 'orders.create', hidden: true },
   { id: 'kitchen', icon: '🍳', label: 'Cocina', permission: 'kitchen.view' },
   { id: 'bar', icon: '🍸', label: 'Bar', permission: 'bar.view' },
