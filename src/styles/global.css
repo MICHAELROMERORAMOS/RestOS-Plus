@@ -1712,6 +1712,10 @@ html, body {
 
 .controlled-void-card {
   width: min(620px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .controlled-void-product {
@@ -1790,6 +1794,11 @@ html, body {
   .kds-void-btn {
     grid-column: 2;
     width: max-content;
+  }
+
+  .controlled-void-card {
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
   }
 
   .controlled-void-product {
