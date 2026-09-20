@@ -8,7 +8,6 @@ export const createInitialDemoState = () => ({
   nextOrder: 1001,
   settings: {
     currency: 'EUR',
-    currencySymbol: '€',
     defaultOrderMode: 'table',
     quickIdentifier: 'order',
     allowPager: true,
