@@ -802,7 +802,7 @@ export function RestaurantProvider({ children }) {
     const reason = cleanName(options.reason)
     if (!reason) return { ok: false, message: 'Debes registrar el motivo de la anulación.' }
 
-    const hasPayment = orderPaidTotal(order) > 0.005
+    const hasPayment = options.accountPaid === true || orderPaidTotal(order) > 0.005
     const method = options.method
 
     if (hasPayment) {
