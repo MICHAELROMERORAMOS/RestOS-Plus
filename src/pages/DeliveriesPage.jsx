@@ -26,7 +26,7 @@ function prepStatus(order) {
 
 export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
   const auth = useAuth()
-  const { state } = useRestaurant()
+  const { state, formatMoney } = useRestaurant()
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
 
   const [showForm, setShowForm] = useState(false)
@@ -189,8 +189,8 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
 
                   <div className="delivery-card-meta">
                     <span>Orden #{order.id}</span>
-                    <strong>€{orderTotal(order).toFixed(2)}</strong>
-                    {balance > 0.005 && <small>Saldo €{balance.toFixed(2)}</small>}
+                    <strong>{formatMoney(orderTotal(order))}</strong>
+                    {balance > 0.005 && <small>Saldo {formatMoney(balance)}</small>}
                   </div>
 
                   <button className="btn" onClick={() => onOpenDelivery(order.id)}>Abrir pedido</button>
