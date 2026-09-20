@@ -296,6 +296,7 @@ export function RestaurantProvider({ children }) {
     setCurrentOrderId(existing?.id || null)
     setDraft([])
     setPager('')
+    setCurrentDelivery(null)
   }, [state.orders])
 
   const startDelivery = useCallback((delivery) => {
@@ -312,14 +313,39 @@ export function RestaurantProvider({ children }) {
       return { ok: false, message: 'Completa nombre, dirección, celular, barrio y ciudad.' }
     }
 
+    let createdOrderId = null
+    updateState((previous) => {
+      createdOrderId = previous.nextOrder
+      const order = {
+        id: createdOrderId,
+        mode: 'delivery',
+        tableIds: [],
+        pager: null,
+        delivery: normalized,
+        deliveryStatus: 'pending',
+        rounds: [],
+        status: 'draft',
+        created: Date.now(),
+        payments: [],
+        closedAt: null,
+      }
+
+      return {
+        ...previous,
+        nextOrder: previous.nextOrder + 1,
+        orders: [...previous.orders, order],
+        activity: [...previous.activity, `Domicilio #${createdOrderId} creado · ${normalized.customerName}`],
+      }
+    })
+
     setOrderModeState('delivery')
     setCurrentTableId(null)
-    setCurrentOrderId(null)
+    setCurrentOrderId(createdOrderId)
     setDraft([])
     setPager('')
     setCurrentDelivery(normalized)
-    return { ok: true }
-  }, [])
+    return { ok: true, orderId: createdOrderId }
+  }, [updateState])
 
   const openDelivery = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
