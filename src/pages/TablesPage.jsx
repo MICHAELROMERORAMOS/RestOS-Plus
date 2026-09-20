@@ -11,7 +11,7 @@ function formatTime(value) {
   }).format(date)
 }
 
-export default function TablesPage({ onOpenTable }) {
+export default function TablesPage({ onOpenTable, onQuickService }) {
   const { state, getTableVisualStatus } = useRestaurant()
   const labels = {
     free: 'LIBRE',
@@ -56,7 +56,21 @@ export default function TablesPage({ onOpenTable }) {
 
   return (
     <section className="view active">
-      <div className="hero"><div><h2>Mesas y salones</h2><p>Las mesas se muestran dentro del área a la que pertenecen. Toca una mesa para abrir o continuar su pedido.</p></div></div>
+      <div className="hero tables-hero">
+        <div>
+          <h2>Mesas y salones</h2>
+          <p>Selecciona una mesa para abrir o continuar su pedido. Para ventas sin mesa utiliza Servicio rápido.</p>
+        </div>
+        {onQuickService && (
+          <button className="btn primary quick-service-entry" onClick={onQuickService}>
+            <span className="quick-service-icon">⚡</span>
+            <span>
+              <b>Servicio rápido</b>
+              <small>Prepago · sin mesa</small>
+            </span>
+          </button>
+        )}
+      </div>
 
       {!activeZones.length && (
         <div className="card"><div className="empty-inline">No hay mesas configuradas. Ve a Configuración → Salones / áreas y mesas para crear la distribución del restaurante.</div></div>
