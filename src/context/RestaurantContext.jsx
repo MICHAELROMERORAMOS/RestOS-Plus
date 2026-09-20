@@ -224,6 +224,7 @@ export function RestaurantProvider({ children }) {
         && structure.zones.length === 0
         && structure.tables.length === 0
         && localZones.length > 0
+        && auth.can('tables.manage')
       ) {
         await importLocalStructure(structure.location.id, localZones, localTables)
         structure = await loadRestaurantStructure(restaurantId)
@@ -251,7 +252,7 @@ export function RestaurantProvider({ children }) {
     } finally {
       setRemoteLoading(false)
     }
-  }, [auth.isDesignMode, auth.mode, restaurantId, applyRemoteStructure])
+  }, [auth.isDesignMode, auth.mode, auth.permissions, restaurantId, applyRemoteStructure])
 
   useEffect(() => {
     if (auth.isDesignMode) {
