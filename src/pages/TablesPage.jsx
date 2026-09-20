@@ -1,6 +1,16 @@
 import React, { useMemo } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 
+function formatTime(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat('es', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 export default function TablesPage({ onOpenTable }) {
   const { state, getTableVisualStatus } = useRestaurant()
   const labels = {
@@ -23,6 +33,14 @@ export default function TablesPage({ onOpenTable }) {
     return undefined
   }
 
+  function tableTimeText(table, status) {
+    const isOpen = ['occupied', 'ready', 'pay'].includes(status)
+    const value = isOpen ? table.openedAt : table.releasedAt
+    const time = formatTime(value)
+    if (!time) return isOpen ? 'Hora de apertura sin registrar' : 'Hora de liberación sin registrar'
+    return isOpen ? `Abierta a las ${time}` : `Liberada a las ${time}`
+  }
+
   return (
     <section className="view active">
       <div className="hero"><div><h2>Mesas y salones</h2><p>Las mesas se muestran dentro del área a la que pertenecen. Toca una mesa para abrir o continuar su pedido.</p></div></div>
@@ -42,9 +60,12 @@ export default function TablesPage({ onOpenTable }) {
                   const status = getTableVisualStatus(table.id)
                   return (
                     <button className={`table ${status}`} style={statusStyle(status)} key={table.id} onClick={() => onOpenTable(table.id)}>
-                      <b>{table.name}</b>
-                      <small>{table.capacity} puestos</small>
-                      <span>{labels[status] || status}</span>
+                      <div className="table-head">
+                        <b>{table.name}</b>
+                        <small className="table-capacity">{table.capacity} puestos</small>
+                      </div>
+                      <small className="table-time">◷ {tableTimeText(table, status)}</small>
+                      <span className="table-status">{labels[status] || status}</span>
                     </button>
                   )
                 })}
