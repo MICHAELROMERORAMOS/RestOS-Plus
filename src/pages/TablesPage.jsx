@@ -35,7 +35,18 @@ export default function TablesPage({ onOpenTable }) {
 
   function tableTimeText(table, status) {
     const isOpen = ['occupied', 'ready', 'pay'].includes(status)
-    const value = isOpen ? table.openedAt : table.releasedAt
+
+    const relatedOrders = state.orders
+      .filter((order) => order.mode === 'table' && (order.tableIds || []).includes(table.id))
+      .sort((a, b) => (b.created || 0) - (a.created || 0))
+
+    const openOrder = relatedOrders.find((order) => !['closed', 'cancelled', 'merged'].includes(order.status))
+    const lastClosedOrder = relatedOrders.find((order) => order.status === 'closed' && order.closedAt)
+
+    const value = isOpen
+      ? (table.openedAt || openOrder?.created)
+      : (table.releasedAt || lastClosedOrder?.closedAt)
+
     const time = formatTime(value)
     if (!time) return isOpen ? 'Hora de apertura sin registrar' : 'Hora de liberación sin registrar'
     return isOpen ? `Abierta a las ${time}` : `Liberada a las ${time}`
