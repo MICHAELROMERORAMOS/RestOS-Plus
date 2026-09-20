@@ -343,8 +343,18 @@ export function RestaurantProvider({ children }) {
   }, [])
 
   const ensureOrder = useCallback((source, { prepaid = false } = {}) => {
-    const existing = source.orders.find((order) => order.id === currentOrderId)
-    if (existing) return { order: existing, source }
+    const existingById = source.orders.find((order) => order.id === currentOrderId)
+    if (existingById) return { order: existingById, source }
+
+    const existingByTable = orderMode === 'table' && currentTableId
+      ? source.orders.find((order) => (
+        order.mode === 'table'
+        && (order.tableIds || []).includes(currentTableId)
+        && !['closed', 'merged', 'cancelled'].includes(order.status)
+      ))
+      : null
+
+    if (existingByTable) return { order: existingByTable, source }
 
     const order = {
       id: source.nextOrder,
@@ -607,17 +617,43 @@ export function RestaurantProvider({ children }) {
     return { ok: true, reserved: status === 'reserved' }
   }, [state.orders, currentOrderId, getTableTransferStatus, tableLabel, updateState])
 
-  const recordPayment = useCallback((orderId, amount, method = 'card') => {
-    const numericAmount = Number(amount)
-    const target = state.orders.find((order) => order.id === orderId)
-    if (!target || numericAmount <= 0) return { ok: false, message: 'Importe inválido.' }
-    const balanceBefore = orderBalance(target)
-    const applied = Math.min(balanceBefore, numericAmount)
-    if (applied <= 0) return { ok: false, message: 'La cuenta ya está pagada.' }
+  const recordPayments = useCallback((allocations, method = 'card') => {
+    const normalized = (Array.isArray(allocations) ? allocations : [])
+      .map((allocation) => ({
+        orderId: allocation.orderId,
+        amount: Number(allocation.amount || 0),
+        itemAllocations: Array.isArray(allocation.itemAllocations) ? allocation.itemAllocations : [],
+      }))
+      .filter((allocation) => allocation.orderId != null && allocation.amount > 0)
+
+    if (!normalized.length) return { ok: false, message: 'No hay importes válidos para cobrar.' }
+    if (!['cash', 'card'].includes(method)) return { ok: false, message: 'Método de pago inválido.' }
+
+    const requestedByOrder = new Map(normalized.map((allocation) => [allocation.orderId, allocation]))
+    let expectedApplied = 0
+
+    for (const allocation of normalized) {
+      const order = state.orders.find((candidate) => candidate.id === allocation.orderId)
+      if (!order) continue
+      expectedApplied += Math.min(orderBalance(order), allocation.amount)
+    }
+
+    if (expectedApplied <= 0.005) return { ok: false, message: 'La cuenta ya está pagada.' }
 
     updateState((previous) => {
+      let appliedTotal = 0
+      const affectedTableIds = new Set()
+
       const orders = previous.orders.map((order) => {
-        if (order.id !== orderId) return order
+        const allocation = requestedByOrder.get(order.id)
+        if (!allocation) return order
+
+        const balanceBefore = orderBalance(order)
+        const applied = Math.min(balanceBefore, allocation.amount)
+        if (applied <= 0.005) return order
+
+        appliedTotal += applied
+        ;(order.tableIds || []).forEach((tableId) => affectedTableIds.add(tableId))
 
         const payments = [...(order.payments || []), {
           id: makeId(),
@@ -625,7 +661,9 @@ export function RestaurantProvider({ children }) {
           method,
           created: Date.now(),
           type: 'payment',
+          itemAllocations: allocation.itemAllocations,
         }]
+
         const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
         const paidInFull = totalPaid + 0.005 >= orderTotal(order)
         const waitingForFood = paidInFull && orderHasPendingPreparation(order)
@@ -638,35 +676,51 @@ export function RestaurantProvider({ children }) {
         }
       })
 
-      const refreshed = orders.find((order) => order.id === orderId)
-      const closed = refreshed?.status === 'closed'
-      const waitingForFood = refreshed?.status === 'waiting_food'
+      const tables = previous.tables.map((table) => {
+        if (!affectedTableIds.has(table.id)) return table
+
+        const activeOrders = orders.filter((order) => (
+          order.mode === 'table'
+          && (order.tableIds || []).includes(table.id)
+          && !['closed', 'merged', 'cancelled'].includes(order.status)
+        ))
+
+        if (!activeOrders.length) {
+          return { ...table, status: 'free', releasedAt: Date.now() }
+        }
+
+        const hasBalance = activeOrders.some((order) => orderBalance(order) > 0.005)
+        const hasPendingFood = activeOrders.some((order) => orderHasPendingPreparation(order))
+
+        if (!hasBalance && hasPendingFood) {
+          return { ...table, status: 'waiting_food' }
+        }
+
+        if (hasBalance && !hasPendingFood) {
+          return { ...table, status: 'pay' }
+        }
+
+        return { ...table, status: 'occupied' }
+      })
 
       return {
         ...previous,
         orders,
-        sales: previous.sales + applied,
-        tables: previous.tables.map((table) => {
-          if (!refreshed?.tableIds?.includes(table.id)) return table
-
-          if (closed) {
-            return { ...table, status: 'free', releasedAt: Date.now() }
-          }
-
-          if (waitingForFood) {
-            return { ...table, status: 'waiting_food' }
-          }
-
-          return table
-        }),
+        tables,
+        sales: previous.sales + appliedTotal,
         activity: [
           ...previous.activity,
-          `${waitingForFood ? 'Cuenta pagada · esperando comida' : (closed ? 'Cuenta cerrada' : 'Pago parcial')} · Orden #${orderId} · €${applied.toFixed(2)}`,
+          `Cobro registrado · €${appliedTotal.toFixed(2)} · ${normalized.length} cuenta${normalized.length === 1 ? '' : 's'} interna${normalized.length === 1 ? '' : 's'}`,
         ],
       }
     })
-    return { ok: true, applied }
+
+    return { ok: true, applied: expectedApplied }
   }, [state.orders, updateState])
+
+  const recordPayment = useCallback((orderId, amount, method = 'card') => (
+    recordPayments([{ orderId, amount }], method)
+  ), [recordPayments])
 
   const updateSettings = useCallback((patch) => {
     updateState((previous) => ({ ...previous, settings: { ...previous.settings, ...patch } }))
@@ -737,6 +791,7 @@ export function RestaurantProvider({ children }) {
     updateTable,
     deleteTable,
     recordPayment,
+    recordPayments,
     updateSettings,
     resetDemo,
     stationJobs,
@@ -750,7 +805,7 @@ export function RestaurantProvider({ children }) {
     updateDraftNote, sendDraft, voidSentItem, advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
-    recordPayment, updateSettings, resetDemo, stationJobs, openOrderForTable,
+    recordPayment, recordPayments, updateSettings, resetDemo, stationJobs, openOrderForTable,
   ])
 
   return <RestaurantContext.Provider value={value}>{children}</RestaurantContext.Provider>
