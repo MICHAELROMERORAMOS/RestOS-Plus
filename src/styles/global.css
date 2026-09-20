@@ -951,6 +951,10 @@ html, body {
 
 .delivery-form-card {
   width: min(720px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .delivery-form-grid {
@@ -1023,6 +1027,11 @@ html, body {
 
   .deliveries-hero .btn {
     width: 100%;
+  }
+
+  .delivery-form-card {
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
   }
 
   .delivery-form-grid {
