@@ -2345,3 +2345,81 @@ html, body {
     width: 100%;
   }
 }
+
+/* Product form category and preparation buttons */
+.product-choice-field {
+  display: grid;
+  gap: 7px;
+}
+
+.product-choice-label {
+  font-size: 12px;
+  font-weight: 850;
+  color: #53665d;
+}
+
+.product-choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.product-choice-btn {
+  min-height: 43px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.2;
+  box-shadow: none;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.product-choice-btn:hover {
+  border-color: #aabeb4;
+  background: #f4f8f6;
+}
+
+.product-choice-btn.active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 5px 14px #174c3624;
+}
+
+.product-choice-btn:active {
+  transform: translateY(1px);
+}
+
+.station-choice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 112px;
+  justify-content: center;
+}
+
+.product-choice-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+@media (max-width: 520px) {
+  .product-choice-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-choice-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .station-choice-btn {
+    min-width: 0;
+  }
+}
