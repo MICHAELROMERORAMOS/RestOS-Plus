@@ -28,17 +28,39 @@ function mapItemStatus(status) {
 function deriveFrontendOrderStatus(raw, rounds) {
   if (asNumber(raw.refund_due) > 0.005 && raw.account_void_scope !== 'paid') return 'refund_due'
   if (raw.status === 'cancelled') return 'cancelled'
-  if (raw.status === 'closed') return 'closed'
 
   const items = rounds.flatMap((round) => round.items || []).filter((item) => !item.voided)
   const pendingPreparation = items.some((item) => ['new', 'preparing'].includes(item.prepStatus))
   const allPrepared = items.length > 0 && items.every((item) => ['ready', 'delivered'].includes(item.prepStatus))
+  const allDelivered = items.length > 0 && items.every((item) => item.prepStatus === 'delivered')
+  const waitingForHandoff = items.some((item) => item.prepStatus === 'ready')
 
   if (raw.payment_status === 'paid' && pendingPreparation) return 'waiting_food'
+  if (raw.payment_status === 'paid' && waitingForHandoff && !allDelivered) return 'ready'
+  if (raw.status === 'closed') return 'closed'
   if (allPrepared && raw.payment_status !== 'paid') return 'pay'
   if (raw.status === 'awaiting_payment') return 'pay'
   if (raw.status === 'draft') return 'draft'
   return 'open'
+}
+
+export function isOperationalOrder(order) {
+  if (!order) return false
+  if (asNumber(order.refundDue) > 0.005) return true
+  return !['closed', 'cancelled', 'merged'].includes(order.status)
+}
+
+function mapOperationalSummary(payload) {
+  return {
+    salesToday: asNumber(payload?.sales_today),
+    completedOrdersToday: asNumber(payload?.completed_orders_today),
+    tableReleases: Array.isArray(payload?.table_releases)
+      ? payload.table_releases.map((release) => ({
+          tableId: release.table_id,
+          releasedAt: asTimestamp(release.released_at),
+        }))
+      : [],
+  }
 }
 
 function mapOperationalOrders(payload) {
@@ -137,14 +159,57 @@ function mapOperationalOrders(payload) {
 export async function loadOperationalState(restaurantId, locationId) {
   const client = requireSupabase()
 
-  const { data, error } = await client.rpc('load_operational_state', {
+  const [operationalResult, summaryResult] = await Promise.all([
+    client.rpc('load_operational_state', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+    }),
+    client.rpc('load_operational_summary', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+    }),
+  ])
+
+  if (operationalResult.error) throw operationalResult.error
+  if (summaryResult.error) throw summaryResult.error
+  return {
+    orders: mapOperationalOrders(operationalResult.data || {}),
+    summary: mapOperationalSummary(summaryResult.data || {}),
+  }
+}
+
+export async function loadOperationalSummary(restaurantId, locationId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('load_operational_summary', {
     p_restaurant_id: restaurantId,
     p_location_id: locationId,
   })
 
   if (error) throw error
+  return mapOperationalSummary(data || {})
+}
+
+export async function loadOperationalHistory(
+  restaurantId,
+  locationId,
+  { mode = null, before = null, limit = 50 } = {},
+) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('load_operational_history', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+    p_service_mode: mode,
+    p_before: before || null,
+    p_limit: limit,
+  })
+
+  if (error) throw error
   return {
-    orders: mapOperationalOrders(data || {}),
+    orders: mapOperationalOrders(data || {})
+      .filter((order) => !isOperationalOrder(order))
+      .sort((left, right) => (right.closedAt || right.created || 0) - (left.closedAt || left.created || 0)),
+    hasMore: Boolean(data?.has_more),
+    nextBefore: data?.next_before || null,
   }
 }
 
@@ -288,16 +353,7 @@ export async function recordOrderPaymentsRemote(allocations, method) {
   return data || { applied: 0 }
 }
 
-export async function getInvoicePreviewsRemote(orderIds) {
-  const client = requireSupabase()
-  const ids = [...new Set((orderIds || []).filter(Boolean))]
-  if (!ids.length) return []
-  const { data, error } = await client.rpc('get_invoice_previews', { p_order_ids: ids })
-  if (error) throw error
-  return Array.isArray(data) ? data : []
-}
-
-export function subscribeOperationalChanges(locationId, onChange) {
+export function subscribeOperationalChanges(restaurantId, locationId, onChange) {
   const client = requireSupabase()
   const channel = client.channel(`restos-operational:${locationId}`)
   const emit = (table) => (payload) => onChange?.({ ...payload, table: payload.table || table })
@@ -318,6 +374,12 @@ export function subscribeOperationalChanges(locationId, onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'order_table_links' }, emit('order_table_links'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'order_rounds' }, emit('order_rounds'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, emit('order_items'))
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'kitchen_void_requests',
+      filter: `restaurant_id=eq.${restaurantId}`,
+    }, emit('kitchen_void_requests'))
     .subscribe()
 
   return channel

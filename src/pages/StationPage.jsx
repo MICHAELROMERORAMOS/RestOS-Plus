@@ -8,7 +8,13 @@ import {
 
 export default function StationPage({ station }) {
   const auth = useAuth()
-  const { stationJobs, advanceStationRound, tableLabel, formatMoney } = useRestaurant()
+  const {
+    stationJobs,
+    advanceStationRound,
+    tableLabel,
+    formatMoney,
+    voidRequestsVersion,
+  } = useRestaurant()
   const audioContextRef = useRef(null)
   const knownJobKeysRef = useRef(new Set())
   const knownStationRef = useRef(station)
@@ -224,13 +230,9 @@ export default function StationPage({ station }) {
   useEffect(() => {
     if (!canReviewVoids || !restaurantId) return undefined
 
-    refreshVoidRequests()
-    const timer = window.setInterval(() => {
-      refreshVoidRequests({ silent: true })
-    }, 5000)
-
-    return () => window.clearInterval(timer)
-  }, [canReviewVoids, restaurantId])
+    refreshVoidRequests({ silent: true })
+    return undefined
+  }, [canReviewVoids, restaurantId, voidRequestsVersion])
 
   async function reviewRequest(request, decision) {
     if (reviewingId) return

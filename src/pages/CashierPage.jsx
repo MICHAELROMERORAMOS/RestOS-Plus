@@ -4,8 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import {
   createKitchenVoidRequest,
-  listMyKitchenVoidRequests,
-  markKitchenVoidRequestApplied,
+  listMyKitchenVoidRequestsForOrders,
 } from '../services/voidAuthorizationService.js'
 
 function money(value) {
@@ -53,7 +52,7 @@ export default function CashierPage() {
     recordPayments,
     tableLabel,
     formatMoney,
-    applyKitchenApprovedVoidRequest,
+    voidRequestsVersion,
   } = useRestaurant()
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
@@ -148,27 +147,11 @@ export default function CashierPage() {
     }
 
     try {
-      const batches = await Promise.all(
-        unpaidOrders.map((order) => listMyKitchenVoidRequests(restaurantId, order.id)),
+      const requests = await listMyKitchenVoidRequestsForOrders(
+        restaurantId,
+        unpaidOrders.map((order) => order.id),
       )
-      const requests = batches.flat()
       setMyVoidRequests(requests)
-
-      for (const request of requests) {
-        if (request.status !== 'approved' || request.applied_at) continue
-
-        const order = unpaidOrders.find((candidate) => String(candidate.id) === String(request.order_ref))
-        if (!order || orderPaidTotal(order) > 0.005) continue
-
-        const result = applyKitchenApprovedVoidRequest(order.id, request)
-        if (!result.ok) continue
-
-        try {
-          await markKitchenVoidRequestApplied(request.id)
-        } catch {
-          // Retry acknowledgement on next poll.
-        }
-      }
     } catch (error) {
       if (!silent) window.alert(error?.message || 'No se pudieron consultar las solicitudes de anulación.')
     }
@@ -178,12 +161,8 @@ export default function CashierPage() {
     if (!restaurantId || !canRequestUnpaidVoid) return undefined
 
     refreshVoidRequests({ silent: true })
-    const timer = window.setInterval(() => {
-      refreshVoidRequests({ silent: true })
-    }, 5000)
-
-    return () => window.clearInterval(timer)
-  }, [restaurantId, canRequestUnpaidVoid, groups.length])
+    return undefined
+  }, [restaurantId, canRequestUnpaidVoid, groups.length, voidRequestsVersion])
 
   function allocateAcrossOrders(group, requestedAmount) {
     let remaining = Math.min(Number(requestedAmount || 0), group.balance)

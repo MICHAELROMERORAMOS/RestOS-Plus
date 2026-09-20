@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderTotal } from '../context/RestaurantContext.jsx'
 import DeliveredOrderModal, { isPaidAndDelivered } from '../components/orders/DeliveredOrderModal.jsx'
+import { loadOperationalHistory } from '../services/operationalService.js'
 import {
   findCustomerByPhone,
   normalizePhone,
@@ -27,7 +28,7 @@ function prepStatus(order) {
 
 export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
   const auth = useAuth()
-  const { state, formatMoney } = useRestaurant()
+  const { state, formatMoney, activeLocation } = useRestaurant()
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
 
   const [showForm, setShowForm] = useState(false)
@@ -36,8 +37,17 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
   const [matchedCustomer, setMatchedCustomer] = useState(null)
   const [saving, setSaving] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [historyOrders, setHistoryOrders] = useState([])
+  const [historyCursor, setHistoryCursor] = useState(null)
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
 
-  const completedDeliveries = useMemo(() => state.orders.filter((order) => order.mode === 'delivery' && isPaidAndDelivered(order, orderBalance)), [state.orders])
+  const completedDeliveries = useMemo(() => (
+    auth.isDesignMode
+      ? state.orders.filter((order) => order.mode === 'delivery' && isPaidAndDelivered(order, orderBalance))
+      : historyOrders
+  ), [auth.isDesignMode, state.orders, historyOrders])
 
   const deliveries = useMemo(
     () => state.orders
@@ -104,6 +114,44 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
     setShowForm(true)
   }
 
+  async function loadHistory({ reset = false } = {}) {
+    if (auth.isDesignMode) {
+      setHistoryLoaded(true)
+      return
+    }
+    if (!restaurantId || !activeLocation?.id || historyLoading) return
+
+    setHistoryLoading(true)
+    try {
+      const result = await loadOperationalHistory(restaurantId, activeLocation.id, {
+        mode: 'delivery',
+        before: reset ? null : historyCursor,
+        limit: 50,
+      })
+
+      setHistoryOrders((current) => {
+        if (reset) return result.orders
+        const byId = new Map(current.map((order) => [String(order.serverId || order.id), order]))
+        result.orders.forEach((order) => byId.set(String(order.serverId || order.id), order))
+        return Array.from(byId.values()).sort((left, right) => (
+          (right.closedAt || right.created || 0) - (left.closedAt || left.created || 0)
+        ))
+      })
+      setHistoryCursor(result.nextBefore)
+      setHistoryHasMore(result.hasMore)
+      setHistoryLoaded(true)
+    } catch (error) {
+      window.alert(error?.message || 'No se pudo cargar el historial de domicilios.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function openHistory() {
+    setShowHistory(true)
+    loadHistory({ reset: true })
+  }
+
   async function submit(event) {
     event.preventDefault()
 
@@ -159,7 +207,7 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
           <h2>Domicilios</h2>
           <p>Busca al cliente por celular. Si ya existe, RestOS+ completa automáticamente sus datos.</p>
         </div>
-        <div className="actions"><button className="btn" onClick={() => setShowHistory(true)}>📦 Historial ({completedDeliveries.length})</button><button className="btn primary" onClick={openNewDelivery}>＋ Nuevo domicilio</button></div>
+        <div className="actions"><button className="btn" onClick={openHistory}>📦 Historial{historyLoaded || auth.isDesignMode ? ` (${completedDeliveries.length}${historyHasMore ? '+' : ''})` : ''}</button><button className="btn primary" onClick={openNewDelivery}>＋ Nuevo domicilio</button></div>
       </div>
 
       <div className="card">
@@ -168,7 +216,7 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
             <h3>Pedidos a domicilio</h3>
             <p className="muted">{deliveries.length} domicilio{deliveries.length === 1 ? '' : 's'} registrado{deliveries.length === 1 ? '' : 's'}</p>
           </div>
-          <button className="btn" onClick={() => setShowHistory(true)}>Ver entregados</button>
+          <button className="btn" onClick={openHistory}>Ver entregados</button>
         </div>
 
         {deliveries.length ? (
@@ -208,7 +256,16 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
         )}
       </div>
 
-      {showHistory && <DeliveredOrderModal orders={completedDeliveries} onClose={() => setShowHistory(false)} formatMoney={formatMoney} />}
+      {showHistory && (
+        <DeliveredOrderModal
+          orders={completedDeliveries}
+          onClose={() => setShowHistory(false)}
+          formatMoney={formatMoney}
+          loading={historyLoading}
+          hasMore={!auth.isDesignMode && historyHasMore}
+          onLoadMore={() => loadHistory({ reset: false })}
+        />
+      )}
 
       {showForm && (
         <div className="modal open" onClick={() => !saving && setShowForm(false)}>

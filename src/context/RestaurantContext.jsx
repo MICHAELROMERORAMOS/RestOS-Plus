@@ -16,9 +16,11 @@ import { loadRestaurantSettings, saveRestaurantCurrency } from '../services/sett
 import {
   advanceStationRoundRemote,
   createDeliveryOrderRemote,
+  isOperationalOrder,
   joinOrderTableRemote,
   loadOperationalOrdersByIds,
   loadOperationalState,
+  loadOperationalSummary,
   markRoundServedRemote,
   recordOrderPaymentsRemote,
   sendOrderRoundRemote,
@@ -204,6 +206,12 @@ export function RestaurantProvider({ children }) {
   const [activeLocation, setActiveLocation] = useState(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState('')
+  const [operationalSummary, setOperationalSummary] = useState({
+    salesToday: 0,
+    completedOrdersToday: 0,
+    tableReleases: [],
+  })
+  const [voidRequestsVersion, setVoidRequestsVersion] = useState(0)
   const [orderMode, setOrderModeState] = useState(state.settings.defaultOrderMode || 'table')
   const [currentTableId, setCurrentTableId] = useState(null)
   const [currentOrderId, setCurrentOrderId] = useState(null)
@@ -265,13 +273,24 @@ export function RestaurantProvider({ children }) {
     })
   }, [])
 
-  const applyOperationalOrders = useCallback((orders) => {
+  const applyOperationalOrders = useCallback((orders, summary = null) => {
+    const operationalOrders = (orders || []).filter(isOperationalOrder)
+    const releasedByTableId = new Map(
+      (summary?.tableReleases || []).map((release) => [release.tableId, release.releasedAt]),
+    )
+
+    if (summary) setOperationalSummary(summary)
+
     setState((previous) => {
+      const tablesWithReleaseTimes = previous.tables.map((table) => ({
+        ...table,
+        releasedAt: releasedByTableId.get(table.id) || table.releasedAt || null,
+      }))
       const next = {
         ...previous,
-        orders,
-        tables: syncOperationalTableStatuses(previous.tables, orders),
-        sales: orders.reduce((sum, order) => sum + orderPaidTotal(order), 0),
+        orders: operationalOrders,
+        tables: syncOperationalTableStatuses(tablesWithReleaseTimes, operationalOrders),
+        sales: summary ? Number(summary.salesToday || 0) : previous.sales,
       }
 
       if (auth.isDesignMode) {
@@ -294,20 +313,56 @@ export function RestaurantProvider({ children }) {
         const patch = patchByServerId.get(String(order.serverId))
         if (!patch) return order
         seen.add(String(order.serverId))
-        return patch
-      })
+        return isOperationalOrder(patch) ? patch : null
+      }).filter(Boolean)
 
       patches.forEach((order) => {
-        if (!seen.has(String(order.serverId))) orders.push(order)
+        if (!seen.has(String(order.serverId)) && isOperationalOrder(order)) orders.push(order)
       })
 
       orders.sort((a, b) => (a.created || 0) - (b.created || 0))
 
+      const releaseByTableId = new Map()
+      patches.filter((order) => !isOperationalOrder(order)).forEach((order) => {
+        ;(order.tableIds || []).forEach((tableId) => {
+          const releasedAt = order.closedAt || Date.now()
+          const current = releaseByTableId.get(tableId) || 0
+          if (releasedAt > current) releaseByTableId.set(tableId, releasedAt)
+        })
+      })
+
+      const tablesWithReleaseTimes = previous.tables.map((table) => (
+        releaseByTableId.has(table.id)
+          ? { ...table, releasedAt: releaseByTableId.get(table.id) }
+          : table
+      ))
+
       return {
         ...previous,
         orders,
-        tables: syncOperationalTableStatuses(previous.tables, orders),
-        sales: orders.reduce((sum, order) => sum + orderPaidTotal(order), 0),
+        tables: syncOperationalTableStatuses(tablesWithReleaseTimes, orders),
+      }
+    })
+  }, [])
+
+  const applyOperationalSummary = useCallback((summary) => {
+    if (!summary) return
+    setOperationalSummary(summary)
+
+    const releasedByTableId = new Map(
+      (summary.tableReleases || []).map((release) => [release.tableId, release.releasedAt]),
+    )
+
+    setState((previous) => {
+      const tables = previous.tables.map((table) => ({
+        ...table,
+        releasedAt: releasedByTableId.get(table.id) || table.releasedAt || null,
+      }))
+
+      return {
+        ...previous,
+        sales: Number(summary.salesToday || 0),
+        tables: syncOperationalTableStatuses(tables, previous.orders),
       }
     })
   }, [])
@@ -323,7 +378,7 @@ export function RestaurantProvider({ children }) {
 
     try {
       const operational = await loadOperationalState(restaurantId, location.id)
-      applyOperationalOrders(operational.orders)
+      applyOperationalOrders(operational.orders, operational.summary)
       return { ok: true, operational }
     } catch (error) {
       const message = error?.message || 'No se pudieron sincronizar los pedidos con Supabase.'
@@ -331,6 +386,23 @@ export function RestaurantProvider({ children }) {
       return { ok: false, message }
     }
   }, [auth.isDesignMode, restaurantId, activeLocation, applyOperationalOrders])
+
+  const refreshOperationalSummary = useCallback(async (locationOverride = null) => {
+    if (auth.isDesignMode) return { ok: true }
+
+    const location = locationOverride || activeLocation
+    if (!restaurantId || !location?.id) return { ok: false, message: 'No hay sucursal activa.' }
+
+    try {
+      const summary = await loadOperationalSummary(restaurantId, location.id)
+      applyOperationalSummary(summary)
+      return { ok: true, summary }
+    } catch (error) {
+      const message = error?.message || 'No se pudo actualizar el resumen operativo.'
+      setRemoteError(message)
+      return { ok: false, message }
+    }
+  }, [auth.isDesignMode, restaurantId, activeLocation, applyOperationalSummary])
 
   const refreshOperationalOrdersByIds = useCallback(async (orderIds, locationOverride = null) => {
     if (auth.isDesignMode) return { ok: true }
@@ -432,7 +504,7 @@ export function RestaurantProvider({ children }) {
         setProducts(catalog.products)
         setMenuCategories(catalog.categories)
         setMenuStations(catalog.stations)
-        applyOperationalOrders(operational.orders)
+        applyOperationalOrders(operational.orders, operational.summary)
       } else {
         setProducts([])
         setMenuCategories([])
@@ -457,6 +529,8 @@ export function RestaurantProvider({ children }) {
     }
 
     if (auth.mode === 'authenticated' && restaurantId) {
+      setOperationalSummary({ salesToday: 0, completedOrdersToday: 0, tableReleases: [] })
+      setVoidRequestsVersion(0)
       setState((previous) => ({
         ...previous,
         orders: [],
@@ -480,9 +554,18 @@ export function RestaurantProvider({ children }) {
       return undefined
     }
 
-    const channel = subscribeOperationalChanges(activeLocation.id, (payload) => {
+    const channel = subscribeOperationalChanges(restaurantId, activeLocation.id, (payload) => {
+      if (payload.table === 'kitchen_void_requests') {
+        setVoidRequestsVersion((version) => version + 1)
+        return
+      }
+
       const orderId = orderIdFromRealtimePayload(payload)
       if (!orderId) return
+
+      if (payload.table === 'payments') {
+        refreshOperationalSummary(activeLocation).catch(() => {})
+      }
 
       pendingOperationalOrderIds.current.add(orderId)
 
@@ -511,6 +594,7 @@ export function RestaurantProvider({ children }) {
     restaurantId,
     activeLocation?.id,
     refreshOperationalOrdersByIds,
+    refreshOperationalSummary,
   ])
 
   const openOrderForTable = useCallback((tableId, source = state) => source.orders.find((order) => (
@@ -1015,6 +1099,7 @@ export function RestaurantProvider({ children }) {
         setCurrentOrderId(orderNumber)
         setDraft([])
         await refreshOperationalOrdersByIds([result.order_id], activeLocation)
+        if (prepaid) await refreshOperationalSummary(activeLocation)
         return { ok: true, orderId: orderNumber }
       } catch (error) {
         return { ok: false, message: error?.message || 'No se pudo enviar la comanda a Supabase.' }
@@ -1079,7 +1164,7 @@ export function RestaurantProvider({ children }) {
   }, [
     draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
     auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager,
-    openOrderForTable, refreshOperationalOrdersByIds,
+    openOrderForTable, refreshOperationalOrdersByIds, refreshOperationalSummary,
   ])
 
   const applyKitchenApprovedVoidRequest = useCallback((orderId, request) => {
@@ -1342,6 +1427,7 @@ export function RestaurantProvider({ children }) {
       try {
         await markRoundServedRemote(order.serverId, round.serverId)
         await refreshOperationalOrdersByIds([order.serverId], activeLocation)
+        await refreshOperationalSummary(activeLocation)
         return { ok: true }
       } catch (error) {
         return { ok: false, message: error?.message || 'No se pudo marcar la comanda como entregada.' }
@@ -1360,7 +1446,8 @@ export function RestaurantProvider({ children }) {
       activity: [...previous.activity, `Comanda ${roundId} entregada · Orden #${orderId}`],
     }))
   }, [
-    updateState, auth.isDesignMode, state.orders, refreshOperationalOrdersByIds, activeLocation,
+    updateState, auth.isDesignMode, state.orders, refreshOperationalOrdersByIds,
+    refreshOperationalSummary, activeLocation,
   ])
 
   const transferCurrentTable = useCallback(async (destinationId) => {
@@ -1500,6 +1587,7 @@ export function RestaurantProvider({ children }) {
           remoteAllocations.map((allocation) => allocation.orderId),
           activeLocation,
         )
+        await refreshOperationalSummary(activeLocation)
         return { ok: true, applied: Number(result?.applied || 0) }
       } catch (error) {
         return { ok: false, message: error?.message || 'No se pudo registrar el pago en Supabase.' }
@@ -1584,7 +1672,7 @@ export function RestaurantProvider({ children }) {
     return { ok: true, applied: expectedApplied }
   }, [
     state.orders, updateState, formatMoney, auth.isDesignMode,
-    refreshOperationalOrdersByIds, activeLocation,
+    refreshOperationalOrdersByIds, refreshOperationalSummary, activeLocation,
   ])
 
   const recordPayment = useCallback((orderId, amount, method = 'card') => (
@@ -1675,10 +1763,13 @@ export function RestaurantProvider({ children }) {
     activeLocation,
     remoteLoading,
     remoteError,
+    operationalSummary,
+    voidRequestsVersion,
     refreshMenu,
     refreshRemoteData,
     refreshOperationalData,
     refreshOperationalOrdersByIds,
+    refreshOperationalSummary,
     currencyCode,
     formatMoney,
     setCurrency,
@@ -1726,7 +1817,9 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    refreshMenu, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    operationalSummary, voidRequestsVersion,
+    refreshMenu, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
+    refreshOperationalSummary, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,

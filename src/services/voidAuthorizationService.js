@@ -80,6 +80,20 @@ export async function listMyKitchenVoidRequests(restaurantId, orderRef) {
   return data || []
 }
 
+export async function listMyKitchenVoidRequestsForOrders(restaurantId, orderRefs) {
+  const client = requireSupabase()
+  const refs = Array.from(new Set((orderRefs || []).map((value) => String(value)).filter(Boolean)))
+  if (!refs.length) return []
+
+  const { data, error } = await client.rpc('list_my_kitchen_void_requests_batch', {
+    p_restaurant_id: restaurantId,
+    p_order_refs: refs,
+  })
+
+  if (error) throw error
+  return data || []
+}
+
 export async function markKitchenVoidRequestApplied(requestId) {
   const client = requireSupabase()
 

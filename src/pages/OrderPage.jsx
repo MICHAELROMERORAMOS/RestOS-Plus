@@ -6,7 +6,6 @@ import {
   consumeAccountVoidAuthorization,
   createKitchenVoidRequest,
   listMyKitchenVoidRequests,
-  markKitchenVoidRequestApplied,
   requestAccountVoidAuthorization,
   sendAccountVoidConfirmation,
 } from '../services/voidAuthorizationService.js'
@@ -44,7 +43,7 @@ export default function OrderPage({ onNavigate }) {
   const {
     products, formatMoney, orderMode, currentTableId, currentOrder, currentDelivery, draft, pager, setPager, setOrderMode,
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
-    applyKitchenApprovedVoidRequest, voidPaidTableAccount,
+    voidPaidTableAccount, voidRequestsVersion,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
     tableLabel: getTableLabel, getTableTransferStatus,
   } = restaurant
@@ -232,7 +231,7 @@ export default function OrderPage({ onNavigate }) {
     setShowSplit(true)
   }
 
-  async function refreshMyVoidRequests({ applyApproved = true, silent = false } = {}) {
+  async function refreshMyVoidRequests({ silent = false } = {}) {
     if (!restaurantId || !currentOrder?.id || !canRequestUnpaidVoid) {
       setMyVoidRequests([])
       return
@@ -241,21 +240,6 @@ export default function OrderPage({ onNavigate }) {
     try {
       const requests = await listMyKitchenVoidRequests(restaurantId, currentOrder.id)
       setMyVoidRequests(requests)
-
-      if (applyApproved && !accountHasPayment) {
-        for (const request of requests) {
-          if (request.status !== 'approved' || request.applied_at) continue
-
-          const result = applyKitchenApprovedVoidRequest(currentOrder.id, request)
-          if (!result.ok) continue
-
-          try {
-            await markKitchenVoidRequestApplied(request.id)
-          } catch {
-            // The local void is already applied; the next refresh can retry the acknowledgement.
-          }
-        }
-      }
     } catch (error) {
       if (!silent) window.alert(error?.message || 'No se pudieron consultar las solicitudes de anulación.')
     }
@@ -267,13 +251,9 @@ export default function OrderPage({ onNavigate }) {
       return undefined
     }
 
-    refreshMyVoidRequests()
-    const timer = window.setInterval(() => {
-      refreshMyVoidRequests({ silent: true })
-    }, 5000)
-
-    return () => window.clearInterval(timer)
-  }, [restaurantId, currentOrder?.id, canRequestUnpaidVoid, accountHasPayment])
+    refreshMyVoidRequests({ silent: true })
+    return undefined
+  }, [restaurantId, currentOrder?.id, canRequestUnpaidVoid, voidRequestsVersion])
 
   function openUnpaidVoidRequest() {
     if (!currentOrder || !tableAccountUnpaid) return
@@ -316,7 +296,7 @@ export default function OrderPage({ onNavigate }) {
       setShowUnpaidVoidRequest(false)
       setUnpaidVoidSelected({})
       setUnpaidVoidReason('')
-      await refreshMyVoidRequests({ applyApproved: false, silent: true })
+      await refreshMyVoidRequests({ silent: true })
     } catch (error) {
       window.alert(error?.message || 'No se pudo enviar la solicitud a Cocina.')
     } finally {

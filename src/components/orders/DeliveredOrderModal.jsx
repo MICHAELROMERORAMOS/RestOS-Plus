@@ -17,7 +17,15 @@ function modeLabel(order, tableLabel) {
   return tableLabel || 'Mesa'
 }
 
-export default function DeliveredOrderModal({ orders, onClose, formatMoney, tableLabelFor }) {
+export default function DeliveredOrderModal({
+  orders,
+  onClose,
+  formatMoney,
+  tableLabelFor,
+  loading = false,
+  hasMore = false,
+  onLoadMore,
+}) {
   return (
     <div className="modal open delivered-history-modal" onClick={onClose}>
       <div className="modal-card delivered-history-card" onClick={(event) => event.stopPropagation()}>
@@ -25,7 +33,7 @@ export default function DeliveredOrderModal({ orders, onClose, formatMoney, tabl
           <div><h3>📦 Historial de entregas</h3><p className="muted">Solo productos entregados y no anulados.</p></div>
           <button className="btn" onClick={onClose}>×</button>
         </div>
-        {!orders.length ? <div className="empty-block">No hay pedidos entregados todavía.</div> : (
+        {!orders.length && loading ? <div className="empty-block">Cargando historial…</div> : !orders.length ? <div className="empty-block">No hay pedidos entregados todavía.</div> : (
           <div className="list delivered-history-list">
             {orders.map((order) => {
               const items = deliveredItems(order)
@@ -46,6 +54,11 @@ export default function DeliveredOrderModal({ orders, onClose, formatMoney, tabl
                 <div className="section-title"><span>Valor pagado</span><b>{formatMoney(paid)}</b></div>
               </article>
             })}
+            {hasMore && (
+              <button className="btn full" type="button" onClick={onLoadMore} disabled={loading}>
+                {loading ? 'Cargando…' : 'Cargar más entregas'}
+              </button>
+            )}
           </div>
         )}
       </div>
