@@ -11,6 +11,8 @@ import {
   updateZone as updateRemoteZone,
 } from '../services/restaurantStructureService.js'
 import { loadMenuCatalog } from '../services/menuService.js'
+import { formatMoneyValue } from '../lib/currency.js'
+import { loadRestaurantSettings, saveRestaurantCurrency } from '../services/settingsService.js'
 
 const RestaurantContext = createContext(null)
 const STORAGE_KEY = 'restos-plus-demo-state-v3'
@@ -152,6 +154,24 @@ export function RestaurantProvider({ children }) {
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
 
+  const currencyCode = state.settings.currency || 'EUR'
+  const formatMoney = useCallback(
+    (value) => formatMoneyValue(value, currencyCode),
+    [currencyCode],
+  )
+
+  const applyRemoteSettings = useCallback((remoteSettings) => {
+    if (!remoteSettings?.currency_code) return
+
+    updateState((previous) => ({
+      ...previous,
+      settings: {
+        ...previous.settings,
+        currency: remoteSettings.currency_code,
+      },
+    }))
+  }, [updateState])
+
   const applyRemoteStructure = useCallback((structure) => {
     setState((previous) => {
       const previousById = new Map((previous.tables || []).map((table) => [table.id, table]))
@@ -214,7 +234,12 @@ export function RestaurantProvider({ children }) {
     setRemoteError('')
 
     try {
-      let structure = await loadRestaurantStructure(restaurantId)
+      const [initialStructure, remoteSettings] = await Promise.all([
+        loadRestaurantStructure(restaurantId),
+        loadRestaurantSettings(restaurantId),
+      ])
+      let structure = initialStructure
+      applyRemoteSettings(remoteSettings)
 
       const localZones = initialLocalStructure.current.zones.filter((zone) => zone.active !== false)
       const localTables = initialLocalStructure.current.tables.filter((table) => table.active !== false)
@@ -252,7 +277,7 @@ export function RestaurantProvider({ children }) {
     } finally {
       setRemoteLoading(false)
     }
-  }, [auth.isDesignMode, auth.mode, auth.permissions, restaurantId, applyRemoteStructure])
+  }, [auth.isDesignMode, auth.mode, auth.permissions, restaurantId, applyRemoteStructure, applyRemoteSettings])
 
   useEffect(() => {
     if (auth.isDesignMode) {
@@ -1012,13 +1037,13 @@ export function RestaurantProvider({ children }) {
         sales: previous.sales + appliedTotal,
         activity: [
           ...previous.activity,
-          `Cobro registrado · €${appliedTotal.toFixed(2)} · ${normalized.length} cuenta${normalized.length === 1 ? '' : 's'} interna${normalized.length === 1 ? '' : 's'}`,
+          `Cobro registrado · ${formatMoney(appliedTotal)} · ${normalized.length} cuenta${normalized.length === 1 ? '' : 's'} interna${normalized.length === 1 ? '' : 's'}`,
         ],
       }
     })
 
     return { ok: true, applied: expectedApplied }
-  }, [state.orders, updateState])
+  }, [state.orders, updateState, formatMoney])
 
   const recordPayment = useCallback((orderId, amount, method = 'card') => (
     recordPayments([{ orderId, amount }], method)
@@ -1027,6 +1052,34 @@ export function RestaurantProvider({ children }) {
   const updateSettings = useCallback((patch) => {
     updateState((previous) => ({ ...previous, settings: { ...previous.settings, ...patch } }))
   }, [updateState])
+
+  const setCurrency = useCallback(async (currency) => {
+    const code = String(currency || '').trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(code)) {
+      return { ok: false, message: 'Código de moneda inválido.' }
+    }
+
+    if (auth.isDesignMode) {
+      updateSettings({ currency: code })
+      return { ok: true, currency: code }
+    }
+
+    if (!restaurantId) {
+      return { ok: false, message: 'No se encontró el restaurante activo.' }
+    }
+
+    if (!auth.can('settings.manage')) {
+      return { ok: false, message: 'Tu rol no tiene permiso para cambiar la moneda del restaurante.' }
+    }
+
+    try {
+      await saveRestaurantCurrency(restaurantId, code)
+      updateSettings({ currency: code })
+      return { ok: true, currency: code }
+    } catch (error) {
+      return { ok: false, message: error?.message || 'No se pudo guardar la moneda en Supabase.' }
+    }
+  }, [auth.isDesignMode, auth.permissions, restaurantId, updateSettings])
 
   const resetDemo = useCallback(() => {
     const fresh = createInitialDemoState()
@@ -1076,6 +1129,9 @@ export function RestaurantProvider({ children }) {
     remoteError,
     refreshMenu,
     refreshRemoteData,
+    currencyCode,
+    formatMoney,
+    setCurrency,
     orderMode,
     currentTableId,
     currentOrderId,
@@ -1119,12 +1175,12 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    refreshMenu, refreshRemoteData, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    refreshMenu, refreshRemoteData, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, voidSentItem, advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
-    recordPayment, recordPayments, updateSettings, resetDemo, stationJobs, openOrderForTable,
+    recordPayment, recordPayments, updateSettings, setCurrency, resetDemo, stationJobs, openOrderForTable,
   ])
 
   return <RestaurantContext.Provider value={value}>{children}</RestaurantContext.Provider>
