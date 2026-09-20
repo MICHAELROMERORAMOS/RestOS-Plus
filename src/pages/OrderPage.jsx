@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import SplitBillModal from '../components/payments/SplitBillModal.jsx'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
@@ -43,6 +44,7 @@ export default function OrderPage({ onNavigate }) {
   const [targetZoneId, setTargetZoneId] = useState('')
   const [targetTableId, setTargetTableId] = useState('')
   const [showCharge, setShowCharge] = useState(false)
+  const [showSplit, setShowSplit] = useState(false)
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeMethod, setChargeMethod] = useState('card')
 
@@ -117,6 +119,22 @@ export default function OrderPage({ onNavigate }) {
     setChargeAmount(tableAccountBalance.toFixed(2))
     setChargeMethod('card')
     setShowCharge(true)
+  }
+
+  function openSplitModal() {
+    if (!canCharge) return window.alert('Tu rol no tiene permiso para dividir o cobrar cuentas.')
+    if (!currentTableId || !tableOrders.length) return window.alert('No hay una cuenta enviada para dividir en esta mesa.')
+    if (tableAccountBalance <= 0.005) return window.alert('La cuenta de esta mesa ya está pagada.')
+
+    if (draft.length) {
+      const continueAnyway = window.confirm(
+        'Hay productos nuevos SIN ENVIAR. Esos productos todavía no forman parte de la cuenta que vas a dividir. ¿Quieres continuar con lo ya enviado?',
+      )
+      if (!continueAnyway) return
+    }
+
+    setShowCharge(false)
+    setShowSplit(true)
   }
 
   function confirmCharge() {
@@ -205,7 +223,11 @@ export default function OrderPage({ onNavigate }) {
             💳 Cobrar mesa
           </button>
         )}
-        {orderMode === 'table' && canCharge && <button className="btn" onClick={() => onNavigate('cashier')}>✂ Dividir / pago parcial</button>}
+        {orderMode === 'table' && canCharge && (
+          <button className="btn" disabled={!tableOrders.length || tableAccountBalance <= 0.005} onClick={openSplitModal}>
+            ✂ Dividir cuenta
+          </button>
+        )}
         {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
       </div>
 
@@ -340,12 +362,20 @@ export default function OrderPage({ onNavigate }) {
             <div className="order-payment-shortcuts">
               <button className="btn" onClick={() => setChargeAmount((tableAccountBalance / 2).toFixed(2))}>½ saldo</button>
               <button className="btn" onClick={() => setChargeAmount(tableAccountBalance.toFixed(2))}>Saldo completo</button>
-              <button className="btn" onClick={() => { setShowCharge(false); onNavigate('cashier') }}>✂ Dividir cuenta</button>
+              <button className="btn" onClick={openSplitModal}>✂ Dividir cuenta</button>
             </div>
 
             <button className="btn primary full" onClick={confirmCharge}>Confirmar cobro</button>
           </div>
         </div>
+      )}
+
+      {showSplit && tableOrders.length > 0 && (
+        <SplitBillModal
+          orders={tableOrders}
+          tableText={accountTableLabel}
+          onClose={() => setShowSplit(false)}
+        />
       )}
 
       {noteLine && (
