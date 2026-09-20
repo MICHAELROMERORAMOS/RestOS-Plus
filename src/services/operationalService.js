@@ -146,6 +146,23 @@ export async function loadOperationalState(restaurantId, locationId) {
   }
 }
 
+export async function loadOperationalOrdersByIds(restaurantId, locationId, orderIds) {
+  const client = requireSupabase()
+  const ids = Array.from(new Set((orderIds || []).filter(Boolean)))
+  if (!ids.length) return { orders: [] }
+
+  const { data, error } = await client.rpc('load_operational_orders_by_ids', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+    p_order_ids: ids,
+  })
+
+  if (error) throw error
+  return {
+    orders: mapOperationalOrders(data || {}),
+  }
+}
+
 export async function createDeliveryOrderRemote({
   restaurantId,
   locationId,
@@ -272,8 +289,7 @@ export async function recordOrderPaymentsRemote(allocations, method) {
 export function subscribeOperationalChanges(locationId, onChange) {
   const client = requireSupabase()
   const channel = client.channel(`restos-operational:${locationId}`)
-
-  const handler = (payload) => onChange?.(payload)
+  const emit = (table) => (payload) => onChange?.({ ...payload, table: payload.table || table })
 
   channel
     .on('postgres_changes', {
@@ -281,17 +297,16 @@ export function subscribeOperationalChanges(locationId, onChange) {
       schema: 'public',
       table: 'orders',
       filter: `location_id=eq.${locationId}`,
-    }, handler)
+    }, emit('orders'))
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
       table: 'payments',
       filter: `location_id=eq.${locationId}`,
-    }, handler)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_table_links' }, handler)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_rounds' }, handler)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, handler)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_allocations' }, handler)
+    }, emit('payments'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_table_links' }, emit('order_table_links'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_rounds' }, emit('order_rounds'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, emit('order_items'))
     .subscribe()
 
   return channel
