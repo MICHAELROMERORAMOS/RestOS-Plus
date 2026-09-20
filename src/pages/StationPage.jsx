@@ -186,7 +186,10 @@ export default function StationPage({ station }) {
 
             <button
               className={`btn kds-action ${status === 'preparing' ? 'primary' : ''}`}
-              onClick={() => advanceStationRound(order.id, round.id, station)}
+              onClick={async () => {
+                const result = await advanceStationRound(order.id, round.id, station)
+                if (result?.ok === false) window.alert(result.message)
+              }}
             >
               {status === 'new' ? `${icon} Empezar preparación` : '✓ Marcar productos listos'}
             </button>
