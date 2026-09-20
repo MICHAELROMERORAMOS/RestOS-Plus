@@ -24,7 +24,7 @@ function askPaymentMethod() {
 }
 
 export default function CashierPage() {
-  const { state, recordPayments, tableLabel } = useRestaurant()
+  const { state, recordPayments, tableLabel, formatMoney } = useRestaurant()
   const [splitGroupKey, setSplitGroupKey] = useState(null)
 
   const groups = useMemo(() => {
@@ -95,7 +95,7 @@ export default function CashierPage() {
     if (!method) return
 
     const confirmed = window.confirm(
-      `¿Confirmar cobro de €${money(total)} para ${group.tableText}?\n\n${label}\n\nSi todavía hay productos pendientes, la mesa seguirá marcada como Esperando comida.`,
+      `¿Confirmar cobro de ${formatMoney(total)} para ${group.tableText}?\n\n${label}\n\nSi todavía hay productos pendientes, la mesa seguirá marcada como Esperando comida.`,
     )
     if (!confirmed) return
 
@@ -113,7 +113,7 @@ export default function CashierPage() {
 
   function chargeCustom(group) {
     const raw = window.prompt(
-      `Saldo total de ${group.tableText}: €${money(group.balance)}. ¿Cuánto deseas cobrar ahora?`,
+      `Saldo total de ${group.tableText}: ${formatMoney(group.balance)}. ¿Cuánto deseas cobrar ahora?`,
       money(group.balance / 2),
     )
     if (raw === null) return
@@ -146,12 +146,12 @@ export default function CashierPage() {
                 <b>{group.tableText}</b>
                 <small>
                   Cuenta única · {group.orders.length} {group.orders.length === 1 ? 'orden interna' : 'órdenes internas'}
-                  {' · '}Total €{money(group.total)} · Pagado €{money(group.paid)}
+                  {' · '}Total {formatMoney(group.total)} · Pagado {formatMoney(group.paid)}
                 </small>
               </div>
 
               <div className="cash-actions">
-                <strong>Saldo €{money(group.balance)}</strong>
+                <strong>Saldo {formatMoney(group.balance)}</strong>
                 <button className="btn" onClick={() => chargeCustom(group)}>Pago por importe</button>
                 <button className="btn" onClick={() => setSplitGroupKey(group.key)}>Dividir cuenta</button>
                 <button className="btn primary" onClick={() => chargeFull(group)}>Cobrar todo</button>
