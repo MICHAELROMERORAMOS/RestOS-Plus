@@ -1801,3 +1801,249 @@ html, body {
     letter-spacing: 7px;
   }
 }
+
+/* Kitchen approval void workflow */
+.kitchen-void-requests {
+  margin-bottom: 16px;
+  border: 1px solid #e5c975;
+  background: #fffaf0;
+}
+
+.kitchen-void-request-head {
+  align-items: center;
+}
+
+.kitchen-void-request-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kitchen-void-request-list {
+  display: grid;
+  gap: 10px;
+}
+
+.kitchen-void-request {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #eadcae;
+  border-radius: 14px;
+  background: white;
+}
+
+.kitchen-void-request-copy {
+  min-width: 0;
+}
+
+.kitchen-void-request-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.kitchen-void-request-title > b {
+  font-size: 16px;
+}
+
+.kitchen-void-request-title > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.kitchen-void-request-items {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.kitchen-void-request-items > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.kitchen-void-request-copy p {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.kitchen-void-review-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.void-request-main {
+  margin: 12px 0 0;
+  border-color: #d2a13a;
+  background: #fff8e8;
+  color: #7d5710;
+  font-weight: 900;
+}
+
+.danger-outline {
+  border: 1px solid #d45a5a;
+  background: #fff7f7;
+  color: #ad3434;
+  font-weight: 900;
+}
+
+.danger-outline:hover {
+  background: #ffeded;
+}
+
+.void-request-state {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.void-request-state.pending {
+  background: #fff3d7;
+  color: #8a6310;
+}
+
+.void-request-state.approved {
+  background: #e9f7ed;
+  color: #26733b;
+}
+
+.void-request-state.rejected {
+  background: #fdeaea;
+  color: #a53d3d;
+}
+
+.void-request-product-list {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+.void-request-product {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fafcfa;
+}
+
+.void-request-product input {
+  width: 18px;
+  height: 18px;
+}
+
+.void-request-product span {
+  min-width: 0;
+}
+
+.void-request-product b,
+.void-request-product small {
+  display: block;
+}
+
+.void-request-product small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.account-void-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.account-void-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8faf9;
+}
+
+.account-void-summary span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.account-void-summary strong {
+  font-size: 16px;
+}
+
+.account-void-summary .refund {
+  border-color: #ebc4c4;
+  background: #fff6f6;
+}
+
+.account-void-summary .refund strong {
+  color: var(--danger);
+}
+
+.account-void-products {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfb;
+}
+
+.account-void-products > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .kitchen-void-request {
+    grid-template-columns: 1fr;
+  }
+
+  .kitchen-void-review-buttons {
+    justify-content: stretch;
+  }
+
+  .kitchen-void-review-buttons .btn {
+    flex: 1;
+  }
+
+  .account-void-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .account-void-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .kitchen-void-request-head {
+    align-items: flex-start;
+  }
+}
