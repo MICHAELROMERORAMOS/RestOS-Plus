@@ -103,6 +103,10 @@ export function orderBalance(order) {
   return Math.max(0, orderTotal(order) - orderPaidTotal(order))
 }
 
+export function orderHasInvoice(order) {
+  return Boolean(order?.invoiceIssuedAt || order?.invoiceNumber || order?.invoiceId)
+}
+
 function deriveRoundStatus(round, station = null) {
   const items = (round.items || []).filter((item) => !item.voided && (!station || item.station === station))
   if (!items.length) return 'empty'
@@ -327,7 +331,7 @@ export function RestaurantProvider({ children }) {
     const table = source.tables.find((item) => item.id === tableId)
     if (!table || table.active === false) return 'unavailable'
     if (openOrderForTable(tableId, source)) {
-      return ['ready', 'pay', 'waiting_food'].includes(table.status) ? table.status : 'occupied'
+      return ['ready', 'pay', 'waiting_food', 'refund_due'].includes(table.status) ? table.status : 'occupied'
     }
     if (reservationForTable(tableId, source)) return 'reserved'
     return 'free'
@@ -585,6 +589,9 @@ export function RestaurantProvider({ children }) {
         status: 'draft',
         created: Date.now(),
         payments: [],
+        refundDue: 0,
+        invoiceIssuedAt: null,
+        invoiceNumber: null,
         closedAt: null,
       }
 
@@ -689,6 +696,9 @@ export function RestaurantProvider({ children }) {
       status: prepaid ? 'preparing' : 'open',
       created: Date.now(),
       payments: [],
+      refundDue: 0,
+      invoiceIssuedAt: null,
+      invoiceNumber: null,
       closedAt: null,
     }
 
@@ -772,24 +782,82 @@ export function RestaurantProvider({ children }) {
     return { ok: true, orderId: createdOrderId }
   }, [draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder])
 
-  const voidSentItem = useCallback((orderId, roundId, lineId) => {
+  const voidSentItem = useCallback((orderId, roundId, lineId, options = {}) => {
+    const order = state.orders.find((candidate) => candidate.id === orderId)
+    if (!order) return { ok: false, message: 'La orden no existe.' }
+
+    const target = (order.rounds || [])
+      .flatMap((round) => round.items || [])
+      .find((item) => item.lineId === lineId)
+
+    if (!target || target.voided) return { ok: false, message: 'El producto no existe o ya fue anulado.' }
+    if (orderHasInvoice(order)) {
+      return {
+        ok: false,
+        message: 'La orden ya tiene factura emitida. Debe tramitarse mediante corrección fiscal / nota de crédito.',
+        invoiceLocked: true,
+      }
+    }
+
+    const reason = cleanName(options.reason)
+    if (!reason) return { ok: false, message: 'Debes registrar el motivo de la anulación.' }
+
+    const hasPayment = orderPaidTotal(order) > 0.005
+    const method = options.method
+
+    if (hasPayment) {
+      if (method !== 'admin_code' || !auth.can('orders.void.authorized') || !options.auditId) {
+        return { ok: false, message: 'Este producto ya tiene pago asociado y requiere código del administrador.' }
+      }
+    } else {
+      if (method !== 'kitchen_unpaid' || !auth.can('orders.void.unpaid') || target.station !== 'kitchen') {
+        return { ok: false, message: 'Solo Cocina puede anular un producto enviado que todavía no ha sido pagado.' }
+      }
+    }
+
+    const lineAmount = Number(target.price || 0) * Number(target.quantity || 0)
+    const projectedTotal = Math.max(0, orderTotal(order) - lineAmount)
+    const refundDue = hasPayment
+      ? Math.max(0, orderPaidTotal(order) - projectedTotal)
+      : Number(order.refundDue || 0)
+
     updateState((previous) => ({
       ...previous,
-      orders: previous.orders.map((order) => {
-        if (order.id !== orderId) return order
-        const target = order.rounds.flatMap((round) => round.items).find((item) => item.lineId === lineId)
+      orders: previous.orders.map((candidate) => {
+        if (candidate.id !== orderId) return candidate
+
         return {
-          ...order,
-          rounds: order.rounds.map((round) => round.id !== roundId ? round : {
+          ...candidate,
+          refundDue,
+          status: refundDue > 0.005 ? 'refund_due' : candidate.status,
+          rounds: candidate.rounds.map((round) => round.id !== roundId ? round : {
             ...round,
-            items: round.items.map((item) => item.lineId === lineId ? { ...item, voided: true, voidedAt: Date.now() } : item),
+            items: round.items.map((item) => item.lineId === lineId ? {
+              ...item,
+              voided: true,
+              voidedAt: Date.now(),
+              voidReason: reason,
+              voidMethod: method,
+              voidAuditId: options.auditId || null,
+              voidAuthorizationRequestId: options.authorizationRequestId || null,
+            } : item),
           }),
-          lastEvent: target ? `Anulado: ${target.name}` : order.lastEvent,
+          lastEvent: `Anulado: ${target.name}`,
         }
       }),
-      activity: [...previous.activity, `Producto anulado · Orden #${orderId}`],
+      tables: previous.tables.map((table) => (
+        refundDue > 0.005 && (order.tableIds || []).includes(table.id)
+          ? { ...table, status: 'refund_due' }
+          : table
+      )),
+      activity: [
+        ...previous.activity,
+        `Producto anulado · Orden #${orderId} · ${target.name} · ${reason}${refundDue > 0.005 ? ` · Reembolso pendiente ${formatMoney(refundDue)}` : ''}`,
+      ],
     }))
-  }, [updateState])
+
+    return { ok: true, refundDue, paid: hasPayment }
+  }, [state.orders, updateState, auth.permissions, formatMoney])
 
   const advanceStationRound = useCallback((orderId, roundId, station) => {
     updateState((previous) => {
@@ -823,6 +891,10 @@ export function RestaurantProvider({ children }) {
         nextOrders = nextOrders.map((order) => {
           if (order.id !== orderId) return order
 
+          if (Number(order.refundDue || 0) > 0.005) {
+            return { ...order, status: 'refund_due' }
+          }
+
           if (order.status === 'waiting_food' && orderBalance(order) <= 0.005) {
             return {
               ...order,
@@ -847,6 +919,7 @@ export function RestaurantProvider({ children }) {
         }
 
         if (allPrepared) {
+          if (Number(refreshed.refundDue || 0) > 0.005) return { ...table, status: 'refund_due' }
           return { ...table, status: orderBalance(refreshed) <= 0.005 ? 'ready' : 'pay' }
         }
 
