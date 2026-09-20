@@ -419,7 +419,12 @@ export default function OrderPage({ onNavigate }) {
         emailWarning = `\n\nLa cuenta fue anulada, pero no se pudo enviar el correo de confirmación: ${error?.message || 'error de correo'}`
       }
 
-      closeAccountVoid()
+      setAccountVoidBusy(false)
+      setShowAccountVoid(false)
+      setAccountVoidReason('')
+      setAccountVoidRequestId(null)
+      setAccountVoidCode('')
+      setAccountVoidExpiresAt(null)
 
       window.alert(
         `Cuenta completa anulada. Reembolso pendiente: ${formatMoney(result.refundDue)}.${emailWarning}`,
