@@ -514,3 +514,13 @@ html, body {
     font-size: 20px;
   }
 }
+
+/* Paid table waiting for food */
+.table.waiting_food {
+  background: #f3f5ff;
+}
+
+.waiting_food .table-status {
+  color: #4055ad;
+  font-weight: 950;
+}
