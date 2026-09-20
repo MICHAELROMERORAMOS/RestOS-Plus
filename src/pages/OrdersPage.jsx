@@ -2,7 +2,7 @@ import React from 'react'
 import { useRestaurant, orderBalance, orderTotal } from '../context/RestaurantContext.jsx'
 
 export default function OrdersPage() {
-  const { state, tableLabel } = useRestaurant()
+  const { state, tableLabel, formatMoney } = useRestaurant()
   return (
     <section className="view active">
       <div className="hero"><div><h2>Pedidos</h2><p>Historial, estado operativo y rondas enviadas.</p></div></div>
@@ -26,7 +26,7 @@ export default function OrdersPage() {
                     {order.rounds.length} comandas · {items.map((item) => `${item.quantity}× ${item.name}`).join(', ') || 'Sin productos'}
                   </small>
                 </div>
-                <div className="history-meta"><span className="badge">{String(order.status || 'open').toUpperCase()}</span><strong>€{orderTotal(order).toFixed(2)}</strong>{orderBalance(order) > 0.005 && <small>Saldo €{orderBalance(order).toFixed(2)}</small>}</div>
+                <div className="history-meta"><span className="badge">{String(order.status || 'open').toUpperCase()}</span><strong>{formatMoney(orderTotal(order))}</strong>{orderBalance(order) > 0.005 && <small>Saldo {formatMoney(orderBalance(order))}</small>}</div>
               </div>
             )
           }) : <div className="empty-block">Todavía no hay pedidos.</div>}
