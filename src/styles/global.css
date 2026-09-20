@@ -1190,3 +1190,170 @@ html, body {
     width: 100%;
   }
 }
+
+/* Supabase-backed menu administration */
+.products-admin-hero {
+  align-items: center;
+}
+
+.inline-create-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.inline-create-form input {
+  min-width: 0;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 0 12px;
+  background: white;
+}
+
+.menu-product-list {
+  display: grid;
+  gap: 10px;
+}
+
+.menu-product-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fbfcfb;
+}
+
+.menu-product-card.inactive {
+  opacity: .62;
+  background: #f5f6f5;
+}
+
+.menu-product-main {
+  min-width: 0;
+}
+
+.menu-product-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.menu-product-title h4 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.menu-product-main small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.menu-product-main p {
+  margin: 7px 0 0;
+  color: #42534a;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.menu-product-price {
+  min-width: 78px;
+  text-align: right;
+  font-size: 20px;
+  color: var(--brand);
+}
+
+.product-form-card {
+  width: min(760px, 100%);
+}
+
+.product-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.product-form-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.product-form-grid label > span {
+  font-size: 12px;
+  font-weight: 850;
+  color: #53665d;
+}
+
+.product-form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.product-form-grid input:not([type="checkbox"]),
+.product-form-grid select,
+.product-form-grid textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 0 12px;
+  background: white;
+}
+
+.product-form-grid input:not([type="checkbox"]),
+.product-form-grid select {
+  height: 46px;
+}
+
+.product-form-grid textarea {
+  min-height: 90px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+@media (max-width: 700px) {
+  .products-admin-hero {
+    display: grid;
+    gap: 12px;
+  }
+
+  .products-admin-hero .btn {
+    width: 100%;
+  }
+
+  .menu-product-card {
+    grid-template-columns: 1fr auto;
+  }
+
+  .menu-product-card > .btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .product-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-form-grid .wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .inline-create-form {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-product-card {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-product-price {
+    text-align: left;
+  }
+}
