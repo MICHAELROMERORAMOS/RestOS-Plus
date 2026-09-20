@@ -1,20 +1,61 @@
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 
 export default function StationPage({ station }) {
   const { stationJobs, advanceStationRound, tableLabel } = useRestaurant()
+  const [showSummary, setShowSummary] = useState(false)
   const jobs = stationJobs(station)
   const isBar = station === 'bar'
   const label = isBar ? 'Bar Display' : 'Kitchen Display'
+  const stationName = isBar ? 'Bar' : 'Cocina'
   const icon = isBar ? '🍸' : '🍳'
 
+  const preparationSummary = useMemo(() => {
+    const totals = new Map()
+
+    jobs.forEach(({ items }) => {
+      items.forEach((item) => {
+        const key = item.productId || item.name
+        const current = totals.get(key) || {
+          key,
+          name: item.name,
+          total: 0,
+          newQty: 0,
+          preparingQty: 0,
+        }
+
+        const quantity = Number(item.quantity || 0)
+        current.total += quantity
+
+        if (item.prepStatus === 'preparing') current.preparingQty += quantity
+        else current.newQty += quantity
+
+        totals.set(key, current)
+      })
+    })
+
+    return Array.from(totals.values()).sort((a, b) => (
+      a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+    ))
+  }, [jobs])
+
+  const totalPendingUnits = preparationSummary.reduce((sum, item) => sum + item.total, 0)
+
   return (
-    <section className="view active">
-      <div className="hero">
+    <section className={`view active station-view ${isBar ? 'bar-station' : 'kitchen-station'}`}>
+      <div className="hero station-hero">
         <div>
           <h2>{label}</h2>
-          <p>Solo aparecen productos asignados a {isBar ? 'Bar' : 'Cocina'}.</p>
+          <p>Solo aparecen productos asignados a {stationName}.</p>
         </div>
+
+        <button
+          className="btn primary station-summary-button"
+          onClick={() => setShowSummary(true)}
+        >
+          ∑ Resumen de preparación
+          <span>{totalPendingUnits} unidad{totalPendingUnits === 1 ? '' : 'es'}</span>
+        </button>
       </div>
 
       <div className="kds kds-large">
@@ -63,6 +104,47 @@ export default function StationPage({ station }) {
           </div>
         )}
       </div>
+
+      {showSummary && (
+        <div className="modal open station-summary-modal" onClick={() => setShowSummary(false)}>
+          <div className="modal-card station-summary-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title station-summary-head">
+              <div>
+                <h3>{icon} Resumen de {stationName}</h3>
+                <p>
+                  {totalPendingUnits} unidad{totalPendingUnits === 1 ? '' : 'es'} pendiente{totalPendingUnits === 1 ? '' : 's'}
+                  {' · '}{jobs.length} comanda{jobs.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button className="btn" onClick={() => setShowSummary(false)}>×</button>
+            </div>
+
+            {preparationSummary.length ? (
+              <div className="station-summary-list">
+                {preparationSummary.map((item) => (
+                  <div className="station-summary-row" key={item.key}>
+                    <div className="station-summary-quantity">{item.total}×</div>
+                    <div className="station-summary-copy">
+                      <b>{item.name}</b>
+                      <small>
+                        {item.newQty > 0 && `${item.newQty} nueva${item.newQty === 1 ? '' : 's'}`}
+                        {item.newQty > 0 && item.preparingQty > 0 ? ' · ' : ''}
+                        {item.preparingQty > 0 && `${item.preparingQty} preparando`}
+                      </small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-block">No hay productos pendientes de preparación.</div>
+            )}
+
+            <button className="btn primary full station-summary-close" onClick={() => setShowSummary(false)}>
+              Cerrar resumen
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
