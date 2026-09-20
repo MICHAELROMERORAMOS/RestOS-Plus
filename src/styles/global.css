@@ -2236,3 +2236,67 @@ html, body {
     gap: 10px;
   }
 }
+
+
+/* Kitchen / Bar new-order sound alerts */
+.station-hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.station-sound-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  text-align: left;
+}
+
+.station-sound-button.enabled {
+  background: #eef8f3;
+  box-shadow: 0 0 0 1px #b8ddca;
+  color: #174c36;
+}
+
+.station-sound-button.disabled {
+  background: #fff;
+  color: #53665d;
+}
+
+.station-sound-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.station-sound-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.station-sound-copy b {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.station-sound-copy small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+@media (max-width: 760px) {
+  .station-hero-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .station-sound-button,
+  .station-summary-button,
+  .station-void-alert-button {
+    width: 100%;
+  }
+}
