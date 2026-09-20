@@ -20,6 +20,7 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
     ready: 'PEDIDO LISTO',
     pay: 'POR COBRAR',
     waiting_food: 'PAGADA · ESPERANDO COMIDA',
+    refund_due: 'REEMBOLSO PENDIENTE',
   }
 
   const activeZones = useMemo(
@@ -32,11 +33,12 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
     if (status === 'reserved') return { borderColor: '#e0a800', boxShadow: 'inset 0 0 0 1px #e0a800' }
     if (status === 'occupied') return { borderColor: '#d64545', boxShadow: 'inset 0 0 0 1px #d64545' }
     if (status === 'waiting_food') return { borderColor: '#5b6fc7', boxShadow: 'inset 0 0 0 1px #5b6fc7' }
+    if (status === 'refund_due') return { borderColor: '#b84b4b', boxShadow: 'inset 0 0 0 1px #b84b4b' }
     return undefined
   }
 
   function tableTimeText(table, status) {
-    const isOpen = ['occupied', 'ready', 'pay', 'waiting_food'].includes(status)
+    const isOpen = ['occupied', 'ready', 'pay', 'waiting_food', 'refund_due'].includes(status)
 
     const relatedOrders = state.orders
       .filter((order) => order.mode === 'table' && (order.tableIds || []).includes(table.id))
