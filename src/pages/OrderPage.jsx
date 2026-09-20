@@ -48,8 +48,18 @@ export default function OrderPage({ onNavigate }) {
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeMethod, setChargeMethod] = useState('card')
 
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(
+      products
+        .filter((product) => product.available !== false)
+        .map((product) => product.category || 'Sin categoría'),
+    )).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })),
+    [products],
+  )
+
   const filteredProducts = useMemo(() => products.filter((product) => (
-    (category === 'all' || product.category === category)
+    product.available !== false
+    && (category === 'all' || product.category === category)
     && product.name.toLowerCase().includes(search.toLowerCase())
   )), [products, category, search])
 
@@ -227,7 +237,8 @@ export default function OrderPage({ onNavigate }) {
 
       <div className="order-tools">
         <select value={category} onChange={(event) => setCategory(event.target.value)}>
-          <option value="all">Todas las categorías</option><option>Comida</option><option>Bebidas</option><option>Postres</option>
+          <option value="all">Todas las categorías</option>
+          {categoryOptions.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}
         </select>
         <input value={search} placeholder="Buscar producto…" onChange={(event) => setSearch(event.target.value)} />
         {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
@@ -248,13 +259,15 @@ export default function OrderPage({ onNavigate }) {
         <div className="card">
           <div className="section-title"><h3>Menú</h3><span className="badge">Toca para agregar</span></div>
           <div className="products">
-            {filteredProducts.map((product) => (
+            {filteredProducts.length ? filteredProducts.map((product) => (
               <button className="product" key={product.id} onClick={() => addProduct(product)}>
                 <strong>{product.name}</strong>
                 <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
-                <em>€{product.price.toFixed(2)}</em>
+                <em>€{Number(product.price || 0).toFixed(2)}</em>
               </button>
-            ))}
+            )) : (
+              <div className="empty-inline">No hay productos activos que coincidan con este filtro.</div>
+            )}
           </div>
         </div>
 
