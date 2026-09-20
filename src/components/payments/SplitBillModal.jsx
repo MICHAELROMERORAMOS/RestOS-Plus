@@ -19,7 +19,7 @@ function askPaymentMethod() {
 }
 
 export default function SplitBillModal({ orders, tableText, onClose }) {
-  const { recordPayments } = useRestaurant()
+  const { recordPayments, formatMoney } = useRestaurant()
   const [mode, setMode] = useState('choose')
   const [parts, setParts] = useState(2)
   const [paidParts, setPaidParts] = useState(0)
@@ -87,7 +87,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
     if (!method) return
 
     const confirmed = window.confirm(
-      `¿Confirmar cobro de €${money(amount)} para ${tableText}?\n\n${label}\n\nSi todavía hay productos pendientes, la mesa seguirá marcada como Esperando comida.`,
+      `¿Confirmar cobro de ${formatMoney(amount)} para ${tableText}?\n\n${label}\n\nSi todavía hay productos pendientes, la mesa seguirá marcada como Esperando comida.`,
     )
     if (!confirmed) return
 
@@ -168,7 +168,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
 
     performPayment(
       allocations,
-      `Productos seleccionados · €${money(selectedProductData.total)}.`,
+      `Productos seleccionados · ${formatMoney(selectedProductData.total)}.`,
       () => setSelected({}),
     )
   }
@@ -181,7 +181,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
         <div className="section-title">
           <div>
             <h3>Dividir cuenta · {tableText}</h3>
-            <p className="muted">Saldo pendiente €{money(balance)} · Total €{money(total)} · Pagado €{money(paid)}</p>
+            <p className="muted">Saldo pendiente {formatMoney(balance)} · Total {formatMoney(total)} · Pagado {formatMoney(paid)}</p>
           </div>
           <button className="btn" onClick={onClose}>×</button>
         </div>
@@ -220,7 +220,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
             <div className="split-equal-summary">
               <span>Parte {paidParts + 1} de {parts}</span>
               <strong>
-                €{money(
+                {formatMoney(
                   (parts - paidParts) <= 1
                     ? balance
                     : Math.round((balance / (parts - paidParts)) * 100) / 100,
@@ -245,7 +245,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
                   <div className="split-product-row" key={line.key}>
                     <div className="split-product-copy">
                       <b>{line.name}</b>
-                      <small>€{money(line.price)} c/u · {line.availableQuantity} disponible{line.availableQuantity === 1 ? '' : 's'}</small>
+                      <small>{formatMoney(line.price)} c/u · {line.availableQuantity} disponible{line.availableQuantity === 1 ? '' : 's'}</small>
                     </div>
 
                     <div className="split-product-qty">
@@ -254,7 +254,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
                       <button onClick={() => setProductQuantity(line, selectedQty + 1)} disabled={selectedQty >= line.availableQuantity}>+</button>
                     </div>
 
-                    <strong className="split-product-total">€{money(selectedQty * line.price)}</strong>
+                    <strong className="split-product-total">{formatMoney(selectedQty * line.price)}</strong>
                   </div>
                 )
               }) : <div className="empty-inline">No hay productos disponibles para dividir.</div>}
@@ -262,7 +262,7 @@ export default function SplitBillModal({ orders, tableText, onClose }) {
 
             <div className="split-selected-total">
               <span>Productos seleccionados</span>
-              <strong>€{money(selectedProductData.total)}</strong>
+              <strong>{formatMoney(selectedProductData.total)}</strong>
             </div>
 
             <button
