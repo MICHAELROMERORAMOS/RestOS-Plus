@@ -782,44 +782,21 @@ export function RestaurantProvider({ children }) {
     return { ok: true, orderId: createdOrderId }
   }, [draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder])
 
-  const voidSentItem = useCallback((orderId, roundId, lineId, options = {}) => {
+  const applyKitchenApprovedVoidRequest = useCallback((orderId, request) => {
     const order = state.orders.find((candidate) => candidate.id === orderId)
     if (!order) return { ok: false, message: 'La orden no existe.' }
-
-    const target = (order.rounds || [])
-      .flatMap((round) => round.items || [])
-      .find((item) => item.lineId === lineId)
-
-    if (!target || target.voided) return { ok: false, message: 'El producto no existe o ya fue anulado.' }
+    if (orderPaidTotal(order) > 0.005) {
+      return { ok: false, message: 'La cuenta ya tiene pagos y no puede aplicar una aprobación de Cocina.' }
+    }
     if (orderHasInvoice(order)) {
-      return {
-        ok: false,
-        message: 'La orden ya tiene factura emitida. Debe tramitarse mediante corrección fiscal / nota de crédito.',
-        invoiceLocked: true,
-      }
+      return { ok: false, message: 'La orden ya tiene factura emitida.' }
     }
 
-    const reason = cleanName(options.reason)
-    if (!reason) return { ok: false, message: 'Debes registrar el motivo de la anulación.' }
+    const lineIds = new Set((request?.items || []).map((item) => String(item.lineId || '')))
+    if (!lineIds.size) return { ok: false, message: 'La solicitud no contiene productos.' }
 
-    const hasPayment = options.accountPaid === true || orderPaidTotal(order) > 0.005
-    const method = options.method
-
-    if (hasPayment) {
-      if (method !== 'admin_code' || !auth.can('orders.void.authorized') || !options.auditId) {
-        return { ok: false, message: 'Este producto ya tiene pago asociado y requiere código del administrador.' }
-      }
-    } else {
-      if (method !== 'kitchen_unpaid' || !auth.can('orders.void.unpaid') || target.station !== 'kitchen') {
-        return { ok: false, message: 'Solo Cocina puede anular un producto enviado que todavía no ha sido pagado.' }
-      }
-    }
-
-    const lineAmount = Number(target.price || 0) * Number(target.quantity || 0)
-    const projectedTotal = Math.max(0, orderTotal(order) - lineAmount)
-    const refundDue = hasPayment
-      ? Math.max(0, orderPaidTotal(order) - projectedTotal)
-      : Number(order.refundDue || 0)
+    const reason = cleanName(request?.reason) || 'Aprobado por Cocina'
+    let appliedCount = 0
 
     updateState((previous) => ({
       ...previous,
@@ -828,36 +805,102 @@ export function RestaurantProvider({ children }) {
 
         return {
           ...candidate,
-          refundDue,
-          status: refundDue > 0.005 ? 'refund_due' : candidate.status,
-          rounds: candidate.rounds.map((round) => round.id !== roundId ? round : {
+          rounds: candidate.rounds.map((round) => ({
             ...round,
-            items: round.items.map((item) => item.lineId === lineId ? {
+            items: round.items.map((item) => {
+              if (item.voided || !lineIds.has(String(item.lineId))) return item
+              appliedCount += 1
+              return {
+                ...item,
+                voided: true,
+                voidedAt: Date.now(),
+                voidReason: reason,
+                voidMethod: 'kitchen_approved',
+                voidRequestId: request?.id || null,
+              }
+            }),
+          })),
+          lastEvent: `Anulación aprobada por Cocina · ${appliedCount || lineIds.size} producto(s)`,
+        }
+      }),
+      activity: [
+        ...previous.activity,
+        `Cocina aprobó anulación · Orden #${orderId} · ${reason}`,
+      ],
+    }))
+
+    return { ok: true, appliedCount }
+  }, [state.orders, updateState])
+
+  const voidPaidTableAccount = useCallback((orderIds, options = {}) => {
+    const targetIds = new Set((orderIds || []).map((id) => id))
+    const orders = state.orders.filter((order) => targetIds.has(order.id))
+    if (!orders.length) return { ok: false, message: 'No se encontró la cuenta.' }
+
+    const total = orders.reduce((sum, order) => sum + orderTotal(order), 0)
+    const paid = orders.reduce((sum, order) => sum + orderPaidTotal(order), 0)
+    const balance = Math.max(0, total - paid)
+
+    if (paid <= 0.005) {
+      return { ok: false, message: 'Esta cuenta no tiene pagos; debe solicitarse la anulación a Cocina.' }
+    }
+    if (balance <= 0.005) {
+      return { ok: false, message: 'La cuenta ya está pagada completamente y no admite anulación desde esta pantalla.' }
+    }
+    if (orders.some((order) => orderHasInvoice(order))) {
+      return { ok: false, message: 'Existe una factura emitida y se requiere el flujo fiscal correspondiente.' }
+    }
+    if (!options.auditId) {
+      return { ok: false, message: 'Falta la autorización del administrador.' }
+    }
+
+    const reason = cleanName(options.reason)
+    if (!reason) return { ok: false, message: 'Debes registrar el motivo de la anulación.' }
+
+    const affectedTables = new Set(orders.flatMap((order) => order.tableIds || []))
+
+    updateState((previous) => ({
+      ...previous,
+      orders: previous.orders.map((order) => {
+        if (!targetIds.has(order.id)) return order
+        const orderPaid = orderPaidTotal(order)
+
+        return {
+          ...order,
+          refundDue: orderPaid,
+          status: orderPaid > 0.005 ? 'refund_due' : 'cancelled',
+          accountVoidedAt: Date.now(),
+          accountVoidReason: reason,
+          accountVoidAuditId: options.auditId,
+          accountVoidAuthorizationRequestId: options.authorizationRequestId || null,
+          rounds: order.rounds.map((round) => ({
+            ...round,
+            items: round.items.map((item) => item.voided ? item : {
               ...item,
               voided: true,
               voidedAt: Date.now(),
               voidReason: reason,
-              voidMethod: method,
-              voidAuditId: options.auditId || null,
+              voidMethod: 'admin_account',
+              voidAuditId: options.auditId,
               voidAuthorizationRequestId: options.authorizationRequestId || null,
-            } : item),
-          }),
-          lastEvent: `Anulado: ${target.name}`,
+            }),
+          })),
+          lastEvent: 'Cuenta completa anulada con autorización del administrador',
         }
       }),
       tables: previous.tables.map((table) => (
-        refundDue > 0.005 && (order.tableIds || []).includes(table.id)
+        affectedTables.has(table.id)
           ? { ...table, status: 'refund_due' }
           : table
       )),
       activity: [
         ...previous.activity,
-        `Producto anulado · Orden #${orderId} · ${target.name} · ${reason}${refundDue > 0.005 ? ` · Reembolso pendiente ${formatMoney(refundDue)}` : ''}`,
+        `Cuenta completa anulada · Reembolso pendiente ${formatMoney(paid)} · ${reason}`,
       ],
     }))
 
-    return { ok: true, refundDue, paid: hasPayment }
-  }, [state.orders, updateState, auth.permissions, formatMoney])
+    return { ok: true, refundDue: paid }
+  }, [state.orders, updateState, formatMoney])
 
   const advanceStationRound = useCallback((orderId, roundId, station) => {
     updateState((previous) => {
@@ -1229,7 +1272,8 @@ export function RestaurantProvider({ children }) {
     removeDraft,
     updateDraftNote,
     sendDraft,
-    voidSentItem,
+    applyKitchenApprovedVoidRequest,
+    voidPaidTableAccount,
     advanceStationRound,
     markRoundDelivered,
     transferCurrentTable,
