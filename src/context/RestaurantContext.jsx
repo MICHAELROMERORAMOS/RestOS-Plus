@@ -844,12 +844,16 @@ export function RestaurantProvider({ children }) {
     if (paid <= 0.005) {
       return { ok: false, message: 'Esta cuenta no tiene pagos; debe solicitarse la anulación a Cocina.' }
     }
-    if (balance <= 0.005) {
-      return { ok: false, message: 'La cuenta ya está pagada completamente y no admite anulación desde esta pantalla.' }
+    const fullyPaid = balance <= 0.005
+
+    if (fullyPaid && !options.allowFullyPaid) {
+      return { ok: false, message: 'La cuenta ya está pagada completamente y requiere autorización exclusiva del administrador.' }
     }
-    if (orders.some((order) => orderHasInvoice(order))) {
-      return { ok: false, message: 'Existe una factura emitida y se requiere el flujo fiscal correspondiente.' }
+
+    if (!fullyPaid && options.allowFullyPaid) {
+      return { ok: false, message: 'Esta autorización corresponde a una cuenta ya cobrada, no a una cuenta parcial.' }
     }
+
     if (!options.auditId) {
       return { ok: false, message: 'Falta la autorización del administrador.' }
     }
@@ -865,11 +869,15 @@ export function RestaurantProvider({ children }) {
         if (!targetIds.has(order.id)) return order
         const orderPaid = orderPaidTotal(order)
 
+        const hadInvoice = orderHasInvoice(order)
+
         return {
           ...order,
           refundDue: orderPaid,
           status: orderPaid > 0.005 ? 'refund_due' : 'cancelled',
           accountVoidedAt: Date.now(),
+          invoiceVoidedAt: hadInvoice ? Date.now() : (order.invoiceVoidedAt || null),
+          fiscalCorrectionRequired: hadInvoice,
           accountVoidReason: reason,
           accountVoidAuditId: options.auditId,
           accountVoidAuthorizationRequestId: options.authorizationRequestId || null,
@@ -889,13 +897,13 @@ export function RestaurantProvider({ children }) {
         }
       }),
       tables: previous.tables.map((table) => (
-        affectedTables.has(table.id)
+        !fullyPaid && affectedTables.has(table.id)
           ? { ...table, status: 'refund_due' }
           : table
       )),
       activity: [
         ...previous.activity,
-        `Cuenta completa anulada · Reembolso pendiente ${formatMoney(paid)} · ${reason}`,
+        `${fullyPaid ? 'Cuenta cobrada anulada' : 'Cuenta completa anulada'} · Reembolso pendiente ${formatMoney(paid)} · ${reason}`,
       ],
     }))
 
