@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import {
@@ -9,13 +9,26 @@ import {
 export default function StationPage({ station }) {
   const auth = useAuth()
   const { stationJobs, advanceStationRound, tableLabel, formatMoney } = useRestaurant()
+  const audioContextRef = useRef(null)
+  const knownJobKeysRef = useRef(new Set())
+  const knownStationRef = useRef(station)
+  const jobsInitializedRef = useRef(false)
   const [showSummary, setShowSummary] = useState(false)
   const [showVoidRequests, setShowVoidRequests] = useState(false)
   const [voidRequests, setVoidRequests] = useState([])
   const [requestsLoading, setRequestsLoading] = useState(false)
   const [reviewingId, setReviewingId] = useState(null)
+  const soundStorageKey = `restos-kds-sound-${station}`
+  const [soundEnabled, setSoundEnabled] = useState(() => (
+    localStorage.getItem(`restos-kds-sound-${station}`) === 'on'
+  ))
+  const [soundReady, setSoundReady] = useState(false)
 
   const jobs = stationJobs(station)
+  const jobSignature = jobs
+    .map(({ order, round }) => `${order.serverId || order.id}:${round.serverId || round.id}`)
+    .sort()
+    .join('|')
   const isBar = station === 'bar'
   const label = isBar ? 'Bar Display' : 'Kitchen Display'
   const stationName = isBar ? 'Bar' : 'Cocina'
@@ -53,6 +66,142 @@ export default function StationPage({ station }) {
   }, [jobs])
 
   const totalPendingUnits = preparationSummary.reduce((sum, item) => sum + item.total, 0)
+
+  const ensureAudioReady = useCallback(async () => {
+    if (typeof window === 'undefined') return false
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    if (!AudioContextClass) return false
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass()
+      }
+
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume()
+      }
+
+      const ready = audioContextRef.current.state === 'running'
+      setSoundReady(ready)
+      return ready
+    } catch {
+      setSoundReady(false)
+      return false
+    }
+  }, [])
+
+  const playNewOrderSound = useCallback(async ({ test = false } = {}) => {
+    if (!test && !soundEnabled) return false
+
+    const ready = await ensureAudioReady()
+    if (!ready || !audioContextRef.current) return false
+
+    const context = audioContextRef.current
+    const start = context.currentTime + 0.02
+    const notes = [
+      { frequency: 880, delay: 0, duration: 0.14 },
+      { frequency: 1046, delay: 0.2, duration: 0.14 },
+      { frequency: 880, delay: 0.4, duration: 0.22 },
+    ]
+
+    notes.forEach(({ frequency, delay, duration }) => {
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      const noteStart = start + delay
+      const noteEnd = noteStart + duration
+
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(frequency, noteStart)
+      gain.gain.setValueAtTime(0.0001, noteStart)
+      gain.gain.exponentialRampToValueAtTime(0.22, noteStart + 0.015)
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteEnd)
+
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start(noteStart)
+      oscillator.stop(noteEnd + 0.03)
+    })
+
+    return true
+  }, [ensureAudioReady, soundEnabled])
+
+  const toggleSound = useCallback(async () => {
+    if (soundEnabled) {
+      localStorage.setItem(soundStorageKey, 'off')
+      setSoundEnabled(false)
+      setSoundReady(false)
+      return
+    }
+
+    const ready = await ensureAudioReady()
+    if (!ready) {
+      window.alert('El navegador bloqueó el audio. Haz clic de nuevo en “Activar sonido” después de interactuar con la página.')
+      return
+    }
+
+    localStorage.setItem(soundStorageKey, 'on')
+    setSoundEnabled(true)
+    await playNewOrderSound({ test: true })
+  }, [soundEnabled, soundStorageKey, ensureAudioReady, playNewOrderSound])
+
+  useEffect(() => {
+    setSoundEnabled(localStorage.getItem(soundStorageKey) === 'on')
+    setSoundReady(false)
+    knownStationRef.current = station
+    knownJobKeysRef.current = new Set()
+    jobsInitializedRef.current = false
+  }, [station, soundStorageKey])
+
+  useEffect(() => {
+    if (!soundEnabled) return undefined
+
+    const unlock = () => {
+      ensureAudioReady().catch(() => {})
+    }
+
+    window.addEventListener('pointerdown', unlock, { once: true })
+    window.addEventListener('keydown', unlock, { once: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+  }, [soundEnabled, ensureAudioReady])
+
+  useEffect(() => {
+    if (knownStationRef.current !== station) {
+      knownStationRef.current = station
+      knownJobKeysRef.current = new Set()
+      jobsInitializedRef.current = false
+    }
+
+    const currentKeys = new Set(
+      jobs.map(({ order, round }) => `${order.serverId || order.id}:${round.serverId || round.id}`),
+    )
+
+    if (!jobsInitializedRef.current) {
+      knownJobKeysRef.current = currentKeys
+      jobsInitializedRef.current = true
+      return
+    }
+
+    const hasNewJob = Array.from(currentKeys).some((key) => !knownJobKeysRef.current.has(key))
+    knownJobKeysRef.current = currentKeys
+
+    if (hasNewJob && soundEnabled) {
+      playNewOrderSound().then((played) => {
+        if (!played) setSoundReady(false)
+      }).catch(() => setSoundReady(false))
+    }
+  }, [jobSignature, jobs, station, soundEnabled, playNewOrderSound])
+
+  useEffect(() => () => {
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current = null
+    }
+  }, [])
 
   async function refreshVoidRequests({ silent = false } = {}) {
     if (!canReviewVoids || !restaurantId) {
@@ -119,6 +268,25 @@ export default function StationPage({ station }) {
         </div>
 
         <div className="station-hero-actions">
+          <button
+            type="button"
+            className={`btn station-sound-button ${soundEnabled ? 'enabled' : 'disabled'}`}
+            onClick={toggleSound}
+            title={soundEnabled
+              ? 'Desactivar alerta sonora en este dispositivo'
+              : 'Activar alerta sonora para nuevas comandas'}
+          >
+            <span className="station-sound-icon">{soundEnabled ? '🔔' : '🔕'}</span>
+            <span className="station-sound-copy">
+              <b>{soundEnabled ? 'Sonido activado' : 'Activar sonido'}</b>
+              <small>
+                {soundEnabled
+                  ? (soundReady ? 'Listo para nuevas comandas' : 'Haz clic o toca la pantalla una vez')
+                  : 'Solo en este dispositivo'}
+              </small>
+            </span>
+          </button>
+
           {canReviewVoids && (
             <button
               className={`btn station-void-alert-button ${voidRequests.length ? 'has-pending' : ''}`}
