@@ -10,6 +10,7 @@ export default function StationPage({ station }) {
   const auth = useAuth()
   const { stationJobs, advanceStationRound, tableLabel, formatMoney } = useRestaurant()
   const [showSummary, setShowSummary] = useState(false)
+  const [showVoidRequests, setShowVoidRequests] = useState(false)
   const [voidRequests, setVoidRequests] = useState([])
   const [requestsLoading, setRequestsLoading] = useState(false)
   const [reviewingId, setReviewingId] = useState(null)
@@ -117,80 +118,33 @@ export default function StationPage({ station }) {
           <p>Solo aparecen productos asignados a {stationName}.</p>
         </div>
 
-        <button
-          className="btn primary station-summary-button"
-          onClick={() => setShowSummary(true)}
-        >
-          ∑ Resumen de preparación
-          <span>{totalPendingUnits} unidad{totalPendingUnits === 1 ? '' : 'es'}</span>
-        </button>
-      </div>
-
-      {canReviewVoids && (
-        <div className="card kitchen-void-requests">
-          <div className="section-title kitchen-void-request-head">
-            <div>
-              <h3>⚠ Solicitudes de anulación</h3>
-              <p className="muted">
-                Mesero/Caja/Admin solicita. Cocina o el Owner autorizado aprueba o rechaza únicamente cuentas sin pagos.
-              </p>
-            </div>
-            <div className="kitchen-void-request-actions">
-              <span className="badge">{voidRequests.length} pendiente{voidRequests.length === 1 ? '' : 's'}</span>
-              <button className="btn" disabled={requestsLoading} onClick={() => refreshVoidRequests()}>
-                ↻
-              </button>
-            </div>
-          </div>
-
-          {requestsLoading && !voidRequests.length ? (
-            <div className="empty-inline">Cargando solicitudes…</div>
-          ) : voidRequests.length ? (
-            <div className="kitchen-void-request-list">
-              {voidRequests.map((request) => (
-                <article className="kitchen-void-request" key={request.id}>
-                  <div className="kitchen-void-request-copy">
-                    <div className="kitchen-void-request-title">
-                      <b>{request.table_label || `Orden #${request.order_ref}`}</b>
-                      <span>Solicita: {request.requester_name || 'Usuario'}</span>
-                    </div>
-
-                    <div className="kitchen-void-request-items">
-                      {(request.items || []).map((item) => (
-                        <div key={item.lineId}>
-                          <b>{Number(item.quantity || 0)} × {item.name}</b>
-                          <span>{formatMoney(item.amount || 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <p><b>Motivo:</b> {request.reason}</p>
-                  </div>
-
-                  <div className="kitchen-void-review-buttons">
-                    <button
-                      className="btn"
-                      disabled={reviewingId === request.id}
-                      onClick={() => reviewRequest(request, 'rejected')}
-                    >
-                      Rechazar
-                    </button>
-                    <button
-                      className="btn primary"
-                      disabled={reviewingId === request.id}
-                      onClick={() => reviewRequest(request, 'approved')}
-                    >
-                      {reviewingId === request.id ? 'Procesando…' : '✓ Aprobar'}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-inline">No hay solicitudes pendientes de anulación.</div>
+        <div className="station-hero-actions">
+          {canReviewVoids && (
+            <button
+              className={`btn station-void-alert-button ${voidRequests.length ? 'has-pending' : ''}`}
+              onClick={() => {
+                setShowVoidRequests(true)
+                refreshVoidRequests({ silent: true })
+              }}
+            >
+              <span className="station-void-alert-icon">⚠</span>
+              <span className="station-void-alert-copy">
+                <b>Anulaciones</b>
+                <small>{voidRequests.length ? 'Solicitudes pendientes' : 'Sin solicitudes'}</small>
+              </span>
+              <span className="station-void-count">{voidRequests.length}</span>
+            </button>
           )}
+
+          <button
+            className="btn primary station-summary-button"
+            onClick={() => setShowSummary(true)}
+          >
+            ∑ Resumen de preparación
+            <span>{totalPendingUnits} unidad{totalPendingUnits === 1 ? '' : 'es'}</span>
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="kds kds-large">
         {jobs.length ? jobs.map(({ order, round, items, status }) => (
@@ -247,6 +201,79 @@ export default function StationPage({ station }) {
           </div>
         )}
       </div>
+
+      {showVoidRequests && canReviewVoids && (
+        <div className="modal open kitchen-void-modal" onClick={() => setShowVoidRequests(false)}>
+          <div className="modal-card kitchen-void-modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title kitchen-void-modal-head">
+              <div>
+                <h3>⚠ Solicitudes de anulación</h3>
+                <p>
+                  {voidRequests.length} pendiente{voidRequests.length === 1 ? '' : 's'} · actualización automática cada 5 segundos
+                </p>
+              </div>
+
+              <div className="kitchen-void-modal-head-actions">
+                <button className="btn" disabled={requestsLoading} onClick={() => refreshVoidRequests()}>
+                  ↻
+                </button>
+                <button className="btn" onClick={() => setShowVoidRequests(false)}>×</button>
+              </div>
+            </div>
+
+            {requestsLoading && !voidRequests.length ? (
+              <div className="empty-inline">Cargando solicitudes…</div>
+            ) : voidRequests.length ? (
+              <div className="kitchen-void-request-list kitchen-void-request-list-modal">
+                {voidRequests.map((request) => (
+                  <article className="kitchen-void-request" key={request.id}>
+                    <div className="kitchen-void-request-copy">
+                      <div className="kitchen-void-request-title">
+                        <b>{request.table_label || `Orden #${request.order_ref}`}</b>
+                        <span>Solicita: {request.requester_name || 'Usuario'}</span>
+                      </div>
+
+                      <div className="kitchen-void-request-items">
+                        {(request.items || []).map((item) => (
+                          <div key={item.lineId}>
+                            <b>{Number(item.quantity || 0)} × {item.name}</b>
+                            <span>{formatMoney(item.amount || 0)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p><b>Motivo:</b> {request.reason}</p>
+                    </div>
+
+                    <div className="kitchen-void-review-buttons">
+                      <button
+                        className="btn"
+                        disabled={reviewingId === request.id}
+                        onClick={() => reviewRequest(request, 'rejected')}
+                      >
+                        Rechazar
+                      </button>
+                      <button
+                        className="btn primary"
+                        disabled={reviewingId === request.id}
+                        onClick={() => reviewRequest(request, 'approved')}
+                      >
+                        {reviewingId === request.id ? 'Procesando…' : '✓ Aprobar'}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-block kitchen-void-empty">
+                <div className="icon">✓</div>
+                <h3>Sin solicitudes pendientes</h3>
+                <p>Cuando Mesero, Caja o Admin soliciten una anulación, aparecerá aquí automáticamente.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showSummary && (
         <div className="modal open station-summary-modal" onClick={() => setShowSummary(false)}>
