@@ -23,6 +23,8 @@ export default function ProductsPage() {
     menuCategories,
     menuStations,
     activeLocation,
+    currencyCode,
+    formatMoney,
     remoteLoading,
     remoteError,
     refreshMenu,
@@ -245,7 +247,7 @@ export default function ProductsPage() {
                   {product.sku && <small>SKU: {product.sku}</small>}
                 </div>
 
-                <strong className="menu-product-price">€{Number(product.price || 0).toFixed(2)}</strong>
+                <strong className="menu-product-price">{formatMoney(product.price)}</strong>
 
                 {canManage && (
                   <button className="btn" onClick={() => openEditProduct(product)}>Editar</button>
@@ -291,7 +293,7 @@ export default function ProductsPage() {
               </label>
 
               <label>
-                <span>Precio (€) *</span>
+                <span>Precio ({currencyCode}) *</span>
                 <input inputMode="decimal" value={form.price} onChange={(event) => updateField('price', event.target.value)} placeholder="0.00" />
               </label>
 
