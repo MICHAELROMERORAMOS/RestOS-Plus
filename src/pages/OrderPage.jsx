@@ -401,7 +401,7 @@ export default function OrderPage({ onNavigate }) {
         amountPaid: tableAccountPaid,
       })
 
-      const result = voidPaidTableAccount(
+      const result = await voidPaidTableAccount(
         tableOrders.map((order) => order.id),
         {
           reason: accountVoidReason.trim(),
@@ -436,7 +436,7 @@ export default function OrderPage({ onNavigate }) {
     }
   }
 
-  function confirmCharge() {
+  async function confirmCharge() {
     if (!canCharge) return window.alert('Tu rol no tiene permiso para cobrar cuentas.')
 
     const amount = Number(String(chargeAmount).replace(',', '.'))
@@ -451,20 +451,20 @@ export default function OrderPage({ onNavigate }) {
     )
     if (!confirmed) return
 
-    const result = recordPayments(allocations, chargeMethod)
+    const result = await recordPayments(allocations, chargeMethod)
     if (!result.ok) return window.alert(result.message)
 
     setShowCharge(false)
     setChargeAmount('')
   }
 
-  function handleSend() {
-    const result = sendDraft({ prepaid: false })
+  async function handleSend() {
+    const result = await sendDraft({ prepaid: false })
     if (!result.ok) window.alert(result.message)
   }
 
-  function handleQuickPay() {
-    const result = sendDraft({ prepaid: true, paymentMethod: 'cash/card' })
+  async function handleQuickPay() {
+    const result = await sendDraft({ prepaid: true, paymentMethod: 'cash/card' })
     if (!result.ok) return window.alert(result.message)
     onNavigate('kitchen')
   }
@@ -483,7 +483,7 @@ export default function OrderPage({ onNavigate }) {
     setTargetTableId('')
   }
 
-  function confirmTableAction() {
+  async function confirmTableAction() {
     if (!targetZoneId || !targetTableId) return window.alert('Selecciona el área y la mesa destino.')
     const status = getTableTransferStatus(targetTableId)
     if (status === 'occupied') return window.alert('Esa mesa está ocupada y no puede seleccionarse.')
@@ -495,8 +495,8 @@ export default function OrderPage({ onNavigate }) {
     }
 
     const result = tableAction === 'join'
-      ? joinTable(targetTableId)
-      : transferCurrentTable(targetTableId)
+      ? await joinTable(targetTableId)
+      : await transferCurrentTable(targetTableId)
 
     if (!result.ok) return window.alert(result.message)
     closeTableSelector()
@@ -639,7 +639,10 @@ export default function OrderPage({ onNavigate }) {
                   </div>
                 </div>
               ))}
-              {roundStatus(round) === 'LISTA' && <button className="btn" onClick={() => markRoundDelivered(currentOrder.id, round.id)}>✓ Marcar comanda entregada</button>}
+              {roundStatus(round) === 'LISTA' && <button className="btn" onClick={async () => {
+                      const result = await markRoundDelivered(currentOrder.id, round.id)
+                      if (result?.ok === false) window.alert(result.message)
+                    }}>✓ Marcar comanda entregada</button>}
             </div>
           ))}
 
