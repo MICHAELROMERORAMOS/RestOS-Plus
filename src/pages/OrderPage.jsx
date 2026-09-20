@@ -64,7 +64,7 @@ export default function OrderPage({ onNavigate }) {
   )), [state.tables, targetZoneId, currentTableId, currentOrder])
 
   const draftTotal = draft.reduce((sum, line) => sum + line.price * line.quantity, 0)
-  const accountTotal = (currentOrder ? orderTotal(currentOrder) : 0) + draftTotal
+  const currentOrderTotal = currentOrder ? orderTotal(currentOrder) : 0
   const currentTableLabel = currentTableId ? getTableLabel(currentTableId) : 'Mesa —'
   const accountTableLabel = currentOrder?.tableIds?.length
     ? currentOrder.tableIds.map((id) => getTableLabel(id)).join(' + ')
@@ -84,6 +84,7 @@ export default function OrderPage({ onNavigate }) {
   const tableAccountTotal = tableOrders.reduce((sum, order) => sum + orderTotal(order), 0)
   const tableAccountPaid = tableOrders.reduce((sum, order) => sum + orderPaidTotal(order), 0)
   const tableAccountBalance = tableOrders.reduce((sum, order) => sum + orderBalance(order), 0)
+  const accountTotal = (orderMode === 'table' ? tableAccountTotal : currentOrderTotal) + draftTotal
 
   function allocateTablePayment(requestedAmount) {
     let remaining = Math.min(Number(requestedAmount || 0), tableAccountBalance)
