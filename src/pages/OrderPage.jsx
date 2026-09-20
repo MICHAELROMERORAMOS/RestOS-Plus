@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { useRestaurant, orderTotal } from '../context/RestaurantContext.jsx'
+import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const roundStatus = (round) => {
   const items = round.items.filter((item) => !item.voided)
@@ -26,10 +27,12 @@ const availabilityIcon = {
 
 export default function OrderPage({ onNavigate }) {
   const restaurant = useRestaurant()
+  const auth = useAuth()
+  const canCharge = auth.can('payments.create')
   const {
     products, orderMode, currentTableId, currentOrder, draft, pager, setPager, setOrderMode,
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft, voidSentItem,
-    markRoundDelivered, transferCurrentTable, joinTable, state,
+    markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
     tableLabel: getTableLabel, getTableTransferStatus,
   } = restaurant
   const [category, setCategory] = useState('all')
@@ -39,6 +42,9 @@ export default function OrderPage({ onNavigate }) {
   const [tableAction, setTableAction] = useState(null)
   const [targetZoneId, setTargetZoneId] = useState('')
   const [targetTableId, setTargetTableId] = useState('')
+  const [showCharge, setShowCharge] = useState(false)
+  const [chargeAmount, setChargeAmount] = useState('')
+  const [chargeMethod, setChargeMethod] = useState('card')
 
   const filteredProducts = useMemo(() => products.filter((product) => (
     (category === 'all' || product.category === category)
@@ -63,6 +69,76 @@ export default function OrderPage({ onNavigate }) {
   const accountTableLabel = currentOrder?.tableIds?.length
     ? currentOrder.tableIds.map((id) => getTableLabel(id)).join(' + ')
     : currentTableLabel
+  const tableOrders = useMemo(() => {
+    if (orderMode !== 'table' || !currentTableId) return []
+    return state.orders
+      .filter((order) => (
+        order.mode === 'table'
+        && (order.tableIds || []).includes(currentTableId)
+        && !['closed', 'cancelled', 'merged'].includes(order.status)
+        && (order.rounds?.length || 0) > 0
+      ))
+      .sort((a, b) => (a.created || 0) - (b.created || 0))
+  }, [state.orders, orderMode, currentTableId])
+
+  const tableAccountTotal = tableOrders.reduce((sum, order) => sum + orderTotal(order), 0)
+  const tableAccountPaid = tableOrders.reduce((sum, order) => sum + orderPaidTotal(order), 0)
+  const tableAccountBalance = tableOrders.reduce((sum, order) => sum + orderBalance(order), 0)
+
+  function allocateTablePayment(requestedAmount) {
+    let remaining = Math.min(Number(requestedAmount || 0), tableAccountBalance)
+    const allocations = []
+
+    for (const order of tableOrders) {
+      if (remaining <= 0.005) break
+      const balance = orderBalance(order)
+      if (balance <= 0.005) continue
+      const amount = Math.min(balance, remaining)
+      allocations.push({ orderId: order.id, amount })
+      remaining -= amount
+    }
+
+    return allocations
+  }
+
+  function openChargeModal() {
+    if (!canCharge) return window.alert('Tu rol no tiene permiso para cobrar cuentas.')
+    if (!currentTableId || !tableOrders.length) return window.alert('No hay una cuenta enviada para cobrar en esta mesa.')
+    if (tableAccountBalance <= 0.005) return window.alert('La cuenta de esta mesa ya está pagada.')
+
+    if (draft.length) {
+      const continueAnyway = window.confirm(
+        'Hay productos nuevos SIN ENVIAR. Esos productos todavía no forman parte del saldo a cobrar. ¿Quieres cobrar únicamente lo ya enviado?',
+      )
+      if (!continueAnyway) return
+    }
+
+    setChargeAmount(tableAccountBalance.toFixed(2))
+    setChargeMethod('card')
+    setShowCharge(true)
+  }
+
+  function confirmCharge() {
+    if (!canCharge) return window.alert('Tu rol no tiene permiso para cobrar cuentas.')
+
+    const amount = Number(String(chargeAmount).replace(',', '.'))
+    if (!Number.isFinite(amount) || amount <= 0) return window.alert('Introduce un importe válido.')
+    if (amount > tableAccountBalance + 0.005) return window.alert('El importe supera el saldo pendiente de la mesa.')
+
+    const allocations = allocateTablePayment(amount)
+    if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
+
+    const confirmed = window.confirm(
+      `¿Confirmar cobro de €${amount.toFixed(2)} para ${accountTableLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`,
+    )
+    if (!confirmed) return
+
+    const result = recordPayments(allocations, chargeMethod)
+    if (!result.ok) return window.alert(result.message)
+
+    setShowCharge(false)
+    setChargeAmount('')
+  }
 
   function handleSend() {
     const result = sendDraft({ prepaid: false })
@@ -128,7 +204,12 @@ export default function OrderPage({ onNavigate }) {
         </select>
         <input value={search} placeholder="Buscar producto…" onChange={(event) => setSearch(event.target.value)} />
         {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
-        {orderMode === 'table' && <button className="btn" onClick={() => onNavigate('cashier')}>✂ Dividir / pago parcial</button>}
+        {orderMode === 'table' && canCharge && (
+          <button className="btn pay-inline-btn" disabled={!tableOrders.length || tableAccountBalance <= 0.005} onClick={openChargeModal}>
+            💳 Cobrar mesa
+          </button>
+        )}
+        {orderMode === 'table' && canCharge && <button className="btn" onClick={() => onNavigate('cashier')}>✂ Dividir / pago parcial</button>}
         {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
       </div>
 
@@ -191,7 +272,24 @@ export default function OrderPage({ onNavigate }) {
             </div>
           ) : <div className="empty-inline">No hay productos nuevos por enviar</div>}
 
-          <div className="order-summary"><div className="row plain"><b>Total cuenta</b><strong>€{accountTotal.toFixed(2)}</strong></div></div>
+          <div className="order-summary">
+            <div className="row plain"><b>Total cuenta</b><strong>€{accountTotal.toFixed(2)}</strong></div>
+            {orderMode === 'table' && tableOrders.length > 0 && (
+              <>
+                <div className="row plain"><span>Pagado</span><strong>€{tableAccountPaid.toFixed(2)}</strong></div>
+                <div className="row plain"><b>Saldo pendiente</b><strong>€{tableAccountBalance.toFixed(2)}</strong></div>
+              </>
+            )}
+          </div>
+          {orderMode === 'table' && canCharge && tableOrders.length > 0 && (
+            <button
+              className="btn payment-from-order full"
+              disabled={tableAccountBalance <= 0.005}
+              onClick={openChargeModal}
+            >
+              💳 Cobrar mesa desde esta pantalla
+            </button>
+          )}
           {orderMode === 'table' ? (
             <button className="btn primary full action-main" disabled={!draft.length} onClick={handleSend}>Enviar nuevos productos</button>
           ) : (
@@ -200,6 +298,59 @@ export default function OrderPage({ onNavigate }) {
           {orderMode === 'quick' && <div className="notice">En servicio rápido el pedido se cobra antes de enviarse a Cocina/Bar.</div>}
         </div>
       </div>
+
+      {showCharge && (
+        <div className="modal open" onClick={() => setShowCharge(false)}>
+          <div className="modal-card order-payment-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title">
+              <div>
+                <h3>💳 Cobrar · {accountTableLabel}</h3>
+                <p className="muted">Cuenta consolidada de la mesa</p>
+              </div>
+              <button className="btn" onClick={() => setShowCharge(false)}>×</button>
+            </div>
+
+            <div className="order-payment-totals">
+              <div><span>Total</span><strong>€{tableAccountTotal.toFixed(2)}</strong></div>
+              <div><span>Pagado</span><strong>€{tableAccountPaid.toFixed(2)}</strong></div>
+              <div className="balance"><span>Saldo</span><strong>€{tableAccountBalance.toFixed(2)}</strong></div>
+            </div>
+
+            {draft.length > 0 && (
+              <div className="notice warn">
+                Hay productos sin enviar por €{draftTotal.toFixed(2)}. No están incluidos en este cobro hasta que los envíes a preparación.
+              </div>
+            )}
+
+            <div className="settings-form">
+              <label>
+                <span>Importe a cobrar</span>
+                <input
+                  inputMode="decimal"
+                  value={chargeAmount}
+                  onChange={(event) => setChargeAmount(event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>Método de pago</span>
+                <select value={chargeMethod} onChange={(event) => setChargeMethod(event.target.value)}>
+                  <option value="card">Tarjeta</option>
+                  <option value="cash">Efectivo</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="order-payment-shortcuts">
+              <button className="btn" onClick={() => setChargeAmount((tableAccountBalance / 2).toFixed(2))}>½ saldo</button>
+              <button className="btn" onClick={() => setChargeAmount(tableAccountBalance.toFixed(2))}>Saldo completo</button>
+              <button className="btn" onClick={() => { setShowCharge(false); onNavigate('cashier') }}>✂ Dividir cuenta</button>
+            </div>
+
+            <button className="btn primary full" onClick={confirmCharge}>Confirmar cobro</button>
+          </div>
+        </div>
+      )}
 
       {noteLine && (
         <div className="modal open">
