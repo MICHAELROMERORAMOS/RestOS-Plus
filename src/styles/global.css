@@ -1449,6 +1449,40 @@ html, body {
   color: var(--brand);
 }
 
+.delivered-history-card,
+.invoice-detail-card {
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.delivered-history-list,
+.invoice-detail-lines {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 2px 0;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.invoice-detail-card .invoice-origin-summary,
+.invoice-detail-card .totals {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 650px) {
+  .delivered-history-card,
+  .invoice-detail-card {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+  }
+}
+
 /* Desktop/tablet: collapsible sidebar + independent scrolling */
 .brand-short,
 .logout-icon {
