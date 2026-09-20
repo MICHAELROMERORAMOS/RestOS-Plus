@@ -2065,3 +2065,32 @@ html, body {
     align-items: flex-start;
   }
 }
+
+/* Fully paid account void */
+.paid-order-void-btn {
+  margin-top: 8px;
+  white-space: nowrap;
+}
+
+.paid-account-summary {
+  grid-template-columns: 1fr 1fr;
+}
+
+.order-history-copy {
+  min-width: 0;
+}
+
+.order-history-copy .void-request-state,
+.order-history-copy .void-lock {
+  margin-top: 8px;
+}
+
+@media (max-width: 650px) {
+  .paid-account-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .paid-order-void-btn {
+    width: 100%;
+  }
+}
