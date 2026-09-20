@@ -1661,3 +1661,143 @@ html, body {
     width: 100%;
   }
 }
+
+/* Controlled item void authorization */
+.kds-product-row-controlled {
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+}
+
+.kds-void-btn {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.kitchen-void-rule {
+  margin-top: -6px;
+  margin-bottom: 16px;
+}
+
+.void-lock {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 7px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  background: #fff5e5;
+  color: #8a641d;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.void-lock.critical {
+  background: #fff0f0;
+  color: var(--danger);
+}
+
+.voided-reason {
+  display: block;
+  margin-top: 6px;
+  max-width: 180px;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.controlled-void-modal {
+  z-index: 110;
+}
+
+.controlled-void-card {
+  width: min(620px, 100%);
+}
+
+.controlled-void-product {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8faf9;
+}
+
+.controlled-void-product b,
+.controlled-void-product small {
+  display: block;
+}
+
+.controlled-void-product small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.controlled-void-product strong {
+  flex: 0 0 auto;
+  font-size: 19px;
+  color: var(--brand);
+}
+
+.controlled-void-reason,
+.void-code-field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.controlled-void-reason > span,
+.void-code-field > span {
+  font-size: 12px;
+  font-weight: 850;
+  color: #53665d;
+}
+
+.controlled-void-reason textarea {
+  min-height: 105px;
+}
+
+.void-code-field input {
+  width: 100%;
+  height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: white;
+  padding: 0 14px;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 950;
+  letter-spacing: 10px;
+}
+
+.refund-due-row strong,
+.refund_due .table-status {
+  color: var(--danger);
+}
+
+.table.refund_due {
+  background: #fff4f4;
+}
+
+@media (max-width: 650px) {
+  .kds-product-row-controlled {
+    grid-template-columns: 48px 1fr;
+  }
+
+  .kds-void-btn {
+    grid-column: 2;
+    width: max-content;
+  }
+
+  .controlled-void-product {
+    align-items: flex-start;
+  }
+
+  .void-code-field input {
+    font-size: 24px;
+    letter-spacing: 7px;
+  }
+}
