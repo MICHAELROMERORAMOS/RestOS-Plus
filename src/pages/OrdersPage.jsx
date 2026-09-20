@@ -245,7 +245,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {showDelivered && <DeliveredOrderModal orders={completedOrders} onClose={() => setShowDelivered(false)} formatMoney={formatMoney} tableLabelFor={(order) => tableLabel(order.tableId)} />}
+      {showDelivered && <DeliveredOrderModal orders={completedOrders} onClose={() => setShowDelivered(false)} formatMoney={formatMoney} tableLabelFor={(order) => (order.tableIds || []).map((id) => tableLabel(id)).join(' + ')} />}
 
       {voidTarget && (
         <div className="modal open controlled-void-modal" onClick={closeVoidModal}>
