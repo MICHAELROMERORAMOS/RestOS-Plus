@@ -7,6 +7,7 @@ export const NAV_ITEMS = [
   { id: 'bar', icon: '🍸', label: 'Bar', permission: 'bar.view' },
   { id: 'cashier', icon: '💳', label: 'Cobrar', permission: 'payments.create' },
   { id: 'void-invoice', icon: '⊘', label: 'Anular factura', permission: 'payments.create' },
+  { id: 'invoice-register', icon: '🧾', label: 'Facturas cobradas', permission: 'reports.view' },
   { id: 'orders', icon: '☷', label: 'Pedidos', permission: 'orders.view' },
   { id: 'inventory', icon: '📦', label: 'Inventario', permission: 'inventory.view' },
   { id: 'products', icon: '🍔', label: 'Productos', permission: 'products.view' },
