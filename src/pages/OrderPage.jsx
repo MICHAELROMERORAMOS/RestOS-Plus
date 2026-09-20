@@ -194,11 +194,6 @@ export default function OrderPage({ onNavigate }) {
         </div>
       </div>
 
-      <div className="order-mode">
-        <button className={`seg ${orderMode === 'table' ? 'active' : ''}`} onClick={() => setOrderMode('table')}>🍽️ Servicio de mesa</button>
-        <button className={`seg ${orderMode === 'quick' ? 'active' : ''}`} onClick={() => setOrderMode('quick')}>⚡ Servicio rápido / Prepago</button>
-      </div>
-
       <div className="order-tools">
         <select value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="all">Todas las categorías</option><option>Comida</option><option>Bebidas</option><option>Postres</option>
