@@ -11,6 +11,7 @@ import {
   requestAccountVoidAuthorization,
   sendAccountVoidConfirmation,
 } from '../services/voidAuthorizationService.js'
+import DeliveredOrderModal, { isPaidAndDelivered } from '../components/orders/DeliveredOrderModal.jsx'
 
 export default function OrdersPage() {
   const auth = useAuth()
@@ -30,6 +31,9 @@ export default function OrdersPage() {
   const [voidCode, setVoidCode] = useState('')
   const [expiresAt, setExpiresAt] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [showDelivered, setShowDelivered] = useState(false)
+
+  const completedOrders = state.orders.filter((order) => ['table', 'quick'].includes(order.mode) && isPaidAndDelivered(order, orderBalance))
 
   function orderItems(order) {
     return (order.rounds || []).flatMap((round) => (
@@ -62,11 +66,11 @@ export default function OrdersPage() {
     const balance = orderBalance(order)
 
     if (paid <= 0.005 || balance > 0.005) {
-      return window.alert('Esta opción es únicamente para cuentas ya cobradas al 100 %.')
+      return window.alert('Esta opciÃ³n es Ãºnicamente para cuentas ya cobradas al 100 %.')
     }
 
     if (Number(order.refundDue || 0) > 0.005 || order.accountVoidedAt) {
-      return window.alert('Esta cuenta ya tiene una anulación o reembolso pendiente.')
+      return window.alert('Esta cuenta ya tiene una anulaciÃ³n o reembolso pendiente.')
     }
 
     setVoidTarget({
@@ -103,7 +107,7 @@ export default function OrdersPage() {
       setExpiresAt(result.expiresAt || null)
       setVoidCode('')
     } catch (error) {
-      window.alert(error?.message || 'No se pudo enviar el código al administrador.')
+      window.alert(error?.message || 'No se pudo enviar el cÃ³digo al administrador.')
     } finally {
       setBusy(false)
     }
@@ -114,7 +118,7 @@ export default function OrdersPage() {
 
     const code = voidCode.trim()
     if (!/^\d{6}$/.test(code)) {
-      return window.alert('Introduce el código de 6 dígitos enviado al correo del administrador.')
+      return window.alert('Introduce el cÃ³digo de 6 dÃ­gitos enviado al correo del administrador.')
     }
 
     setBusy(true)
@@ -146,7 +150,7 @@ export default function OrdersPage() {
       try {
         await sendAccountVoidConfirmation(auditId)
       } catch (error) {
-        emailWarning = `\n\nLa cuenta fue anulada, pero no se pudo enviar el correo de confirmación: ${error?.message || 'error de correo'}`
+        emailWarning = `\n\nLa cuenta fue anulada, pero no se pudo enviar el correo de confirmaciÃ³n: ${error?.message || 'error de correo'}`
       }
 
       setBusy(false)
@@ -160,7 +164,7 @@ export default function OrdersPage() {
         `Cuenta cobrada anulada. Reembolso pendiente: ${formatMoney(result.refundDue)}.${emailWarning}`,
       )
     } catch (error) {
-      window.alert(error?.message || 'No se pudo validar la anulación de la cuenta cobrada.')
+      window.alert(error?.message || 'No se pudo validar la anulaciÃ³n de la cuenta cobrada.')
       setBusy(false)
     }
   }
@@ -172,6 +176,7 @@ export default function OrdersPage() {
           <h2>Pedidos</h2>
           <p>Historial, estado operativo y rondas enviadas.</p>
         </div>
+        <button className="btn" onClick={() => setShowDelivered(true)}>ð¦ Entregados ({completedOrders.length})</button>
       </div>
 
       <div className="card">
@@ -182,8 +187,8 @@ export default function OrdersPage() {
             const tableText = order.tableIds?.length
               ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
               : order.mode === 'delivery'
-                ? `Domicilio · ${order.delivery?.customerName || 'Cliente'}`
-                : 'Servicio rápido'
+                ? `Domicilio Â· ${order.delivery?.customerName || 'Cliente'}`
+                : 'Servicio rÃ¡pido'
 
             const paid = orderPaidTotal(order)
             const balance = orderBalance(order)
@@ -198,27 +203,27 @@ export default function OrdersPage() {
             return (
               <div className="row order-history-row" key={order.id}>
                 <div className="order-history-copy">
-                  <b>#{order.id} · {tableText}{order.pager ? ` · Pager ${order.pager}` : ''}</b>
+                  <b>#{order.id} Â· {tableText}{order.pager ? ` Â· Pager ${order.pager}` : ''}</b>
                   <small>
                     {order.mode === 'delivery' && order.delivery
-                      ? `${order.delivery.address} · ${order.delivery.neighborhood} · ${order.delivery.city} · ${order.delivery.phone} · `
+                      ? `${order.delivery.address} Â· ${order.delivery.neighborhood} Â· ${order.delivery.city} Â· ${order.delivery.phone} Â· `
                       : ''}
-                    {order.rounds.length} comandas · {
+                    {order.rounds.length} comandas Â· {
                       (order.accountVoidedAt ? allItems : activeItems)
-                        .map((item) => `${item.quantity}× ${item.name}`)
+                        .map((item) => `${item.quantity}Ã ${item.name}`)
                         .join(', ') || 'Sin productos'
                     }
                   </small>
 
                   {order.accountVoidedAt && (
                     <span className="void-request-state rejected">
-                      Cuenta anulada · Reembolso pendiente {formatMoney(order.refundDue || paid)}
+                      Cuenta anulada Â· Reembolso pendiente {formatMoney(order.refundDue || paid)}
                     </span>
                   )}
 
                   {order.fiscalCorrectionRequired && (
                     <span className="void-lock critical">
-                      Factura emitida · requiere corrección fiscal externa
+                      Factura emitida Â· requiere correcciÃ³n fiscal externa
                     </span>
                   )}
                 </div>
@@ -230,25 +235,27 @@ export default function OrdersPage() {
 
                   {canVoidPaidAccount && fullyPaidTable && (
                     <button className="mini danger paid-order-void-btn" onClick={() => openPaidVoid(order, tableText)}>
-                      🔐 Anular cuenta cobrada
+                      ð Anular cuenta cobrada
                     </button>
                   )}
                 </div>
               </div>
             )
-          }) : <div className="empty-block">Todavía no hay pedidos.</div>}
+          }) : <div className="empty-block">TodavÃ­a no hay pedidos.</div>}
         </div>
       </div>
+
+      {showDelivered && <DeliveredOrderModal orders={completedOrders} onClose={() => setShowDelivered(false)} formatMoney={formatMoney} tableLabelFor={(order) => tableLabel(order.tableId)} />}
 
       {voidTarget && (
         <div className="modal open controlled-void-modal" onClick={closeVoidModal}>
           <div className="modal-card controlled-void-card" onClick={(event) => event.stopPropagation()}>
             <div className="section-title">
               <div>
-                <h3>🔐 Anular cuenta ya cobrada</h3>
-                <p className="muted">{voidTarget.tableText} · Orden #{voidTarget.order.id}</p>
+                <h3>ð Anular cuenta ya cobrada</h3>
+                <p className="muted">{voidTarget.tableText} Â· Orden #{voidTarget.order.id}</p>
               </div>
-              <button className="btn" disabled={busy} onClick={closeVoidModal}>×</button>
+              <button className="btn" disabled={busy} onClick={closeVoidModal}>Ã</button>
             </div>
 
             <div className="account-void-summary paid-account-summary">
@@ -265,7 +272,7 @@ export default function OrdersPage() {
             <div className="account-void-products">
               {voidTarget.items.map((item) => (
                 <div key={item.lineId}>
-                  <span>{item.quantity} × {item.name}</span>
+                  <span>{item.quantity} Ã {item.name}</span>
                   <strong>{formatMoney(item.amount)}</strong>
                 </div>
               ))}
@@ -277,29 +284,29 @@ export default function OrdersPage() {
                 value={voidReason}
                 disabled={Boolean(requestId) || busy}
                 onChange={(event) => setVoidReason(event.target.value)}
-                placeholder="Explica por qué debe anularse esta cuenta ya cobrada"
+                placeholder="Explica por quÃ© debe anularse esta cuenta ya cobrada"
               />
             </label>
 
             {!requestId ? (
               <>
                 <div className="notice warn">
-                  Esta operación es exclusiva del Owner / Super Admin. Se enviará un código de 6 dígitos al correo del administrador y la mesa no volverá a abrirse.
+                  Esta operaciÃ³n es exclusiva del Owner / Super Admin. Se enviarÃ¡ un cÃ³digo de 6 dÃ­gitos al correo del administrador y la mesa no volverÃ¡ a abrirse.
                 </div>
 
                 <button className="btn primary full" disabled={busy} onClick={requestCode}>
-                  {busy ? 'Enviando código…' : 'Enviar código al administrador'}
+                  {busy ? 'Enviando cÃ³digoâ¦' : 'Enviar cÃ³digo al administrador'}
                 </button>
               </>
             ) : (
               <>
                 <div className="notice">
-                  Código enviado.
-                  {expiresAt ? ` Válido hasta ${new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
+                  CÃ³digo enviado.
+                  {expiresAt ? ` VÃ¡lido hasta ${new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
                 </div>
 
                 <label className="void-code-field">
-                  <span>Código de autorización</span>
+                  <span>CÃ³digo de autorizaciÃ³n</span>
                   <input
                     inputMode="numeric"
                     maxLength="6"
@@ -310,11 +317,11 @@ export default function OrdersPage() {
                 </label>
 
                 <div className="notice warn">
-                  Al confirmar se anulará la cuenta histórica completa y el total ya cobrado quedará como reembolso pendiente.
+                  Al confirmar se anularÃ¡ la cuenta histÃ³rica completa y el total ya cobrado quedarÃ¡ como reembolso pendiente.
                 </div>
 
                 <button className="btn primary full" disabled={busy || voidCode.length !== 6} onClick={confirmCode}>
-                  {busy ? 'Validando…' : 'Validar código y anular cuenta cobrada'}
+                  {busy ? 'Validandoâ¦' : 'Validar cÃ³digo y anular cuenta cobrada'}
                 </button>
               </>
             )}
