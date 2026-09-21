@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
+import InvoiceCustomerFields, {
+  invoiceCustomerFromOrders,
+  validateInvoiceCustomer,
+} from '../components/payments/InvoiceCustomerFields.jsx'
 import { useRestaurant, orderBalance, orderHasInvoice, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
@@ -58,6 +62,8 @@ export default function OrderPage({ onNavigate }) {
   const [showSplit, setShowSplit] = useState(false)
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeMethod, setChargeMethod] = useState('card')
+  const [chargeInvoiceCustomer, setChargeInvoiceCustomer] = useState(() => invoiceCustomerFromOrders([]))
+  const [chargeBusy, setChargeBusy] = useState(false)
   const [myVoidRequests, setMyVoidRequests] = useState([])
   const [showUnpaidVoidRequest, setShowUnpaidVoidRequest] = useState(false)
   const [unpaidVoidSelected, setUnpaidVoidSelected] = useState({})
@@ -262,6 +268,7 @@ export default function OrderPage({ onNavigate }) {
 
     setChargeAmount(tableAccountBalance.toFixed(2))
     setChargeMethod('card')
+    setChargeInvoiceCustomer(invoiceCustomerFromOrders(tableOrders))
     setShowCharge(true)
   }
 
@@ -277,6 +284,7 @@ export default function OrderPage({ onNavigate }) {
       if (!continueAnyway) return
     }
 
+    if (!showCharge) setChargeInvoiceCustomer(invoiceCustomerFromOrders(tableOrders))
     setShowCharge(false)
     setShowSplit(true)
   }
@@ -476,12 +484,20 @@ export default function OrderPage({ onNavigate }) {
     const allocations = allocateTablePayment(amount)
     if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
 
+    const customerResult = validateInvoiceCustomer(chargeInvoiceCustomer)
+    if (!customerResult.ok) return window.alert(customerResult.message)
+
+    const invoiceText = customerResult.customer.requested
+      ? `${customerResult.customer.fullName} · ${customerResult.customer.documentType} ${customerResult.customer.documentNumber}`
+      : 'Consumidor final'
     const confirmed = window.confirm(
-      `¿Confirmar cobro de ${formatMoney(amount)} para ${accountTableLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`,
+      `¿Confirmar cobro de ${formatMoney(amount)} para ${accountTableLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}\nFactura: ${invoiceText}`,
     )
     if (!confirmed) return
 
-    const result = await recordPayments(allocations, chargeMethod)
+    setChargeBusy(true)
+    const result = await recordPayments(allocations, chargeMethod, customerResult.customer)
+    setChargeBusy(false)
     if (!result.ok) return window.alert(result.message)
 
     setShowCharge(false)
@@ -869,14 +885,14 @@ export default function OrderPage({ onNavigate }) {
       )}
 
       {showCharge && (
-        <div className="modal open" onClick={() => setShowCharge(false)}>
+        <div className="modal open" onClick={() => !chargeBusy && setShowCharge(false)}>
           <div className="modal-card order-payment-modal" onClick={(event) => event.stopPropagation()}>
             <div className="section-title">
               <div>
                 <h3>💳 Cobrar · {accountTableLabel}</h3>
                 <p className="muted">Cuenta consolidada de la mesa</p>
               </div>
-              <button className="btn" onClick={() => setShowCharge(false)}>×</button>
+              <button className="btn" disabled={chargeBusy} onClick={() => setShowCharge(false)}>×</button>
             </div>
 
             <div className="order-payment-totals">
@@ -910,13 +926,21 @@ export default function OrderPage({ onNavigate }) {
               </label>
             </div>
 
+            <InvoiceCustomerFields
+              value={chargeInvoiceCustomer}
+              onChange={setChargeInvoiceCustomer}
+              disabled={chargeBusy}
+            />
+
             <div className="order-payment-shortcuts">
               <button className="btn" onClick={() => setChargeAmount((tableAccountBalance / 2).toFixed(2))}>½ saldo</button>
               <button className="btn" onClick={() => setChargeAmount(tableAccountBalance.toFixed(2))}>Saldo completo</button>
               <button className="btn" onClick={openSplitModal}>✂ Dividir cuenta</button>
             </div>
 
-            <button className="btn primary full" onClick={confirmCharge}>Confirmar cobro</button>
+            <button className="btn primary full" disabled={chargeBusy} onClick={confirmCharge}>
+              {chargeBusy ? 'Registrando cobro…' : 'Confirmar cobro'}
+            </button>
           </div>
         </div>
       )}
@@ -925,6 +949,7 @@ export default function OrderPage({ onNavigate }) {
         <SplitBillModal
           orders={tableOrders}
           tableText={accountTableLabel}
+          initialInvoiceCustomer={chargeInvoiceCustomer}
           onClose={() => setShowSplit(false)}
         />
       )}

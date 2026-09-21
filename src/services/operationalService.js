@@ -130,6 +130,9 @@ function mapOperationalOrders(payload) {
       id: Number(raw.order_number),
       serverId: raw.id,
       mode: raw.service_mode === 'counter' ? 'quick' : raw.service_mode,
+      customerId: raw.customer_id || null,
+      customerName: raw.customer_name || '',
+      invoiceCustomer: raw.invoice_customer || null,
       tableIds: raw.table_ids || [],
       pager: raw.pager_number || null,
       delivery,
@@ -341,12 +344,13 @@ export async function joinOrderTableRemote(orderServerId, tableId) {
   return { ok: true }
 }
 
-export async function recordOrderPaymentsRemote(allocations, method) {
+export async function recordOrderPaymentsRemote(allocations, method, invoiceCustomer = null) {
   const client = requireSupabase()
 
   const { data, error } = await client.rpc('record_order_payments', {
     p_allocations: allocations,
     p_method: method,
+    p_invoice_customer: invoiceCustomer,
   })
 
   if (error) throw error

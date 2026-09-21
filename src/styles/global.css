@@ -1050,7 +1050,104 @@ html, body {
 }
 
 .order-payment-modal {
-  width: min(620px, 100%);
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+
+.cashier-payment-modal {
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+
+.cashier-payment-fields {
+  grid-template-columns: 1fr 1fr;
+}
+
+.invoice-customer-panel {
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: #fafcfb;
+  overflow: hidden;
+}
+
+.invoice-customer-panel.enabled {
+  border-color: #b8cfc4;
+  background: #f6faf8;
+}
+
+.invoice-customer-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 15px 16px;
+  cursor: pointer;
+}
+
+.invoice-customer-toggle input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--brand);
+}
+
+.invoice-customer-toggle span {
+  display: grid;
+  gap: 3px;
+}
+
+.invoice-customer-toggle small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.invoice-customer-fields {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.invoice-customer-phone-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+}
+
+.invoice-customer-phone-row label,
+.invoice-customer-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.invoice-customer-phone-row label > span,
+.invoice-customer-grid label > span {
+  color: #46554d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.invoice-customer-phone-row input,
+.invoice-customer-grid input,
+.invoice-customer-grid select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: white;
+  padding: 0 11px;
+}
+
+.invoice-customer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+}
+
+.invoice-customer-grid .wide {
+  grid-column: 1 / -1;
 }
 
 .order-payment-totals {
@@ -1095,6 +1192,16 @@ html, body {
 }
 
 @media (max-width: 650px) {
+  .cashier-payment-fields,
+  .invoice-customer-grid,
+  .invoice-customer-phone-row {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-customer-phone-row .btn {
+    width: 100%;
+  }
+
   .order-payment-totals {
     grid-template-columns: 1fr;
   }
@@ -1735,6 +1842,47 @@ html, body {
   color: var(--brand);
 }
 
+.invoice-billing-customer {
+  display: grid;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid #bfd3c9;
+  border-radius: 13px;
+  background: #f2f8f5;
+  flex: 0 0 auto;
+}
+
+.invoice-billing-customer.consumer-final {
+  border-color: var(--line);
+  background: #fafcfb;
+}
+
+.invoice-billing-customer.consumer-final small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.invoice-billing-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.invoice-billing-heading > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .7px;
+}
+
+.invoice-billing-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: #46554d;
+  font-size: 12px;
+}
+
 .delivered-history-card,
 .invoice-detail-card {
   width: min(760px, 100%);
@@ -1756,6 +1904,7 @@ html, body {
 }
 
 .invoice-detail-card .invoice-origin-summary,
+.invoice-detail-card .invoice-billing-customer,
 .invoice-detail-card .totals {
   flex: 0 0 auto;
 }

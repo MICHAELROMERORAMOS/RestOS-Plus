@@ -25,7 +25,7 @@ function tableText(row) {
 }
 
 function customerName(row) {
-  return row.customer?.name || row.delivery?.customerName || ''
+  return row.billingCustomer?.name || row.customer?.name || row.delivery?.customerName || ''
 }
 
 function originDescription(row) {
@@ -53,6 +53,34 @@ function OriginSummary({ invoice, compact = false }) {
           {serviceMode(invoice) === 'delivery' && delivery.phone && <span>📱 {delivery.phone}</span>}
         </div>
       )}
+      {compact && name && <div className="invoice-origin-details"><span>👤 {name}</span></div>}
+    </div>
+  )
+}
+
+function BillingCustomerSummary({ invoice }) {
+  const customer = invoice.billingCustomer
+
+  if (!customer) {
+    return (
+      <div className="invoice-billing-customer consumer-final">
+        <div><b>Factura a consumidor final</b><small>No se solicitaron datos personales para esta factura.</small></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="invoice-billing-customer">
+      <div className="invoice-billing-heading">
+        <span>FACTURADA A</span>
+        <b>{customer.name}</b>
+      </div>
+      <div className="invoice-billing-details">
+        <span><b>{customer.documentType}</b> {customer.documentNumber}</span>
+        {customer.phone && <span>📱 {customer.phone}</span>}
+        {customer.email && <span>✉ {customer.email}</span>}
+        {customer.address && <span>📍 {customer.address}{customer.city ? ` · ${customer.city}` : ''}</span>}
+      </div>
     </div>
   )
 }
@@ -130,6 +158,7 @@ export default function InvoiceRegisterPage() {
           <div className="modal-card invoice-detail-card" onClick={(event) => event.stopPropagation()}>
             <div className="section-title"><div><h3>{selected.invoiceNumber}</h3><p className="muted">Orden #{selected.orderNumber} · {new Date(selected.issuedAt).toLocaleString('es-CO')} · {selected.voided ? 'Anulada' : 'Válida'}</p></div><button className="btn" onClick={() => setSelected(null)}>×</button></div>
             <OriginSummary invoice={selected} />
+            <BillingCustomerSummary invoice={selected} />
             <div className="list invoice-detail-lines">{(selected.items || []).map((item, index) => <div className="row" key={index}><span>{item.quantity} × {item.name}<small>IVA {item.taxRate || 0}% · {formatMoney(item.unitPrice)} c/u</small></span><b>{formatMoney(item.amount)}</b></div>)}</div>
             <div className="totals"><div>Subtotal <b>{formatMoney(selected.subtotal)}</b></div><div>IVA <b>{formatMoney(selected.taxTotal)}</b></div><div>Total <b>{formatMoney(selected.total)}</b></div><div>Valor pagado <b>{formatMoney(selected.paidTotal || selected.total)}</b></div></div>
           </div>

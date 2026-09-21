@@ -46,6 +46,22 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function paymentErrorMessage(error) {
+  const message = String(error?.message || '')
+
+  if (message.includes('Customer document or phone is already assigned')) {
+    return 'El documento o el celular ya pertenece a otro cliente. Verifica los datos antes de cobrar.'
+  }
+  if (message.includes('Customer does not belong to this restaurant')) {
+    return 'El cliente seleccionado no pertenece a este restaurante. Búscalo nuevamente por celular.'
+  }
+  if (message.includes('Not allowed to register payment')) {
+    return 'Tu usuario no tiene permiso para registrar este cobro.'
+  }
+
+  return message || 'No se pudo registrar el pago en Supabase.'
+}
+
 function normalizeStoredState(raw) {
   if (!raw) return createInitialDemoState()
   const initial = createInitialDemoState()
@@ -1544,7 +1560,7 @@ export function RestaurantProvider({ children }) {
     auth.isDesignMode, refreshOperationalOrdersByIds, activeLocation,
   ])
 
-  const recordPayments = useCallback(async (allocations, method = 'card') => {
+  const recordPayments = useCallback(async (allocations, method = 'card', invoiceCustomer = undefined) => {
     const normalized = (Array.isArray(allocations) ? allocations : [])
       .map((allocation) => ({
         orderId: allocation.orderId,
@@ -1582,7 +1598,11 @@ export function RestaurantProvider({ children }) {
           }
         })
 
-        const result = await recordOrderPaymentsRemote(remoteAllocations, method)
+        const result = await recordOrderPaymentsRemote(
+          remoteAllocations,
+          method,
+          invoiceCustomer === undefined ? null : invoiceCustomer,
+        )
         await refreshOperationalOrdersByIds(
           remoteAllocations.map((allocation) => allocation.orderId),
           activeLocation,
@@ -1590,7 +1610,7 @@ export function RestaurantProvider({ children }) {
         await refreshOperationalSummary(activeLocation)
         return { ok: true, applied: Number(result?.applied || 0) }
       } catch (error) {
-        return { ok: false, message: error?.message || 'No se pudo registrar el pago en Supabase.' }
+        return { ok: false, message: paymentErrorMessage(error) }
       }
     }
 
@@ -1624,6 +1644,25 @@ export function RestaurantProvider({ children }) {
 
         return {
           ...order,
+          customerId: invoiceCustomer?.requested
+            ? (invoiceCustomer.id || order.customerId || null)
+            : (invoiceCustomer === undefined || order.mode === 'delivery' ? order.customerId : null),
+          customerName: invoiceCustomer?.requested
+            ? invoiceCustomer.fullName
+            : (invoiceCustomer === undefined || order.mode === 'delivery' ? order.customerName : ''),
+          invoiceCustomer: invoiceCustomer === undefined
+            ? order.invoiceCustomer
+            : (invoiceCustomer.requested ? {
+                id: invoiceCustomer.id || null,
+                name: invoiceCustomer.fullName,
+                documentType: invoiceCustomer.documentType,
+                documentNumber: invoiceCustomer.documentNumber,
+                phone: invoiceCustomer.phone || null,
+                email: invoiceCustomer.email || null,
+                address: invoiceCustomer.address || null,
+                neighborhood: invoiceCustomer.neighborhood || null,
+                city: invoiceCustomer.city || null,
+              } : null),
           payments,
           status: paidInFull ? (waitingForFood ? 'waiting_food' : 'closed') : order.status,
           closedAt: paidInFull && !waitingForFood ? Date.now() : order.closedAt,

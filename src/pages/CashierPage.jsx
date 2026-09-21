@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
+import InvoiceCustomerFields, {
+  invoiceCustomerFromOrders,
+  validateInvoiceCustomer,
+} from '../components/payments/InvoiceCustomerFields.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import {
@@ -13,19 +17,6 @@ function money(value) {
 
 function groupKeyFor(order) {
   return [...(order.tableIds || [])].sort().join('|') || `order-${order.id}`
-}
-
-function askPaymentMethod() {
-  const raw = window.prompt('Método de pago: escribe cash o card. Pulsa Cancelar para abortar.', 'card')
-  if (raw === null) return null
-
-  const method = raw.trim().toLowerCase()
-  if (!['cash', 'card'].includes(method)) {
-    window.alert('Método inválido. Usa cash o card.')
-    return null
-  }
-
-  return method
 }
 
 function groupItems(group, { requestableOnly = false } = {}) {
@@ -59,6 +50,12 @@ export default function CashierPage() {
   const canRequestUnpaidVoid = auth.can('orders.void.request_unpaid')
 
   const [splitGroupKey, setSplitGroupKey] = useState(null)
+  const [chargeGroupKey, setChargeGroupKey] = useState(null)
+  const [chargeAmount, setChargeAmount] = useState('')
+  const [chargeMethod, setChargeMethod] = useState('card')
+  const [chargeLabel, setChargeLabel] = useState('')
+  const [chargeInvoiceCustomer, setChargeInvoiceCustomer] = useState(() => invoiceCustomerFromOrders([]))
+  const [chargeBusy, setChargeBusy] = useState(false)
   const [myVoidRequests, setMyVoidRequests] = useState([])
 
   const [voidRequestGroupKey, setVoidRequestGroupKey] = useState(null)
@@ -112,6 +109,10 @@ export default function CashierPage() {
 
   const splitGroup = splitGroupKey
     ? groups.find((group) => group.key === splitGroupKey) || null
+    : null
+
+  const chargeGroup = chargeGroupKey
+    ? groups.find((group) => group.key === chargeGroupKey) || null
     : null
 
   const voidRequestGroup = voidRequestGroupKey
@@ -182,46 +183,54 @@ export default function CashierPage() {
     return allocations
   }
 
-  async function performPayment(group, allocations, label) {
-    const total = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
-    if (total <= 0.005) return window.alert('No hay importe pendiente para cobrar.')
-
-    const method = askPaymentMethod()
-    if (!method) return
-
-    const confirmed = window.confirm(
-      `¿Confirmar cobro de ${formatMoney(total)} para ${group.tableText}?\n\n${label}\n\nSi todavía hay productos pendientes, la mesa seguirá marcada como Esperando comida.`,
-    )
-    if (!confirmed) return
-
-    const result = await recordPayments(allocations, method)
-    if (!result.ok) window.alert(result.message)
-  }
-
   function chargeFull(group) {
-    performPayment(
-      group,
-      allocateAcrossOrders(group, group.balance),
-      'Cuenta completa de la mesa.',
-    )
+    setChargeGroupKey(group.key)
+    setChargeAmount(money(group.balance))
+    setChargeMethod('card')
+    setChargeLabel('Cuenta completa.')
+    setChargeInvoiceCustomer(invoiceCustomerFromOrders(group.orders))
   }
 
   function chargeCustom(group) {
-    const raw = window.prompt(
-      `Saldo total de ${group.tableText}: ${formatMoney(group.balance)}. ¿Cuánto deseas cobrar ahora?`,
-      money(group.balance / 2),
-    )
-    if (raw === null) return
+    setChargeGroupKey(group.key)
+    setChargeAmount(money(group.balance / 2))
+    setChargeMethod('card')
+    setChargeLabel('Pago por importe.')
+    setChargeInvoiceCustomer(invoiceCustomerFromOrders(group.orders))
+  }
 
-    const amount = Number(String(raw).replace(',', '.'))
-    if (!Number.isFinite(amount) || amount <= 0) return window.alert('Importe inválido.')
-    if (amount > group.balance + 0.005) return window.alert('El importe supera el saldo pendiente.')
+  function closeCharge() {
+    if (chargeBusy) return
+    setChargeGroupKey(null)
+    setChargeAmount('')
+  }
 
-    performPayment(
-      group,
-      allocateAcrossOrders(group, amount),
-      'Pago parcial por importe.',
+  async function confirmPayment() {
+    if (!chargeGroup) return
+
+    const amount = Number(String(chargeAmount).replace(',', '.'))
+    if (!Number.isFinite(amount) || amount <= 0) return window.alert('Introduce un importe válido.')
+    if (amount > chargeGroup.balance + 0.005) return window.alert('El importe supera el saldo pendiente.')
+
+    const allocations = allocateAcrossOrders(chargeGroup, amount)
+    if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
+
+    const customerResult = validateInvoiceCustomer(chargeInvoiceCustomer)
+    if (!customerResult.ok) return window.alert(customerResult.message)
+
+    const invoiceText = customerResult.customer.requested
+      ? `${customerResult.customer.fullName} · ${customerResult.customer.documentType} ${customerResult.customer.documentNumber}`
+      : 'Consumidor final'
+    const confirmed = window.confirm(
+      `¿Confirmar cobro de ${formatMoney(amount)} para ${chargeGroup.tableText}?\n\n${chargeLabel}\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}\nFactura: ${invoiceText}`,
     )
+    if (!confirmed) return
+
+    setChargeBusy(true)
+    const result = await recordPayments(allocations, chargeMethod, customerResult.customer)
+    setChargeBusy(false)
+    if (!result.ok) return window.alert(result.message)
+    closeCharge()
   }
 
   function openVoidRequest(group) {
@@ -280,8 +289,8 @@ export default function CashierPage() {
     <section className="view active">
       <div className="hero">
         <div>
-          <h2>Caja · Cobrar mesa</h2>
-          <p>Una mesa se cobra como una sola cuenta. Las anulaciones sin pago pasan por Cocina; las facturas pagadas se anulan desde el módulo Anular factura.</p>
+          <h2>Caja · Cobrar cuentas</h2>
+          <p>Cobra mesas, servicios rápidos y domicilios; la factura puede quedar a consumidor final o a nombre del cliente.</p>
         </div>
       </div>
 
@@ -327,10 +336,60 @@ export default function CashierPage() {
         </div>
       </div>
 
+      {chargeGroup && (
+        <div className="modal open" onClick={closeCharge}>
+          <div className="modal-card cashier-payment-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title">
+              <div>
+                <h3>💳 Cobrar · {chargeGroup.tableText}</h3>
+                <p className="muted">Saldo pendiente {formatMoney(chargeGroup.balance)}</p>
+              </div>
+              <button className="btn" disabled={chargeBusy} onClick={closeCharge}>×</button>
+            </div>
+
+            <div className="settings-form cashier-payment-fields">
+              <label>
+                <span>Importe a cobrar</span>
+                <input
+                  inputMode="decimal"
+                  value={chargeAmount}
+                  disabled={chargeBusy}
+                  onChange={(event) => setChargeAmount(event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>Método de pago</span>
+                <select value={chargeMethod} disabled={chargeBusy} onChange={(event) => setChargeMethod(event.target.value)}>
+                  <option value="card">Tarjeta</option>
+                  <option value="cash">Efectivo</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="order-payment-shortcuts">
+              <button className="btn" disabled={chargeBusy} onClick={() => setChargeAmount(money(chargeGroup.balance / 2))}>½ saldo</button>
+              <button className="btn" disabled={chargeBusy} onClick={() => setChargeAmount(money(chargeGroup.balance))}>Saldo completo</button>
+            </div>
+
+            <InvoiceCustomerFields
+              value={chargeInvoiceCustomer}
+              onChange={setChargeInvoiceCustomer}
+              disabled={chargeBusy}
+            />
+
+            <button className="btn primary full" disabled={chargeBusy} onClick={confirmPayment}>
+              {chargeBusy ? 'Registrando cobro…' : 'Confirmar cobro'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {splitGroup && (
         <SplitBillModal
           orders={splitGroup.orders}
           tableText={splitGroup.tableText}
+          initialInvoiceCustomer={invoiceCustomerFromOrders(splitGroup.orders)}
           onClose={() => setSplitGroupKey(null)}
         />
       )}
