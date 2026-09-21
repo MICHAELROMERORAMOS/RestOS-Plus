@@ -8,6 +8,7 @@ import {
   signInWithPassword,
   signOut as remoteSignOut,
   subscribeToAuth,
+  subscribeToUserAccess,
 } from '../services/authService.js'
 
 const AuthContext = createContext(null)
@@ -142,6 +143,24 @@ export function AuthProvider({ children }) {
       unsubscribe()
     }
   }, [enterDesignMode, handleUser])
+
+  useEffect(() => {
+    if (mode !== 'authenticated' || !userContext?.id) return undefined
+
+    let refreshing = false
+    const unsubscribe = subscribeToUserAccess(userContext.id, async () => {
+      if (refreshing) return
+      refreshing = true
+      try {
+        const { data, error } = await getAuthenticatedUser()
+        if (!error && data?.user) await handleUser(data.user)
+      } finally {
+        refreshing = false
+      }
+    })
+
+    return unsubscribe
+  }, [mode, userContext?.id, handleUser])
 
   const value = useMemo(() => ({
     mode,

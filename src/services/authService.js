@@ -107,3 +107,21 @@ export function subscribeToAuth(callback) {
   const { data } = supabase.auth.onAuthStateChange(callback)
   return () => data.subscription.unsubscribe()
 }
+
+export function subscribeToUserAccess(userId, callback) {
+  if (!supabase || !userId) return () => {}
+
+  const channel = supabase
+    .channel(`restos-user-access:${userId}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'memberships',
+      filter: `user_id=eq.${userId}`,
+    }, callback)
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
