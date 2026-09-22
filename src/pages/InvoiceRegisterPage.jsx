@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { listPaidInvoices } from '../services/invoiceRegisterService.js'
@@ -93,11 +93,24 @@ export default function InvoiceRegisterPage() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [hasSearched, setHasSearched] = useState(false)
 
-  async function load() {
+  async function load(event) {
+    event?.preventDefault()
+
+    if (!filters.from || !filters.to) {
+      return window.alert('Selecciona la fecha inicial y la fecha final.')
+    }
+
+    if (filters.from > filters.to) {
+      return window.alert('La fecha inicial no puede ser posterior a la fecha final.')
+    }
+
     setLoading(true)
+    setSelected(null)
     try {
       setRows(await listPaidInvoices(restaurantId, filters))
+      setHasSearched(true)
     } catch (error) {
       window.alert(error.message)
     } finally {
@@ -105,12 +118,15 @@ export default function InvoiceRegisterPage() {
     }
   }
 
-  useEffect(() => {
-    if (restaurantId) load()
-  }, [restaurantId])
+  function clearSearch() {
+    setFilters({ from: '', to: '', status: 'all' })
+    setRows([])
+    setSelected(null)
+    setHasSearched(false)
+  }
 
   return (
-    <section className="view active">
+    <section className="view active invoice-register-view">
       <div className="hero">
         <div>
           <h2>Facturas cobradas</h2>
@@ -118,18 +134,52 @@ export default function InvoiceRegisterPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="filters">
-          <label>Desde<input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} /></label>
-          <label>Hasta<input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} /></label>
-          <label>Estado<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="all">Todas</option><option value="valid">No anuladas</option><option value="voided">Anuladas</option></select></label>
-          <button className="btn primary" onClick={load}>Aplicar filtros</button>
+      <div className="card invoice-filter-card">
+        <div className="invoice-filter-heading">
+          <div>
+            <h3>Consultar por fecha</h3>
+            <p>La lista permanecerá vacía hasta que selecciones un rango y pulses “Consultar facturas”.</p>
+          </div>
         </div>
+
+        <form className="invoice-filter-form" onSubmit={load}>
+          <label className="invoice-filter-field">
+            <span>Fecha inicial</span>
+            <input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+          </label>
+
+          <label className="invoice-filter-field">
+            <span>Fecha final</span>
+            <input type="date" value={filters.to} min={filters.from || undefined} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+          </label>
+
+          <label className="invoice-filter-field">
+            <span>Estado de la factura</span>
+            <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+              <option value="all">Todas las facturas</option>
+              <option value="valid">Solo válidas</option>
+              <option value="voided">Solo anuladas</option>
+            </select>
+          </label>
+
+          <div className="invoice-filter-actions">
+            {hasSearched && <button type="button" className="btn" onClick={clearSearch}>Limpiar</button>}
+            <button className="btn primary" type="submit" disabled={loading || !restaurantId || !filters.from || !filters.to}>
+              {loading ? 'Consultando…' : 'Consultar facturas'}
+            </button>
+          </div>
+        </form>
       </div>
 
       <div className="card section-gap">
-        <div className="section-title"><div><h3>Registro de facturas</h3><p className="muted">El origen del pedido aparece en la columna “Servicio”.</p></div><span className="badge">{rows.length} resultados</span></div>
-        {loading ? <div className="empty-inline">Cargando…</div> : rows.length ? (
+        <div className="section-title"><div><h3>Registro de facturas</h3><p className="muted">El origen del pedido aparece en la columna “Servicio”.</p></div>{hasSearched && <span className="badge">{rows.length} resultados</span>}</div>
+        {loading ? <div className="empty-inline">Consultando facturas…</div> : !hasSearched ? (
+          <div className="invoice-search-empty">
+            <span>Consulta bajo demanda</span>
+            <h4>Selecciona las fechas para cargar las facturas</h4>
+            <p>Al entrar en esta ventana no se realiza ninguna consulta de facturas a Supabase.</p>
+          </div>
+        ) : rows.length ? (
           <div className="table-wrap">
             <table>
               <thead><tr><th>Factura</th><th>Servicio / origen</th><th>Fecha</th><th>Productos</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th /></tr></thead>
@@ -150,7 +200,7 @@ export default function InvoiceRegisterPage() {
               </tbody>
             </table>
           </div>
-        ) : <div className="empty-inline">No hay facturas para esos filtros.</div>}
+        ) : <div className="empty-inline">No hay facturas para el rango y estado seleccionados.</div>}
       </div>
 
       {selected && (
