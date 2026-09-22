@@ -12,6 +12,7 @@ export const createInitialDemoState = () => ({
     quickIdentifier: 'order',
     allowPager: true,
     splitStations: true,
+    blockInsufficientInventory: true,
     automaticOrderNumbering: true,
     restaurantName: 'Nuestro Restaurante',
   },

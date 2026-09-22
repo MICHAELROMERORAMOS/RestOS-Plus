@@ -20,10 +20,10 @@ const UNITS = [
 const MOVEMENT_LABELS = {
   opening: 'Existencia inicial',
   purchase: 'Entrada / compra',
-  sale: 'Consumo por venta',
+  sale: 'Consumo por preparación',
   waste: 'Desperdicio',
   adjustment: 'Ajuste manual',
-  return: 'Devolución',
+  return: 'Reposición / devolución',
   count: 'Conteo',
   transfer_in: 'Traslado recibido',
   transfer_out: 'Traslado enviado',

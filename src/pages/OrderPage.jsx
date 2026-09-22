@@ -49,7 +49,7 @@ export default function OrderPage({ onNavigate }) {
     addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
     voidPaidTableAccount, voidRequestsVersion,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
-    tableLabel: getTableLabel, getTableTransferStatus,
+    tableLabel: getTableLabel, getTableTransferStatus, inventoryAvailability,
   } = restaurant
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
@@ -92,6 +92,101 @@ export default function OrderPage({ onNavigate }) {
     && (category === 'all' || product.category === category)
     && product.name.toLowerCase().includes(search.toLowerCase())
   )), [products, category, search])
+
+  const inventoryOrderState = useMemo(() => {
+    const availabilityByProduct = inventoryAvailability?.byProduct || {}
+    const ingredientUsage = new Map()
+    const ingredientStock = new Map()
+
+    Object.values(availabilityByProduct).forEach((availability) => {
+      ;(availability.ingredients || []).forEach((ingredient) => {
+        ingredientStock.set(
+          String(ingredient.inventoryItemId),
+          Number(ingredient.availableQuantity || 0),
+        )
+      })
+    })
+
+    draft.forEach((line) => {
+      const availability = availabilityByProduct[String(line.productId)]
+      if (!availability?.hasRecipe) return
+
+      ;(availability.ingredients || []).forEach((ingredient) => {
+        const key = String(ingredient.inventoryItemId)
+        const used = Number(ingredient.quantityRequired || 0) * Number(line.quantity || 0)
+        ingredientUsage.set(key, (ingredientUsage.get(key) || 0) + used)
+      })
+    })
+
+    const byProduct = {}
+    products.forEach((product) => {
+      const availability = availabilityByProduct[String(product.id)]
+      const ingredients = availability?.ingredients || []
+      const controlled = Boolean(
+        availability?.trackInventory
+        && availability?.hasRecipe
+        && ingredients.length,
+      )
+
+      if (!controlled) {
+        byProduct[String(product.id)] = {
+          controlled: false,
+          remaining: null,
+          blocked: false,
+        }
+        return
+      }
+
+      const remaining = Math.max(0, Math.floor(Math.min(...ingredients.map((ingredient) => {
+        const key = String(ingredient.inventoryItemId)
+        const available = Number(ingredient.availableQuantity || 0)
+        const reservedInDraft = Number(ingredientUsage.get(key) || 0)
+        const required = Number(ingredient.quantityRequired || 0)
+        return required > 0 ? ((available - reservedInDraft) / required) + 1e-9 : 0
+      }))))
+
+      byProduct[String(product.id)] = {
+        controlled: true,
+        remaining,
+        blocked: inventoryAvailability?.enforcementEnabled !== false && remaining < 1,
+      }
+    })
+
+    const draftExceedsStock = Array.from(ingredientUsage.entries()).some(([key, used]) => (
+      used > Number(ingredientStock.get(key) || 0) + 1e-6
+    ))
+
+    return { byProduct, draftExceedsStock }
+  }, [products, draft, inventoryAvailability])
+
+  const inventoryControlEnabled = inventoryAvailability?.enforcementEnabled !== false
+  const draftInventoryBlocked = inventoryControlEnabled && inventoryOrderState.draftExceedsStock
+
+  function inventoryStateFor(productId) {
+    return inventoryOrderState.byProduct[String(productId)] || {
+      controlled: false,
+      remaining: null,
+      blocked: false,
+    }
+  }
+
+  function addAvailableProduct(product) {
+    const availability = inventoryStateFor(product.id)
+    if (availability.blocked) {
+      window.alert('Este producto no tiene insumos suficientes para preparar otra unidad.')
+      return
+    }
+    addProduct(product)
+  }
+
+  function increaseDraftQuantity(line) {
+    const availability = inventoryStateFor(line.productId)
+    if (availability.blocked) {
+      window.alert('No quedan insumos suficientes para agregar otra unidad de este producto.')
+      return
+    }
+    changeDraftQuantity(line.draftId, 1)
+  }
 
   const activeZones = useMemo(
     () => state.zones.filter((zone) => zone.active !== false).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
@@ -615,15 +710,40 @@ export default function OrderPage({ onNavigate }) {
 
       <div className="order-layout">
         <div className="card">
-          <div className="section-title"><h3>Menú</h3><span className="badge">Toca para agregar</span></div>
+          <div className="section-title">
+            <h3>Menú</h3>
+            <span className={`badge ${inventoryControlEnabled ? 'ok-badge' : ''}`}>
+              {inventoryControlEnabled ? 'Stock protegido' : 'Bloqueo de stock desactivado'}
+            </span>
+          </div>
           <div className="products">
-            {filteredProducts.length ? filteredProducts.map((product) => (
-              <button className="product" key={product.id} onClick={() => addProduct(product)}>
-                <strong>{product.name}</strong>
-                <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
-                <em>{formatMoney(product.price)}</em>
-              </button>
-            )) : (
+            {filteredProducts.length ? filteredProducts.map((product) => {
+              const availability = inventoryStateFor(product.id)
+              const availabilityText = availability.controlled
+                ? availability.blocked
+                  ? 'No disponible · faltan insumos'
+                  : `${availability.remaining} ${availability.remaining === 1 ? 'unidad disponible' : 'unidades disponibles'}`
+                : product.trackInventory
+                  ? 'Sin receta de inventario'
+                  : 'Sin control de inventario'
+
+              return (
+                <button
+                  className={`product order-menu-product ${availability.blocked ? 'stock-blocked' : availability.controlled ? 'stock-controlled' : ''}`}
+                  key={product.id}
+                  onClick={() => addAvailableProduct(product)}
+                  disabled={availability.blocked}
+                >
+                  <strong>{product.name}</strong>
+                  <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
+                  <span className="product-stock-count">{availabilityText}</span>
+                  {!inventoryControlEnabled && availability.controlled && availability.remaining < 1 && (
+                    <span className="product-stock-warning">Se permite vender aunque el stock llegue a negativo</span>
+                  )}
+                  <em>{formatMoney(product.price)}</em>
+                </button>
+              )
+            }) : (
               <div className="empty-inline">No hay productos activos que coincidan con este filtro.</div>
             )}
           </div>
@@ -718,7 +838,20 @@ export default function OrderPage({ onNavigate }) {
                     </div>
                   </div>
                   <div>
-                    <div className="qty"><button onClick={() => changeDraftQuantity(line.draftId, -1)}>−</button><b>{line.quantity}</b><button onClick={() => changeDraftQuantity(line.draftId, 1)}>+</button></div>
+                    <div className="qty">
+                      <button onClick={() => changeDraftQuantity(line.draftId, -1)}>−</button>
+                      <b>{line.quantity}</b>
+                      <button
+                        onClick={() => increaseDraftQuantity(line)}
+                        disabled={inventoryStateFor(line.productId).blocked}
+                        title={inventoryStateFor(line.productId).blocked ? 'No quedan insumos para otra unidad' : 'Agregar una unidad'}
+                      >+</button>
+                    </div>
+                    {inventoryStateFor(line.productId).controlled && (
+                      <small className="draft-stock-remaining">
+                        {inventoryStateFor(line.productId).remaining} adicionales posibles
+                      </small>
+                    )}
                     <strong className="line-total">{formatMoney(line.price * line.quantity)}</strong>
                   </div>
                 </div>
@@ -738,6 +871,11 @@ export default function OrderPage({ onNavigate }) {
               </>
             )}
           </div>
+          {draftInventoryBlocked && (
+            <div className="notice warn inventory-draft-warning">
+              El inventario cambió y ya no alcanza para todos los productos sin enviar. Reduce las cantidades antes de enviar a preparación.
+            </div>
+          )}
           {orderMode === 'table' && canCharge && tableOrders.length > 0 && !tableAccountFullyPaid && (
             <button
               className="btn payment-from-order full"
@@ -748,9 +886,9 @@ export default function OrderPage({ onNavigate }) {
             </button>
           )}
           {orderMode === 'quick' ? (
-            <button className="btn primary full action-main" disabled={!draft.length} onClick={handleQuickPay}>🍳 Enviar a preparación</button>
+            <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleQuickPay}>🍳 Enviar a preparación</button>
           ) : (
-            <button className="btn primary full action-main" disabled={!draft.length} onClick={handleSend}>
+            <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleSend}>
               {orderMode === 'delivery' ? '🚚 Enviar domicilio a preparación' : 'Enviar nuevos productos'}
             </button>
           )}

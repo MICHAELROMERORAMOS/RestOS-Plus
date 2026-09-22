@@ -381,6 +381,12 @@ export function subscribeOperationalChanges(restaurantId, locationId, onChange) 
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
+      table: 'inventory_availability_events',
+      filter: `location_id=eq.${locationId}`,
+    }, emit('inventory_availability_events'))
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
       table: 'kitchen_void_requests',
       filter: `restaurant_id=eq.${restaurantId}`,
     }, emit('kitchen_void_requests'))

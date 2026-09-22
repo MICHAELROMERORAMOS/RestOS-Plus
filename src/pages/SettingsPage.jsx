@@ -11,6 +11,7 @@ export default function SettingsPage() {
     addTable, updateTable, deleteTable,
     activeLocation, remoteLoading, remoteError,
     setCurrency,
+    setInventoryStockControl,
   } = useRestaurant()
   const auth = useAuth()
   const canManageTables = auth.can('tables.manage')
@@ -38,12 +39,21 @@ export default function SettingsPage() {
   const [editingZone, setEditingZone] = useState(null)
   const [editingTable, setEditingTable] = useState(null)
   const [currencySaving, setCurrencySaving] = useState(false)
+  const [inventoryControlSaving, setInventoryControlSaving] = useState(false)
 
   async function changeCurrency(event) {
     const code = event.target.value
     setCurrencySaving(true)
     const result = await setCurrency(code)
     setCurrencySaving(false)
+    if (!result.ok) window.alert(result.message)
+  }
+
+  async function changeInventoryControl(event) {
+    const enabled = event.target.checked
+    setInventoryControlSaving(true)
+    const result = await setInventoryStockControl(enabled)
+    setInventoryControlSaving(false)
     if (!result.ok) window.alert(result.message)
   }
 
@@ -125,6 +135,22 @@ export default function SettingsPage() {
             <label><span>Identificador servicio rápido</span><select value={settings.quickIdentifier} onChange={(event) => updateSettings({ quickIdentifier: event.target.value })}><option value="order">Número consecutivo de orden</option><option value="pager">Pager / vibrador</option><option value="turn">Número de turno</option><option value="name">Nombre del cliente</option></select></label>
             <label className="toggle-row"><span>Permitir pager / turno manual</span><input type="checkbox" checked={settings.allowPager} onChange={(event) => updateSettings({ allowPager: event.target.checked })} /></label>
             <label className="toggle-row"><span>Separar Cocina / Bar</span><input type="checkbox" checked={settings.splitStations} onChange={(event) => updateSettings({ splitStations: event.target.checked })} /></label>
+            <label className="toggle-row inventory-control-toggle">
+              <span>
+                <b>Bloquear productos sin insumos suficientes</b>
+                <small>
+                  {inventoryControlSaving
+                    ? 'Guardando en Supabase…'
+                    : 'Si está activo, no se podrá enviar una cantidad mayor que la disponible según las recetas.'}
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.blockInsufficientInventory !== false}
+                onChange={changeInventoryControl}
+                disabled={!canManageSettings || inventoryControlSaving}
+              />
+            </label>
           </div>
         </div>
 

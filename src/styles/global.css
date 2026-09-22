@@ -3500,6 +3500,107 @@ html, body {
   line-height: 1;
 }
 
+/* Ingredient availability in order entry */
+.order-menu-product {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 162px;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.order-menu-product:not(:disabled):hover {
+  border-color: #9dbbac;
+  box-shadow: 0 10px 24px #174c3614;
+  transform: translateY(-1px);
+}
+
+.order-menu-product em {
+  align-self: end;
+  margin-top: 5px;
+}
+
+.product-stock-count {
+  width: max-content;
+  max-width: 100%;
+  margin-top: 5px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #526159;
+  background: #eef2ef;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.order-menu-product.stock-controlled .product-stock-count {
+  color: #176341;
+  background: #e5f5ec;
+}
+
+.order-menu-product.stock-blocked {
+  border-color: #e6b7b7;
+  color: #7e5e5e;
+  background: #fff7f7;
+  opacity: .78;
+}
+
+.order-menu-product.stock-blocked .product-stock-count {
+  color: #9a3f3f;
+  background: #f8dddd;
+}
+
+.product-stock-warning {
+  color: #8a641e;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.draft-stock-remaining {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.inventory-draft-warning {
+  margin-bottom: 0;
+}
+
+.inventory-control-toggle > span {
+  display: grid;
+  gap: 4px;
+}
+
+.inventory-control-toggle > span > b {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.inventory-control-toggle > span > small {
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+@media (max-width: 650px) {
+  .order-menu-product {
+    min-height: 175px;
+    padding: 13px;
+  }
+
+  .product-stock-count {
+    width: 100%;
+    border-radius: 10px;
+  }
+}
+
 @media (max-width: 520px) {
   .product-choice-buttons {
     display: grid;

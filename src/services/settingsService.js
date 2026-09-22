@@ -12,7 +12,7 @@ export async function loadRestaurantSettings(restaurantId) {
 
   const { data, error } = await client
     .from('restaurant_settings')
-    .select('restaurant_id,currency_code,default_service_mode,default_payment_timing,pager_enabled,tax_inclusive,service_charge_pct,allow_split_bill,allow_merge_tables,allow_table_transfer,extra,updated_at')
+    .select('restaurant_id,currency_code,default_service_mode,default_payment_timing,pager_enabled,tax_inclusive,service_charge_pct,allow_split_bill,allow_merge_tables,allow_table_transfer,block_insufficient_inventory,extra,updated_at')
     .eq('restaurant_id', restaurantId)
     .maybeSingle()
 
@@ -37,6 +37,23 @@ export async function saveRestaurantCurrency(restaurantId, currencyCode) {
       onConflict: 'restaurant_id',
     })
     .select('restaurant_id,currency_code,updated_at')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function saveInventoryStockControl(restaurantId, enabled) {
+  const client = requireSupabase()
+  const { data, error } = await client
+    .from('restaurant_settings')
+    .upsert({
+      restaurant_id: restaurantId,
+      block_insufficient_inventory: Boolean(enabled),
+    }, {
+      onConflict: 'restaurant_id',
+    })
+    .select('restaurant_id,block_insufficient_inventory,updated_at')
     .single()
 
   if (error) throw error

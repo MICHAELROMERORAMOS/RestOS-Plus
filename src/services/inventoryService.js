@@ -23,6 +23,41 @@ export async function loadInventoryWorkspace(restaurantId, locationId) {
   }
 }
 
+export async function loadProductInventoryAvailability(restaurantId, locationId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('get_product_inventory_availability', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+  })
+
+  if (error) throw error
+
+  const byProduct = {}
+  ;(Array.isArray(data?.products) ? data.products : []).forEach((product) => {
+    byProduct[String(product.productId)] = {
+      productId: product.productId,
+      trackInventory: Boolean(product.trackInventory),
+      hasRecipe: Boolean(product.hasRecipe),
+      maxPreparations: product.maxPreparations == null
+        ? null
+        : Math.max(0, Number(product.maxPreparations || 0)),
+      ingredients: (Array.isArray(product.ingredients) ? product.ingredients : []).map((ingredient) => ({
+        inventoryItemId: ingredient.inventoryItemId,
+        name: ingredient.name || 'Insumo',
+        unit: ingredient.unit || '',
+        quantityRequired: Number(ingredient.quantityRequired || 0),
+        availableQuantity: Number(ingredient.availableQuantity || 0),
+      })),
+    }
+  })
+
+  return {
+    enforcementEnabled: data?.enforcementEnabled !== false,
+    byProduct,
+    generatedAt: data?.generatedAt || null,
+  }
+}
+
 export async function saveInventoryItem({
   itemId = null,
   restaurantId,

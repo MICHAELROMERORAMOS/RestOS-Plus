@@ -11,8 +11,13 @@ import {
   updateZone as updateRemoteZone,
 } from '../services/restaurantStructureService.js'
 import { loadMenuCatalog } from '../services/menuService.js'
+import { loadProductInventoryAvailability } from '../services/inventoryService.js'
 import { formatMoneyValue } from '../lib/currency.js'
-import { loadRestaurantSettings, saveRestaurantCurrency } from '../services/settingsService.js'
+import {
+  loadRestaurantSettings,
+  saveInventoryStockControl,
+  saveRestaurantCurrency,
+} from '../services/settingsService.js'
 import {
   advanceStationRoundRemote,
   createDeliveryOrderRemote,
@@ -215,6 +220,7 @@ export function RestaurantProvider({ children }) {
     tables: state.tables || [],
   })
   const operationalRefreshTimer = useRef(null)
+  const inventoryRefreshTimer = useRef(null)
   const pendingOperationalOrderIds = useRef(new Set())
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
@@ -228,6 +234,11 @@ export function RestaurantProvider({ children }) {
     tableReleases: [],
   })
   const [voidRequestsVersion, setVoidRequestsVersion] = useState(0)
+  const [inventoryAvailability, setInventoryAvailability] = useState({
+    enforcementEnabled: true,
+    byProduct: {},
+    generatedAt: null,
+  })
   const [orderMode, setOrderModeState] = useState(state.settings.defaultOrderMode || 'table')
   const [currentTableId, setCurrentTableId] = useState(null)
   const [currentOrderId, setCurrentOrderId] = useState(null)
@@ -249,6 +260,10 @@ export function RestaurantProvider({ children }) {
   }, [])
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
+  const canLoadInventoryAvailability = auth.isDesignMode
+    || auth.can('orders.create')
+    || auth.can('inventory.view')
+    || auth.can('inventory.manage')
 
   const currencyCode = state.settings.currency || 'EUR'
   const formatMoney = useCallback(
@@ -257,13 +272,14 @@ export function RestaurantProvider({ children }) {
   )
 
   const applyRemoteSettings = useCallback((remoteSettings) => {
-    if (!remoteSettings?.currency_code) return
+    if (!remoteSettings) return
 
     updateState((previous) => ({
       ...previous,
       settings: {
         ...previous.settings,
-        currency: remoteSettings.currency_code,
+        currency: remoteSettings.currency_code || previous.settings.currency,
+        blockInsufficientInventory: remoteSettings.block_insufficient_inventory !== false,
       },
     }))
   }, [updateState])
@@ -447,11 +463,54 @@ export function RestaurantProvider({ children }) {
     applyOperationalOrderPatches,
   ])
 
+  const refreshInventoryAvailability = useCallback(async (locationOverride = null) => {
+    if (auth.isDesignMode) {
+      setInventoryAvailability({
+        enforcementEnabled: state.settings.blockInsufficientInventory !== false,
+        byProduct: {},
+        generatedAt: null,
+      })
+      return { ok: true }
+    }
+
+    if (!canLoadInventoryAvailability) {
+      setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
+      return { ok: true, skipped: true }
+    }
+
+    const location = locationOverride || activeLocation
+    if (!restaurantId || !location?.id) {
+      setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
+      return { ok: false, message: 'No hay restaurante o sucursal activa.' }
+    }
+
+    try {
+      const availability = await loadProductInventoryAvailability(restaurantId, location.id)
+      setInventoryAvailability(availability)
+      return { ok: true, availability }
+    } catch (error) {
+      const message = error?.message || 'No se pudo actualizar la disponibilidad de productos.'
+      setRemoteError(message)
+      return { ok: false, message }
+    }
+  }, [
+    auth.isDesignMode,
+    canLoadInventoryAvailability,
+    restaurantId,
+    activeLocation,
+    state.settings.blockInsufficientInventory,
+  ])
+
   const refreshMenu = useCallback(async (locationOverride = null) => {
     if (auth.isDesignMode) {
       setProducts(DEMO_PRODUCTS)
       setMenuCategories([])
       setMenuStations([])
+      setInventoryAvailability({
+        enforcementEnabled: state.settings.blockInsufficientInventory !== false,
+        byProduct: {},
+        generatedAt: null,
+      })
       return { ok: true }
     }
 
@@ -460,20 +519,33 @@ export function RestaurantProvider({ children }) {
       setProducts([])
       setMenuCategories([])
       setMenuStations([])
+      setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
       return { ok: false, message: 'No hay restaurante o sucursal activa.' }
     }
 
     try {
-      const catalog = await loadMenuCatalog(restaurantId, location.id)
+      const [catalog, availability] = await Promise.all([
+        loadMenuCatalog(restaurantId, location.id),
+        canLoadInventoryAvailability
+          ? loadProductInventoryAvailability(restaurantId, location.id)
+          : Promise.resolve({ enforcementEnabled: true, byProduct: {}, generatedAt: null }),
+      ])
       setProducts(catalog.products)
       setMenuCategories(catalog.categories)
       setMenuStations(catalog.stations)
-      return { ok: true, catalog }
+      setInventoryAvailability(availability)
+      return { ok: true, catalog, availability }
     } catch (error) {
       setRemoteError(error?.message || 'No se pudo cargar el menú desde Supabase.')
       return { ok: false, message: error?.message || 'No se pudo cargar el menú.' }
     }
-  }, [auth.isDesignMode, restaurantId, activeLocation])
+  }, [
+    auth.isDesignMode,
+    canLoadInventoryAvailability,
+    restaurantId,
+    activeLocation,
+    state.settings.blockInsufficientInventory,
+  ])
 
   const refreshRemoteData = useCallback(async () => {
     if (auth.isDesignMode) {
@@ -513,18 +585,23 @@ export function RestaurantProvider({ children }) {
       applyRemoteStructure(structure)
 
       if (structure.location) {
-        const [catalog, operational] = await Promise.all([
+        const [catalog, operational, availability] = await Promise.all([
           loadMenuCatalog(restaurantId, structure.location.id),
           loadOperationalState(restaurantId, structure.location.id),
+          canLoadInventoryAvailability
+            ? loadProductInventoryAvailability(restaurantId, structure.location.id)
+            : Promise.resolve({ enforcementEnabled: true, byProduct: {}, generatedAt: null }),
         ])
         setProducts(catalog.products)
         setMenuCategories(catalog.categories)
         setMenuStations(catalog.stations)
+        setInventoryAvailability(availability)
         applyOperationalOrders(operational.orders, operational.summary)
       } else {
         setProducts([])
         setMenuCategories([])
         setMenuStations([])
+        setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
         applyOperationalOrders([])
       }
 
@@ -536,11 +613,25 @@ export function RestaurantProvider({ children }) {
     } finally {
       setRemoteLoading(false)
     }
-  }, [auth.isDesignMode, auth.mode, auth.permissions, restaurantId, applyRemoteStructure, applyRemoteSettings, applyOperationalOrders])
+  }, [
+    auth.isDesignMode,
+    auth.mode,
+    auth.permissions,
+    canLoadInventoryAvailability,
+    restaurantId,
+    applyRemoteStructure,
+    applyRemoteSettings,
+    applyOperationalOrders,
+  ])
 
   useEffect(() => {
     if (auth.isDesignMode) {
       setProducts(DEMO_PRODUCTS)
+      setInventoryAvailability({
+        enforcementEnabled: state.settings.blockInsufficientInventory !== false,
+        byProduct: {},
+        generatedAt: null,
+      })
       return
     }
 
@@ -558,7 +649,13 @@ export function RestaurantProvider({ children }) {
       }))
       refreshRemoteData()
     }
-  }, [auth.mode, auth.isDesignMode, restaurantId, refreshRemoteData])
+  }, [
+    auth.mode,
+    auth.isDesignMode,
+    restaurantId,
+    refreshRemoteData,
+    state.settings.blockInsufficientInventory,
+  ])
 
   useEffect(() => {
     if (
@@ -573,6 +670,17 @@ export function RestaurantProvider({ children }) {
     const channel = subscribeOperationalChanges(restaurantId, activeLocation.id, (payload) => {
       if (payload.table === 'kitchen_void_requests') {
         setVoidRequestsVersion((version) => version + 1)
+        return
+      }
+
+      if (payload.table === 'inventory_availability_events') {
+        if (inventoryRefreshTimer.current) {
+          window.clearTimeout(inventoryRefreshTimer.current)
+        }
+
+        inventoryRefreshTimer.current = window.setTimeout(() => {
+          refreshInventoryAvailability(activeLocation).catch(() => {})
+        }, 180)
         return
       }
 
@@ -601,6 +709,10 @@ export function RestaurantProvider({ children }) {
         window.clearTimeout(operationalRefreshTimer.current)
         operationalRefreshTimer.current = null
       }
+      if (inventoryRefreshTimer.current) {
+        window.clearTimeout(inventoryRefreshTimer.current)
+        inventoryRefreshTimer.current = null
+      }
       pendingOperationalOrderIds.current.clear()
       unsubscribeOperationalChanges(channel).catch(() => {})
     }
@@ -611,6 +723,7 @@ export function RestaurantProvider({ children }) {
     activeLocation?.id,
     refreshOperationalOrdersByIds,
     refreshOperationalSummary,
+    refreshInventoryAvailability,
   ])
 
   const openOrderForTable = useCallback((tableId, source = state) => source.orders.find((order) => (
@@ -1114,10 +1227,14 @@ export function RestaurantProvider({ children }) {
 
         setCurrentOrderId(orderNumber)
         setDraft([])
-        await refreshOperationalOrdersByIds([result.order_id], activeLocation)
+        await Promise.all([
+          refreshOperationalOrdersByIds([result.order_id], activeLocation),
+          refreshInventoryAvailability(activeLocation),
+        ])
         if (prepaid) await refreshOperationalSummary(activeLocation)
         return { ok: true, orderId: orderNumber }
       } catch (error) {
+        await refreshInventoryAvailability(activeLocation)
         return { ok: false, message: error?.message || 'No se pudo enviar la comanda a Supabase.' }
       }
     }
@@ -1181,6 +1298,7 @@ export function RestaurantProvider({ children }) {
     draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
     auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager,
     openOrderForTable, refreshOperationalOrdersByIds, refreshOperationalSummary,
+    refreshInventoryAvailability,
   ])
 
   const applyKitchenApprovedVoidRequest = useCallback((orderId, request) => {
@@ -1750,6 +1868,42 @@ export function RestaurantProvider({ children }) {
     }
   }, [auth.isDesignMode, auth.permissions, restaurantId, updateSettings])
 
+  const setInventoryStockControl = useCallback(async (enabled) => {
+    const nextEnabled = Boolean(enabled)
+
+    if (auth.isDesignMode) {
+      updateSettings({ blockInsufficientInventory: nextEnabled })
+      setInventoryAvailability((current) => ({
+        ...current,
+        enforcementEnabled: nextEnabled,
+      }))
+      return { ok: true, enabled: nextEnabled }
+    }
+
+    if (!restaurantId) {
+      return { ok: false, message: 'No se encontró el restaurante activo.' }
+    }
+
+    if (!auth.can('settings.manage')) {
+      return { ok: false, message: 'Tu rol no puede cambiar el control de inventario.' }
+    }
+
+    try {
+      await saveInventoryStockControl(restaurantId, nextEnabled)
+      updateSettings({ blockInsufficientInventory: nextEnabled })
+      setInventoryAvailability((current) => ({
+        ...current,
+        enforcementEnabled: nextEnabled,
+      }))
+      return { ok: true, enabled: nextEnabled }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || 'No se pudo guardar el control de disponibilidad.',
+      }
+    }
+  }, [auth.isDesignMode, auth.permissions, restaurantId, updateSettings])
+
   const resetDemo = useCallback(() => {
     if (!auth.isDesignMode) {
       return {
@@ -1770,6 +1924,11 @@ export function RestaurantProvider({ children }) {
     setProducts(DEMO_PRODUCTS)
     setMenuCategories([])
     setMenuStations([])
+    setInventoryAvailability({
+      enforcementEnabled: fresh.settings.blockInsufficientInventory !== false,
+      byProduct: {},
+      generatedAt: null,
+    })
     return { ok: true }
   }, [persist, auth.isDesignMode])
 
@@ -1804,7 +1963,9 @@ export function RestaurantProvider({ children }) {
     remoteError,
     operationalSummary,
     voidRequestsVersion,
+    inventoryAvailability,
     refreshMenu,
+    refreshInventoryAvailability,
     refreshRemoteData,
     refreshOperationalData,
     refreshOperationalOrdersByIds,
@@ -1812,6 +1973,7 @@ export function RestaurantProvider({ children }) {
     currencyCode,
     formatMoney,
     setCurrency,
+    setInventoryStockControl,
     orderMode,
     currentTableId,
     currentOrderId,
@@ -1856,15 +2018,16 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    operationalSummary, voidRequestsVersion,
-    refreshMenu, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
+    operationalSummary, voidRequestsVersion, inventoryAvailability,
+    refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
-    recordPayment, recordPayments, updateSettings, setCurrency, resetDemo, stationJobs, openOrderForTable,
+    recordPayment, recordPayments, updateSettings, setCurrency, setInventoryStockControl,
+    resetDemo, stationJobs, openOrderForTable,
   ])
 
   return <RestaurantContext.Provider value={value}>{children}</RestaurantContext.Provider>
