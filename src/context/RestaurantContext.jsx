@@ -260,6 +260,7 @@ export function RestaurantProvider({ children }) {
   const operationalRefreshTimer = useRef(null)
   const inventoryRefreshTimer = useRef(null)
   const pendingOperationalOrderIds = useRef(new Set())
+  const draftContextTableIdRef = useRef(null)
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
   const [menuStations, setMenuStations] = useState([])
@@ -273,6 +274,7 @@ export function RestaurantProvider({ children }) {
   })
   const [voidRequestsVersion, setVoidRequestsVersion] = useState(0)
   const [tableOrderSessions, setTableOrderSessions] = useState([])
+  const [tableDrafts, setTableDrafts] = useState({})
   const [inventoryAvailability, setInventoryAvailability] = useState({
     enforcementEnabled: true,
     byProduct: {},
@@ -299,6 +301,77 @@ export function RestaurantProvider({ children }) {
   }, [])
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
+  const draftStorageKey = useMemo(() => {
+    const userId = auth.userContext?.id || (auth.isDesignMode ? 'design-user' : null)
+    const scopedRestaurant = restaurantId || (auth.isDesignMode ? 'design-restaurant' : null)
+    const scopedLocation = activeLocation?.id || (auth.isDesignMode ? 'design-location' : null)
+    if (!userId || !scopedRestaurant || !scopedLocation) return null
+    return `${TABLE_DRAFT_STORAGE_PREFIX}:${scopedRestaurant}:${scopedLocation}:${userId}`
+  }, [auth.userContext?.id, auth.isDesignMode, restaurantId, activeLocation?.id])
+
+  useEffect(() => {
+    draftContextTableIdRef.current = null
+    setTableDrafts(loadStoredTableDrafts(draftStorageKey))
+  }, [draftStorageKey])
+
+  const saveTableDraftMap = useCallback((recipe) => {
+    setTableDrafts((previous) => {
+      const next = typeof recipe === 'function' ? recipe(previous) : recipe
+      storeTableDrafts(draftStorageKey, next)
+      return next
+    })
+  }, [draftStorageKey])
+
+  const clearStoredTableDraft = useCallback((tableId) => {
+    if (!tableId) return
+    saveTableDraftMap((previous) => {
+      if (!previous[String(tableId)]) return previous
+      const next = { ...previous }
+      delete next[String(tableId)]
+      return next
+    })
+  }, [saveTableDraftMap])
+
+  const tableDraftForTable = useCallback((tableId) => (
+    tableDrafts[String(tableId)]?.items || []
+  ), [tableDrafts])
+
+  const getTableDraftCount = useCallback((tableId) => (
+    tableDraftForTable(tableId).reduce(
+      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+      0,
+    )
+  ), [tableDraftForTable])
+
+  useEffect(() => {
+    if (
+      orderMode !== 'table'
+      || !currentTableId
+      || draftContextTableIdRef.current !== currentTableId
+    ) {
+      return
+    }
+
+    saveTableDraftMap((previous) => {
+      const key = String(currentTableId)
+      const existing = previous[key]
+      if (!draft.length) {
+        if (!existing) return previous
+        const next = { ...previous }
+        delete next[key]
+        return next
+      }
+
+      return {
+        ...previous,
+        [key]: {
+          items: draft,
+          updatedAt: Date.now(),
+        },
+      }
+    })
+  }, [draft, orderMode, currentTableId, saveTableDraftMap])
+
   const canLoadInventoryAvailability = auth.isDesignMode
     || auth.can('orders.create')
     || auth.can('inventory.view')
