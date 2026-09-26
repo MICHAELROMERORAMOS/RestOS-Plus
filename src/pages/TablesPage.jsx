@@ -14,7 +14,7 @@ function formatTime(value) {
 export default function TablesPage({ onOpenTable, onQuickService }) {
   const {
     state, getTableVisualStatus, formatMoney, orderTotal, tableSessionForTable, getTableDraftCount,
-    abandonTableDraftSession,
+    canReleaseTableDraftSession, abandonTableDraftSession,
   } = useRestaurant()
   const [pendingTable, setPendingTable] = useState(null)
   const [openingTable, setOpeningTable] = useState(false)
@@ -111,15 +111,20 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
 
   async function releaseMyTable(table) {
     const session = tableSessionForTable(table.id)
-    if (!session?.claimedByMe || session.sessionType !== 'draft') {
-      window.alert('Solo el usuario que abrió la mesa puede liberarla antes de enviar el pedido.')
+    if (!canReleaseTableDraftSession(table.id)) {
+      window.alert('No tienes permiso para liberar esta mesa.')
       return
     }
 
     const draftCount = getTableDraftCount(table.id)
-    const message = draftCount > 0
-      ? `Esta mesa tiene ${draftCount} producto${draftCount === 1 ? '' : 's'} sin enviar. Si la liberas, ese borrador se eliminará. ¿Deseas continuar?`
-      : '¿Deseas liberar esta mesa? Aún no se ha enviado ningún pedido.'
+    const isOwnSession = Boolean(session?.claimedByMe)
+
+    let message = '¿Deseas liberar esta mesa? Aún no se ha enviado ningún pedido.'
+    if (isOwnSession && draftCount > 0) {
+      message = `Esta mesa tiene ${draftCount} producto${draftCount === 1 ? '' : 's'} sin enviar. Si la liberas, ese borrador se eliminará. ¿Deseas continuar?`
+    } else if (!isOwnSession) {
+      message = `Esta mesa está siendo atendida por ${session?.attendantName || 'otro usuario'} y todavía no tiene una orden enviada. Si la liberas, se cancelará esa toma de pedido. ¿Deseas continuar?`
+    }
 
     if (!window.confirm(message)) return
 
@@ -185,8 +190,7 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
                   const session = tableSessionForTable(table.id)
                   const blockedByOther = status === 'opening' && !session?.claimedByMe
                   const canReleaseDraft = status === 'opening'
-                    && session?.sessionType === 'draft'
-                    && session?.claimedByMe
+                    && canReleaseTableDraftSession(table.id)
                   return (
                     <div className="table-shell" key={table.id}>
                       <button
