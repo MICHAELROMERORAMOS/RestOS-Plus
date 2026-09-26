@@ -1523,6 +1523,19 @@ export function RestaurantProvider({ children }) {
     updateState,
   ])
 
+  const openQuickOrder = useCallback((orderId) => {
+    const order = state.orders.find((item) => item.id === orderId && item.mode === 'quick')
+    if (!order) return { ok: false, message: 'El pedido rápido no existe o ya fue cerrado.' }
+
+    setOrderModeState('quick')
+    setCurrentTableId(null)
+    setCurrentOrderId(order.id)
+    setDraft([])
+    setPager(order.pager || '')
+    setCurrentDelivery(null)
+    return { ok: true }
+  }, [state.orders])
+
   const openDelivery = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
     if (!order) return { ok: false, message: 'El domicilio no existe.' }
@@ -2445,6 +2458,7 @@ export function RestaurantProvider({ children }) {
     canReleaseTableDraftSession,
     abandonTableDraftSession,
     startDelivery,
+    openQuickOrder,
     openDelivery,
     startNewOrder,
     addProduct,
@@ -2484,7 +2498,7 @@ export function RestaurantProvider({ children }) {
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
-    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
