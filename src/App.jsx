@@ -50,9 +50,26 @@ function MainApplication() {
     setActiveView(view)
   }
 
-  function openTable(tableId) {
-    restaurant.openTable(tableId)
+  async function openTable(tableId, { confirmed = false } = {}) {
+    const status = restaurant.getTableVisualStatus(tableId)
+
+    if (status === 'free' && !confirmed) {
+      const accepted = window.confirm(
+        `¿Deseas abrir ${restaurant.tableLabel(tableId)} para tomar el pedido?`,
+      )
+      if (!accepted) return { ok: false, cancelled: true }
+    }
+
+    const result = await restaurant.openTable(tableId)
+    if (!result?.ok) {
+      if (!confirmed && !result?.cancelled) {
+        window.alert(result?.message || 'No se pudo abrir la mesa.')
+      }
+      return result
+    }
+
     navigate('order')
+    return result
   }
 
   function quickService() {
