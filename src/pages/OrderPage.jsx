@@ -45,8 +45,9 @@ export default function OrderPage({ onNavigate }) {
   const canVoidPartialAccount = auth.can('orders.account_void.authorized')
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const {
-    products, formatMoney, orderMode, currentTableId, currentOrder, currentDelivery, draft, pager, setPager, setOrderMode,
-    addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
+    products, formatMoney, orderMode, currentTableId, currentOrder, currentDelivery, draft,
+    pager, setPager, quickCustomerName, setQuickCustomerName, setOrderMode,
+    updateQuickOrderIdentity, addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
     voidPaidTableAccount, voidRequestsVersion,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
     tableLabel: getTableLabel, getTableTransferStatus, inventoryAvailability,
@@ -64,6 +65,7 @@ export default function OrderPage({ onNavigate }) {
   const [chargeMethod, setChargeMethod] = useState('card')
   const [chargeInvoiceCustomer, setChargeInvoiceCustomer] = useState(() => invoiceCustomerFromOrders([]))
   const [chargeBusy, setChargeBusy] = useState(false)
+  const [quickIdentitySaving, setQuickIdentitySaving] = useState(false)
   const [myVoidRequests, setMyVoidRequests] = useState([])
   const [showUnpaidVoidRequest, setShowUnpaidVoidRequest] = useState(false)
   const [unpaidVoidSelected, setUnpaidVoidSelected] = useState({})
@@ -264,11 +266,15 @@ export default function OrderPage({ onNavigate }) {
     && paymentAccountTotal > 0.005
     && paymentAccountBalance <= 0.005
 
+  const quickIdentifier = pager.trim()
+    ? `Pager ${pager.trim()}`
+    : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
+
   const paymentAccountLabel = orderMode === 'table'
     ? accountTableLabel
     : orderMode === 'delivery'
       ? `Domicilio #${currentOrder?.id || '—'} · ${deliveryInfo?.customerName || 'Cliente'}`
-      : `Rápido #${currentOrder?.id || '—'}${currentOrder?.pager || pager ? ` · Pager ${currentOrder?.pager || pager}` : ''}`
+      : quickIdentifier
 
   useEffect(() => {
     if (orderMode !== 'table' || !currentTableId) {
@@ -371,6 +377,27 @@ export default function OrderPage({ onNavigate }) {
     }
 
     return allocations
+  }
+
+  async function saveQuickIdentity() {
+    if (orderMode !== 'quick' || !currentOrder) return
+    if (pager.trim() && quickCustomerName.trim()) {
+      window.alert('Usa número de pager o nombre del cliente, no ambos.')
+      return
+    }
+
+    setQuickIdentitySaving(true)
+    try {
+      const result = await updateQuickOrderIdentity({
+        pager,
+        customerName: quickCustomerName,
+      })
+      if (!result?.ok) {
+        window.alert(result?.message || 'No se pudo guardar la identificación del pedido.')
+      }
+    } finally {
+      setQuickIdentitySaving(false)
+    }
   }
 
   function openChargeModal() {
@@ -671,7 +698,7 @@ export default function OrderPage({ onNavigate }) {
         <div>
           <h2>{
             orderMode === 'quick'
-              ? 'Servicio rápido'
+              ? `Servicio rápido · ${quickIdentifier}`
               : orderMode === 'delivery'
                 ? `Domicilio · ${deliveryInfo?.customerName || 'Nuevo cliente'}`
                 : currentTableId
@@ -783,11 +810,40 @@ export default function OrderPage({ onNavigate }) {
           <div className="section-title">
             <h3>{orderMode === 'quick' ? 'Nueva orden' : orderMode === 'delivery' ? 'Pedido a domicilio' : 'Cuenta abierta'}</h3>
             <span className="badge">
-              {orderMode === 'quick' ? (currentOrder?.pager ? `Pager ${currentOrder.pager}` : 'Servicio rápido') : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
+              {orderMode === 'quick' ? quickIdentifier : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
             </span>
           </div>
           {orderMode === 'quick' && (
-            <div className="quickpay"><b>Servicio rápido</b><input value={pager} onChange={(event) => setPager(event.target.value)} placeholder="Pager / turno (opcional)" /></div>
+            <div className="quick-identity-panel">
+              <div className="quick-identity-title">
+                <b>Identificación del pedido</b>
+                <small>Usa uno de los dos campos. Este dato reemplaza el número de mesa.</small>
+              </div>
+              <div className="quick-identity-grid">
+                <label>
+                  <span>Número del pager</span>
+                  <input
+                    value={pager}
+                    disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
+                    onChange={(event) => setPager(event.target.value)}
+                    onBlur={saveQuickIdentity}
+                    placeholder="Ej. 16"
+                  />
+                </label>
+                <div className="quick-identity-or">o</div>
+                <label>
+                  <span>Nombre del cliente</span>
+                  <input
+                    value={quickCustomerName}
+                    disabled={Boolean(pager.trim()) || quickIdentitySaving}
+                    onChange={(event) => setQuickCustomerName(event.target.value)}
+                    onBlur={saveQuickIdentity}
+                    placeholder="Ej. Mariana"
+                  />
+                </label>
+              </div>
+              <strong className="quick-identity-preview">{quickIdentifier}</strong>
+            </div>
           )}
 
           {orderMode === 'delivery' && deliveryInfo && (
