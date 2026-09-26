@@ -1198,7 +1198,9 @@ export function RestaurantProvider({ children }) {
     setOrderModeState(mode)
     setDraft([])
     setPager('')
+    setQuickCustomerName('')
     setCurrentOrderId(null)
+    draftContextServiceKeyRef.current = null
     if (mode !== 'table') setCurrentTableId(null)
     if (mode !== 'delivery') setCurrentDelivery(null)
   }, [])
@@ -1462,6 +1464,86 @@ export function RestaurantProvider({ children }) {
     tableDraftForTable,
   ])
 
+  const startQuickOrder = useCallback(async () => {
+    if (!auth.isDesignMode) {
+      if (!restaurantId || !activeLocation?.id) {
+        return { ok: false, message: 'No hay restaurante o sucursal activa.' }
+      }
+
+      try {
+        const created = await createQuickOrderRemote({
+          restaurantId,
+          locationId: activeLocation.id,
+        })
+
+        const orderNumber = Number(created?.order_number)
+        if (!Number.isFinite(orderNumber)) {
+          throw new Error('Supabase no devolvió un número de pedido válido.')
+        }
+
+        setOrderModeState('quick')
+        setCurrentTableId(null)
+        setCurrentOrderId(orderNumber)
+        setPager('')
+        setQuickCustomerName('')
+        setCurrentDelivery(null)
+        draftContextServiceKeyRef.current = `quick:${orderNumber}`
+        setDraft(tableDrafts[`quick:${orderNumber}`]?.items || [])
+        await refreshOperationalOrdersByIds([created.id], activeLocation)
+
+        return { ok: true, orderId: orderNumber }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo crear el pedido rápido.' }
+      }
+    }
+
+    let createdOrderId = null
+    updateState((previous) => {
+      createdOrderId = previous.nextOrder
+      const order = {
+        id: createdOrderId,
+        mode: 'quick',
+        tableIds: [],
+        pager: null,
+        customerName: '',
+        rounds: [],
+        status: 'draft',
+        created: Date.now(),
+        payments: [],
+        refundDue: 0,
+        invoiceIssuedAt: null,
+        invoiceNumber: null,
+        closedAt: null,
+        openedByName: auth.userContext?.name || 'Usuario',
+        openedByMe: true,
+      }
+
+      return {
+        ...previous,
+        nextOrder: previous.nextOrder + 1,
+        orders: [...previous.orders, order],
+      }
+    })
+
+    setOrderModeState('quick')
+    setCurrentTableId(null)
+    setCurrentOrderId(createdOrderId)
+    setPager('')
+    setQuickCustomerName('')
+    setCurrentDelivery(null)
+    draftContextServiceKeyRef.current = `quick:${createdOrderId}`
+    setDraft(tableDrafts[`quick:${createdOrderId}`]?.items || [])
+    return { ok: true, orderId: createdOrderId }
+  }, [
+    auth.isDesignMode,
+    auth.userContext?.name,
+    restaurantId,
+    activeLocation,
+    refreshOperationalOrdersByIds,
+    tableDrafts,
+    updateState,
+  ])
+
   const startDelivery = useCallback(async (delivery) => {
     const normalized = {
       customerId: delivery?.customerId || null,
@@ -1499,9 +1581,11 @@ export function RestaurantProvider({ children }) {
         setOrderModeState('delivery')
         setCurrentTableId(null)
         setCurrentOrderId(orderNumber)
-        setDraft([])
         setPager('')
+        setQuickCustomerName('')
         setCurrentDelivery(normalized)
+        draftContextServiceKeyRef.current = `delivery:${orderNumber}`
+        setDraft(tableDrafts[`delivery:${orderNumber}`]?.items || [])
         await refreshOperationalOrdersByIds([created.id], activeLocation)
 
         return { ok: true, orderId: orderNumber }
@@ -1541,9 +1625,11 @@ export function RestaurantProvider({ children }) {
     setOrderModeState('delivery')
     setCurrentTableId(null)
     setCurrentOrderId(createdOrderId)
-    setDraft([])
     setPager('')
+    setQuickCustomerName('')
     setCurrentDelivery(normalized)
+    draftContextServiceKeyRef.current = `delivery:${createdOrderId}`
+    setDraft(tableDrafts[`delivery:${createdOrderId}`]?.items || [])
     return { ok: true, orderId: createdOrderId }
   }, [
     auth.isDesignMode,
@@ -1551,33 +1637,40 @@ export function RestaurantProvider({ children }) {
     activeLocation,
     refreshOperationalOrdersByIds,
     updateState,
+    tableDrafts,
   ])
 
   const openQuickOrder = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'quick')
     if (!order) return { ok: false, message: 'El pedido rápido no existe o ya fue cerrado.' }
 
+    const draftKey = `quick:${order.id}`
     setOrderModeState('quick')
     setCurrentTableId(null)
     setCurrentOrderId(order.id)
-    setDraft([])
     setPager(order.pager || '')
+    setQuickCustomerName(order.customerName || '')
     setCurrentDelivery(null)
+    draftContextServiceKeyRef.current = draftKey
+    setDraft(tableDrafts[draftKey]?.items || [])
     return { ok: true }
-  }, [state.orders])
+  }, [state.orders, tableDrafts])
 
   const openDelivery = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
     if (!order) return { ok: false, message: 'El domicilio no existe.' }
 
+    const draftKey = `delivery:${order.id}`
     setOrderModeState('delivery')
     setCurrentTableId(null)
     setCurrentOrderId(order.id)
-    setDraft([])
     setPager('')
+    setQuickCustomerName('')
     setCurrentDelivery(order.delivery || null)
+    draftContextServiceKeyRef.current = draftKey
+    setDraft(tableDrafts[draftKey]?.items || [])
     return { ok: true }
-  }, [state.orders])
+  }, [state.orders, tableDrafts])
 
   const startNewOrder = useCallback(() => {
     const free = state.tables.find((table) => table.active !== false && getTableTransferStatus(table.id) === 'free')
