@@ -428,7 +428,7 @@ export default function InventoryPage() {
           {workspace.movements.length ? (
             <div className="table-wrap inventory-table-wrap">
               <table className="inventory-table movement-table">
-                <thead><tr><th>Fecha</th><th>Tipo</th><th>Insumo</th><th>Cantidad</th><th>Costo</th><th>Detalle</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Insumo</th><th>Cantidad</th><th>Costo unitario</th><th>Costo total</th><th>Detalle</th></tr></thead>
                 <tbody>
                   {workspace.movements.map((movement) => (
                     <tr key={movement.id}>
@@ -437,6 +437,7 @@ export default function InventoryPage() {
                       <td><b>{movement.itemName}</b></td>
                       <td><strong className={Number(movement.quantityDelta) < 0 ? 'movement-out' : 'movement-in'}>{Number(movement.quantityDelta) > 0 ? '+' : ''}{quantityText(movement.quantityDelta, movement.unit)}</strong></td>
                       <td>{formatMoney(movement.unitCost || 0)}</td>
+                      <td><b>{formatMoney(Math.abs(Number(movement.quantityDelta || 0)) * Number(movement.unitCost || 0))}</b></td>
                       <td><span>{movement.note || 'Sin observación'}</span>{movement.createdByName && <small>Por {movement.createdByName}</small>}</td>
                     </tr>
                   ))}
