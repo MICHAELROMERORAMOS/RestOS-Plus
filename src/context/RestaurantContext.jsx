@@ -1098,6 +1098,8 @@ export function RestaurantProvider({ children }) {
     const table = state.tables.find((item) => item.id === tableId && item.active !== false)
     if (!table) return { ok: false, message: 'La mesa no existe o ya fue eliminada.' }
     if (openOrderForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa con una cuenta abierta.' }
+    if (tableSessionForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa mientras alguien está tomando un pedido.' }
+    if (tableDraftForTable(tableId).length) return { ok: false, message: 'No puedes eliminar una mesa que tiene productos pendientes sin enviar.' }
     if (reservationForTable(tableId)) return { ok: false, message: 'No puedes eliminar una mesa con una reserva activa.' }
 
     if (!auth.isDesignMode && activeLocation?.id) {
@@ -1116,8 +1118,8 @@ export function RestaurantProvider({ children }) {
     if (currentTableId === tableId) setCurrentTableId(null)
     return { ok: true }
   }, [
-    state.tables, openOrderForTable, reservationForTable, currentTableId, updateState,
-    auth.isDesignMode, activeLocation,
+    state.tables, openOrderForTable, tableSessionForTable, tableDraftForTable, reservationForTable,
+    currentTableId, updateState, auth.isDesignMode, activeLocation,
   ])
 
   const setOrderMode = useCallback((mode) => {
@@ -2238,6 +2240,7 @@ export function RestaurantProvider({ children }) {
 
     const fresh = createInitialDemoState()
     OLD_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key))
+    if (draftStorageKey) localStorage.removeItem(draftStorageKey)
     persist(fresh)
     setOrderModeState(fresh.settings.defaultOrderMode)
     setCurrentTableId(null)
@@ -2246,6 +2249,8 @@ export function RestaurantProvider({ children }) {
     setPager('')
     setCurrentDelivery(null)
     setTableOrderSessions([])
+    setTableDrafts({})
+    draftContextTableIdRef.current = null
     setProducts(DEMO_PRODUCTS)
     setMenuCategories([])
     setMenuStations([])
@@ -2255,7 +2260,7 @@ export function RestaurantProvider({ children }) {
       generatedAt: null,
     })
     return { ok: true }
-  }, [persist, auth.isDesignMode])
+  }, [persist, auth.isDesignMode, draftStorageKey])
 
   const stationJobs = useCallback((station) => {
     const jobs = []
@@ -2289,6 +2294,7 @@ export function RestaurantProvider({ children }) {
     operationalSummary,
     voidRequestsVersion,
     tableOrderSessions,
+    tableDrafts,
     inventoryAvailability,
     refreshMenu,
     refreshInventoryAvailability,
@@ -2331,6 +2337,8 @@ export function RestaurantProvider({ children }) {
     getTableTransferStatus,
     getTableVisualStatus,
     tableSessionForTable,
+    tableDraftForTable,
+    getTableDraftCount,
     addZone,
     updateZone,
     deleteZone,
@@ -2348,13 +2356,14 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    operationalSummary, voidRequestsVersion, tableOrderSessions, inventoryAvailability,
+    operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
     setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
-    transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus, tableSessionForTable,
+    transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
+    tableSessionForTable, tableDraftForTable, getTableDraftCount,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
     recordPayment, recordPayments, updateSettings, setCurrency, setInventoryStockControl,
     resetDemo, stationJobs, openOrderForTable,
