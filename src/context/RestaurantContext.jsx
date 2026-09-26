@@ -833,6 +833,18 @@ export function RestaurantProvider({ children }) {
       }
 
       if (payload.table === 'table_order_sessions') {
+        if (payload.eventType === 'DELETE') {
+          const releasedTableId = payload.old?.table_id || null
+          if (releasedTableId) {
+            clearStoredTableDraft(releasedTableId)
+            if (
+              String(currentTableId || '') === String(releasedTableId)
+              && draftContextTableIdRef.current === releasedTableId
+            ) {
+              setDraft([])
+            }
+          }
+        }
         refreshTableOrderSessions(activeLocation).catch(() => {})
         return
       }
@@ -893,6 +905,9 @@ export function RestaurantProvider({ children }) {
     refreshOperationalSummary,
     refreshInventoryAvailability,
     refreshTableOrderSessions,
+    clearStoredTableDraft,
+    currentTableId,
+    auth.permissions,
   ])
 
   const tableSessionForTable = useCallback((tableId) => (
@@ -1318,6 +1333,13 @@ export function RestaurantProvider({ children }) {
     }
   }, [auth.isDesignMode, currentTableId])
 
+  const canReleaseTableDraftSession = useCallback((tableId) => {
+    const session = tableSessionForTable(tableId)
+    if (!session || session.sessionType !== 'draft') return false
+    if (openOrderForTable(tableId)) return false
+    return session.claimedByMe || auth.can('tables.manage')
+  }, [tableSessionForTable, openOrderForTable, auth.permissions])
+
   const abandonTableDraftSession = useCallback(async (tableId, { discardDraft = false } = {}) => {
     if (!tableId) return { ok: false, message: 'Mesa inválida.' }
 
@@ -1325,8 +1347,12 @@ export function RestaurantProvider({ children }) {
     if (!session || session.sessionType !== 'draft') {
       return { ok: false, message: 'Esta mesa ya no está en toma de pedido.' }
     }
-    if (!session.claimedByMe) {
-      return { ok: false, message: 'Solo el usuario que abrió la mesa puede liberarla.' }
+    const canManageTables = auth.can('tables.manage')
+    if (!session.claimedByMe && !canManageTables) {
+      return {
+        ok: false,
+        message: 'Solo quien abrió la mesa, un supervisor o el owner pueden liberarla.',
+      }
     }
     if (openOrderForTable(tableId)) {
       return { ok: false, message: 'La mesa ya tiene una orden enviada y no puede liberarse desde aquí.' }
@@ -1337,7 +1363,12 @@ export function RestaurantProvider({ children }) {
       return { ok: false, needsConfirmation: true, draftCount: pendingCount }
     }
 
-    const released = await releaseTableDraftSession(tableId)
+    let released = false
+    try {
+      released = await releaseTableDraftSession(tableId)
+    } catch (error) {
+      return { ok: false, message: error?.message || 'No se pudo liberar la mesa.' }
+    }
     if (!released) {
       return { ok: false, message: 'No se pudo liberar la mesa. Actualiza e inténtalo nuevamente.' }
     }
@@ -1644,7 +1675,16 @@ export function RestaurantProvider({ children }) {
         return { ok: true, orderId: orderNumber }
       } catch (error) {
         await refreshInventoryAvailability(activeLocation)
-        return { ok: false, message: error?.message || 'No se pudo enviar la comanda a Supabase.' }
+        const message = String(error?.message || '')
+        if (message.includes('Table session is no longer active')) {
+          clearStoredTableDraft(currentTableId)
+          setDraft([])
+          return {
+            ok: false,
+            message: 'Esta mesa fue liberada mientras tomabas el pedido. Ábrela nuevamente antes de enviar productos.',
+          }
+        }
+        return { ok: false, message: message || 'No se pudo enviar la comanda a Supabase.' }
       }
     }
 
@@ -1707,7 +1747,7 @@ export function RestaurantProvider({ children }) {
     draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
     auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager,
     openOrderForTable, refreshOperationalOrdersByIds, refreshOperationalSummary,
-    refreshInventoryAvailability,
+    refreshInventoryAvailability, clearStoredTableDraft,
   ])
 
   const applyKitchenApprovedVoidRequest = useCallback((orderId, request) => {
@@ -2402,6 +2442,7 @@ export function RestaurantProvider({ children }) {
     openTable,
     touchTableDraftSession,
     releaseTableDraftSession,
+    canReleaseTableDraftSession,
     abandonTableDraftSession,
     startDelivery,
     openDelivery,
@@ -2443,7 +2484,7 @@ export function RestaurantProvider({ children }) {
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
-    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, abandonTableDraftSession, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
