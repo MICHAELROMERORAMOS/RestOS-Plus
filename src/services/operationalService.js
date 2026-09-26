@@ -63,6 +63,16 @@ function mapOperationalSummary(payload) {
   }
 }
 
+function mapTableOrderSessions(payload) {
+  const sessions = Array.isArray(payload) ? payload : []
+  return sessions.map((session) => ({
+    tableId: session.table_id,
+    claimedAt: asTimestamp(session.claimed_at),
+    lastSeenAt: asTimestamp(session.last_seen_at),
+    claimedByMe: Boolean(session.claimed_by_me),
+  }))
+}
+
 function mapOperationalOrders(payload) {
   const rawOrders = Array.isArray(payload?.orders) ? payload.orders : []
   const numberByServerId = new Map(
@@ -233,6 +243,56 @@ export async function loadOperationalOrdersByIds(restaurantId, locationId, order
   }
 }
 
+export async function loadTableOrderSessions(restaurantId, locationId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('load_table_order_sessions', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+  })
+
+  if (error) throw error
+  return mapTableOrderSessions(data || [])
+}
+
+export async function claimTableOrderSession(restaurantId, locationId, tableId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('claim_table_order_session', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+    p_table_id: tableId,
+  })
+
+  if (error) throw error
+  return {
+    ok: Boolean(data?.ok),
+    status: data?.status || null,
+    tableId: data?.table_id || tableId,
+    claimedAt: asTimestamp(data?.claimed_at),
+    lastSeenAt: asTimestamp(data?.last_seen_at),
+    claimedByMe: Boolean(data?.claimed_by_me),
+  }
+}
+
+export async function touchTableOrderSession(tableId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('touch_table_order_session', {
+    p_table_id: tableId,
+  })
+
+  if (error) throw error
+  return Boolean(data)
+}
+
+export async function releaseTableOrderSession(tableId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('release_table_order_session', {
+    p_table_id: tableId,
+  })
+
+  if (error) throw error
+  return Boolean(data)
+}
+
 export async function createDeliveryOrderRemote({
   restaurantId,
   locationId,
@@ -378,6 +438,12 @@ export function subscribeOperationalChanges(restaurantId, locationId, onChange) 
     .on('postgres_changes', { event: '*', schema: 'public', table: 'order_table_links' }, emit('order_table_links'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'order_rounds' }, emit('order_rounds'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, emit('order_items'))
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'table_order_sessions',
+      filter: `location_id=eq.${locationId}`,
+    }, emit('table_order_sessions'))
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
