@@ -50,7 +50,6 @@ export default function OrderPage({ onNavigate }) {
     voidPaidTableAccount, voidRequestsVersion,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
     tableLabel: getTableLabel, getTableTransferStatus, inventoryAvailability,
-    tableSessionForTable, touchTableDraftSession, releaseTableDraftSession,
   } = restaurant
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
@@ -285,38 +284,6 @@ export default function OrderPage({ onNavigate }) {
     tableAccountFullyDelivered,
     draft.length,
     onNavigate,
-  ])
-
-  const tableDraftSession = orderMode === 'table' && currentTableId
-    ? tableSessionForTable(currentTableId)
-    : null
-
-  useEffect(() => {
-    if (
-      orderMode !== 'table'
-      || !currentTableId
-      || currentOrder
-      || !tableDraftSession?.claimedByMe
-    ) {
-      return undefined
-    }
-
-    touchTableDraftSession(currentTableId).catch(() => {})
-    const heartbeat = window.setInterval(() => {
-      touchTableDraftSession(currentTableId).catch(() => {})
-    }, 60_000)
-
-    return () => {
-      window.clearInterval(heartbeat)
-      releaseTableDraftSession(currentTableId).catch(() => {})
-    }
-  }, [
-    orderMode,
-    currentTableId,
-    currentOrder,
-    tableDraftSession?.claimedByMe,
-    touchTableDraftSession,
-    releaseTableDraftSession,
   ])
 
   const requestableItems = useMemo(() => (
