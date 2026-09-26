@@ -20,16 +20,20 @@ import {
 } from '../services/settingsService.js'
 import {
   advanceStationRoundRemote,
+  claimTableOrderSession as claimTableOrderSessionRemote,
   createDeliveryOrderRemote,
   isOperationalOrder,
   joinOrderTableRemote,
   loadOperationalOrdersByIds,
   loadOperationalState,
   loadOperationalSummary,
+  loadTableOrderSessions,
   markRoundServedRemote,
   recordOrderPaymentsRemote,
+  releaseTableOrderSession as releaseTableOrderSessionRemote,
   sendOrderRoundRemote,
   subscribeOperationalChanges,
+  touchTableOrderSession as touchTableOrderSessionRemote,
   transferOrderTableRemote,
   unsubscribeOperationalChanges,
 } from '../services/operationalService.js'
@@ -234,6 +238,7 @@ export function RestaurantProvider({ children }) {
     tableReleases: [],
   })
   const [voidRequestsVersion, setVoidRequestsVersion] = useState(0)
+  const [tableOrderSessions, setTableOrderSessions] = useState([])
   const [inventoryAvailability, setInventoryAvailability] = useState({
     enforcementEnabled: true,
     byProduct: {},
@@ -398,6 +403,26 @@ export function RestaurantProvider({ children }) {
       }
     })
   }, [])
+
+  const refreshTableOrderSessions = useCallback(async (locationOverride = null) => {
+    if (auth.isDesignMode) return { ok: true, sessions: tableOrderSessions }
+
+    const location = locationOverride || activeLocation
+    if (!restaurantId || !location?.id) {
+      setTableOrderSessions([])
+      return { ok: false, message: 'No hay sucursal activa.' }
+    }
+
+    try {
+      const sessions = await loadTableOrderSessions(restaurantId, location.id)
+      setTableOrderSessions(sessions)
+      return { ok: true, sessions }
+    } catch (error) {
+      const message = error?.message || 'No se pudo actualizar el estado de toma de pedidos.'
+      setRemoteError(message)
+      return { ok: false, message }
+    }
+  }, [auth.isDesignMode, restaurantId, activeLocation, tableOrderSessions])
 
   const refreshOperationalData = useCallback(async (locationOverride = null) => {
     if (auth.isDesignMode) return { ok: true }
@@ -585,23 +610,26 @@ export function RestaurantProvider({ children }) {
       applyRemoteStructure(structure)
 
       if (structure.location) {
-        const [catalog, operational, availability] = await Promise.all([
+        const [catalog, operational, availability, tableSessions] = await Promise.all([
           loadMenuCatalog(restaurantId, structure.location.id),
           loadOperationalState(restaurantId, structure.location.id),
           canLoadInventoryAvailability
             ? loadProductInventoryAvailability(restaurantId, structure.location.id)
             : Promise.resolve({ enforcementEnabled: true, byProduct: {}, generatedAt: null }),
+          loadTableOrderSessions(restaurantId, structure.location.id),
         ])
         setProducts(catalog.products)
         setMenuCategories(catalog.categories)
         setMenuStations(catalog.stations)
         setInventoryAvailability(availability)
+        setTableOrderSessions(tableSessions)
         applyOperationalOrders(operational.orders, operational.summary)
       } else {
         setProducts([])
         setMenuCategories([])
         setMenuStations([])
         setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
+        setTableOrderSessions([])
         applyOperationalOrders([])
       }
 
@@ -638,6 +666,7 @@ export function RestaurantProvider({ children }) {
     if (auth.mode === 'authenticated' && restaurantId) {
       setOperationalSummary({ salesToday: 0, completedOrdersToday: 0, tableReleases: [] })
       setVoidRequestsVersion(0)
+      setTableOrderSessions([])
       setState((previous) => ({
         ...previous,
         orders: [],
@@ -670,6 +699,11 @@ export function RestaurantProvider({ children }) {
     const channel = subscribeOperationalChanges(restaurantId, activeLocation.id, (payload) => {
       if (payload.table === 'kitchen_void_requests') {
         setVoidRequestsVersion((version) => version + 1)
+        return
+      }
+
+      if (payload.table === 'table_order_sessions') {
+        refreshTableOrderSessions(activeLocation).catch(() => {})
         return
       }
 
@@ -724,7 +758,15 @@ export function RestaurantProvider({ children }) {
     refreshOperationalOrdersByIds,
     refreshOperationalSummary,
     refreshInventoryAvailability,
+    refreshTableOrderSessions,
   ])
+
+  const tableSessionForTable = useCallback((tableId) => (
+    tableOrderSessions.find((session) => (
+      session.tableId === tableId
+      && (!session.lastSeenAt || Date.now() - session.lastSeenAt < 5 * 60 * 1000)
+    )) || null
+  ), [tableOrderSessions])
 
   const openOrderForTable = useCallback((tableId, source = state) => source.orders.find((order) => (
     order.mode === 'table'
@@ -755,9 +797,10 @@ export function RestaurantProvider({ children }) {
     const table = source.tables.find((item) => item.id === tableId)
     if (!table || table.active === false) return 'unavailable'
     if (openOrderForTable(tableId, source)) return 'occupied'
+    if (tableSessionForTable(tableId)) return 'occupied'
     if (reservationForTable(tableId, source)) return 'reserved'
     return 'free'
-  }, [state, openOrderForTable, reservationForTable])
+  }, [state, openOrderForTable, reservationForTable, tableSessionForTable])
 
   const getTableVisualStatus = useCallback((tableId, source = state) => {
     const table = source.tables.find((item) => item.id === tableId)
@@ -765,9 +808,10 @@ export function RestaurantProvider({ children }) {
     if (openOrderForTable(tableId, source)) {
       return ['ready', 'pay', 'waiting_food', 'refund_due'].includes(table.status) ? table.status : 'occupied'
     }
+    if (tableSessionForTable(tableId)) return 'opening'
     if (reservationForTable(tableId, source)) return 'reserved'
     return 'free'
-  }, [state, openOrderForTable, reservationForTable])
+  }, [state, openOrderForTable, reservationForTable, tableSessionForTable])
 
   const addZone = useCallback(async (name) => {
     const cleaned = cleanName(name)
@@ -978,19 +1022,136 @@ export function RestaurantProvider({ children }) {
     if (mode !== 'delivery') setCurrentDelivery(null)
   }, [])
 
-  const openTable = useCallback((tableId) => {
+  const openTable = useCallback(async (tableId) => {
+    const table = state.tables.find((item) => item.id === tableId && item.active !== false)
+    if (!table) return { ok: false, message: 'La mesa no existe o está desactivada.' }
+
     const existing = state.orders.find((order) => (
       order.mode === 'table'
       && (order.tableIds || []).includes(tableId)
       && !['closed', 'merged', 'cancelled'].includes(order.status)
     ))
+
+    if (!existing) {
+      const currentSession = tableSessionForTable(tableId)
+      if (currentSession && !currentSession.claimedByMe) {
+        return {
+          ok: false,
+          message: 'Esta mesa ya está siendo abierta por otro usuario para tomar un pedido.',
+        }
+      }
+
+      if (auth.isDesignMode) {
+        if (!currentSession) {
+          const now = Date.now()
+          setTableOrderSessions((sessions) => [
+            ...sessions.filter((session) => session.tableId !== tableId),
+            {
+              tableId,
+              claimedAt: now,
+              lastSeenAt: now,
+              claimedByMe: true,
+            },
+          ])
+        }
+      } else {
+        if (!restaurantId || !activeLocation?.id) {
+          return { ok: false, message: 'No hay restaurante o sucursal activa.' }
+        }
+
+        try {
+          const claimed = await claimTableOrderSessionRemote(
+            restaurantId,
+            activeLocation.id,
+            tableId,
+          )
+
+          if (!claimed.ok) {
+            if (claimed.status === 'occupied') {
+              await refreshOperationalData(activeLocation)
+              return { ok: false, message: 'La mesa ya tiene una cuenta abierta.' }
+            }
+            if (claimed.status === 'claimed_by_other') {
+              await refreshTableOrderSessions(activeLocation)
+              return {
+                ok: false,
+                message: 'Esta mesa ya está siendo abierta por otro usuario para tomar un pedido.',
+              }
+            }
+            return { ok: false, message: 'No se pudo reservar la mesa para tomar el pedido.' }
+          }
+
+          setTableOrderSessions((sessions) => [
+            ...sessions.filter((session) => session.tableId !== tableId),
+            claimed,
+          ])
+        } catch (error) {
+          return {
+            ok: false,
+            message: error?.message || 'No se pudo abrir la mesa para tomar el pedido.',
+          }
+        }
+      }
+    }
+
     setOrderModeState('table')
     setCurrentTableId(tableId)
     setCurrentOrderId(existing?.id || null)
     setDraft([])
     setPager('')
     setCurrentDelivery(null)
-  }, [state.orders])
+    return { ok: true, existing: Boolean(existing) }
+  }, [
+    state.tables,
+    state.orders,
+    tableSessionForTable,
+    auth.isDesignMode,
+    restaurantId,
+    activeLocation,
+    refreshOperationalData,
+    refreshTableOrderSessions,
+  ])
+
+  const touchTableDraftSession = useCallback(async (tableId = currentTableId) => {
+    if (!tableId) return false
+
+    if (auth.isDesignMode) {
+      const now = Date.now()
+      setTableOrderSessions((sessions) => sessions.map((session) => (
+        session.tableId === tableId && session.claimedByMe
+          ? { ...session, lastSeenAt: now }
+          : session
+      )))
+      return true
+    }
+
+    try {
+      return await touchTableOrderSessionRemote(tableId)
+    } catch {
+      return false
+    }
+  }, [auth.isDesignMode, currentTableId])
+
+  const releaseTableDraftSession = useCallback(async (tableId = currentTableId) => {
+    if (!tableId) return false
+
+    if (auth.isDesignMode) {
+      setTableOrderSessions((sessions) => sessions.filter((session) => (
+        session.tableId !== tableId || !session.claimedByMe
+      )))
+      return true
+    }
+
+    try {
+      const released = await releaseTableOrderSessionRemote(tableId)
+      if (released) {
+        setTableOrderSessions((sessions) => sessions.filter((session) => session.tableId !== tableId))
+      }
+      return released
+    } catch {
+      return false
+    }
+  }, [auth.isDesignMode, currentTableId])
 
   const startDelivery = useCallback(async (delivery) => {
     const normalized = {
@@ -1921,6 +2082,7 @@ export function RestaurantProvider({ children }) {
     setDraft([])
     setPager('')
     setCurrentDelivery(null)
+    setTableOrderSessions([])
     setProducts(DEMO_PRODUCTS)
     setMenuCategories([])
     setMenuStations([])
@@ -1963,6 +2125,7 @@ export function RestaurantProvider({ children }) {
     remoteError,
     operationalSummary,
     voidRequestsVersion,
+    tableOrderSessions,
     inventoryAvailability,
     refreshMenu,
     refreshInventoryAvailability,
@@ -1970,6 +2133,7 @@ export function RestaurantProvider({ children }) {
     refreshOperationalData,
     refreshOperationalOrdersByIds,
     refreshOperationalSummary,
+    refreshTableOrderSessions,
     currencyCode,
     formatMoney,
     setCurrency,
@@ -1984,6 +2148,8 @@ export function RestaurantProvider({ children }) {
     setPager,
     setOrderMode,
     openTable,
+    touchTableDraftSession,
+    releaseTableDraftSession,
     startDelivery,
     openDelivery,
     startNewOrder,
@@ -2001,6 +2167,7 @@ export function RestaurantProvider({ children }) {
     tableLabel,
     getTableTransferStatus,
     getTableVisualStatus,
+    tableSessionForTable,
     addZone,
     updateZone,
     deleteZone,
@@ -2018,13 +2185,13 @@ export function RestaurantProvider({ children }) {
     orderBalance,
   }), [
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
-    operationalSummary, voidRequestsVersion, inventoryAvailability,
+    operationalSummary, voidRequestsVersion, tableOrderSessions, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
-    refreshOperationalSummary, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
-    setOrderMode, openTable, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
+    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, startDelivery, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
-    transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
+    transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus, tableSessionForTable,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
     recordPayment, recordPayments, updateSettings, setCurrency, setInventoryStockControl,
     resetDemo, stationJobs, openOrderForTable,
