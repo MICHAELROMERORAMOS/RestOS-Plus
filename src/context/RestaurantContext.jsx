@@ -1133,6 +1133,20 @@ export function RestaurantProvider({ children }) {
     const table = state.tables.find((item) => item.id === tableId && item.active !== false)
     if (!table) return { ok: false, message: 'La mesa no existe o está desactivada.' }
 
+    if (currentTableId && currentTableId !== tableId) {
+      const previousSession = tableSessionForTable(currentTableId)
+      const previousDraft = tableDraftForTable(currentTableId)
+      const previousOrder = openOrderForTable(currentTableId)
+
+      if (previousSession?.claimedByMe && !previousDraft.length && !previousOrder) {
+        if (auth.isDesignMode) {
+          setTableOrderSessions((sessions) => sessions.filter((session) => session.tableId !== currentTableId))
+        } else {
+          releaseTableOrderSessionRemote(currentTableId).catch(() => {})
+        }
+      }
+    }
+
     const existing = state.orders.find((order) => (
       order.mode === 'table'
       && (order.tableIds || []).includes(tableId)
@@ -1201,17 +1215,22 @@ export function RestaurantProvider({ children }) {
       }
     }
 
+    const restoredDraft = tableDraftForTable(tableId)
+    draftContextTableIdRef.current = tableId
     setOrderModeState('table')
     setCurrentTableId(tableId)
     setCurrentOrderId(existing?.id || null)
-    setDraft([])
+    setDraft(restoredDraft)
     setPager('')
     setCurrentDelivery(null)
-    return { ok: true, existing: Boolean(existing) }
+    return { ok: true, existing: Boolean(existing), restoredDraftCount: restoredDraft.length }
   }, [
     state.tables,
     state.orders,
+    currentTableId,
     tableSessionForTable,
+    tableDraftForTable,
+    openOrderForTable,
     auth.isDesignMode,
     restaurantId,
     activeLocation,
@@ -1259,6 +1278,43 @@ export function RestaurantProvider({ children }) {
       return false
     }
   }, [auth.isDesignMode, currentTableId])
+
+  useEffect(() => {
+    const keepAliveTableIds = tableOrderSessions
+      .filter((session) => (
+        session.claimedByMe
+        && (
+          session.tableId === currentTableId
+          || tableDraftForTable(session.tableId).length > 0
+        )
+      ))
+      .map((session) => session.tableId)
+
+    if (!keepAliveTableIds.length) return undefined
+
+    const heartbeat = window.setInterval(() => {
+      if (auth.isDesignMode) {
+        const now = Date.now()
+        setTableOrderSessions((sessions) => sessions.map((session) => (
+          keepAliveTableIds.includes(session.tableId) && session.claimedByMe
+            ? { ...session, lastSeenAt: now }
+            : session
+        )))
+        return
+      }
+
+      Promise.all(
+        keepAliveTableIds.map((tableId) => touchTableOrderSessionRemote(tableId).catch(() => false)),
+      ).catch(() => {})
+    }, 60_000)
+
+    return () => window.clearInterval(heartbeat)
+  }, [
+    auth.isDesignMode,
+    currentTableId,
+    tableOrderSessions,
+    tableDraftForTable,
+  ])
 
   const startDelivery = useCallback(async (delivery) => {
     const normalized = {
