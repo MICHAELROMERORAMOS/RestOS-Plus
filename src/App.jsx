@@ -77,8 +77,14 @@ function MainApplication() {
     navigate('order')
   }
 
-  function startDelivery(delivery) {
-    const result = restaurant.startDelivery(delivery)
+  function openQuickOrder(orderId) {
+    const result = restaurant.openQuickOrder(orderId)
+    if (result.ok) navigate('order')
+    return result
+  }
+
+  async function startDelivery(delivery) {
+    const result = await restaurant.startDelivery(delivery)
     if (result.ok) navigate('order')
     return result
   }
@@ -91,7 +97,14 @@ function MainApplication() {
 
   const pages = {
     dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={() => navigate('tables')} />,
-    tables: <TablesPage onOpenTable={openTable} onQuickService={auth.can('orders.create') ? quickService : null} />,
+    tables: (
+      <TablesPage
+        onOpenTable={openTable}
+        onQuickService={auth.can('orders.create') ? quickService : null}
+        onOpenQuickOrder={openQuickOrder}
+        onOpenDelivery={openDelivery}
+      />
+    ),
     deliveries: <DeliveriesPage onStartDelivery={startDelivery} onOpenDelivery={openDelivery} />,
     order: <OrderPage onNavigate={navigate} />,
     kitchen: <StationPage station="kitchen" />,
