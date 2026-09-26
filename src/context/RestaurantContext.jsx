@@ -1201,6 +1201,8 @@ export function RestaurantProvider({ children }) {
               claimedAt: now,
               lastSeenAt: now,
               claimedByMe: true,
+              attendantName: auth.userContext?.name || 'Usuario',
+              sessionType: 'draft',
             },
           ])
         }
@@ -1233,7 +1235,11 @@ export function RestaurantProvider({ children }) {
 
           setTableOrderSessions((sessions) => [
             ...sessions.filter((session) => session.tableId !== tableId),
-            claimed,
+            {
+              ...claimed,
+              attendantName: claimed.attendantName || auth.userContext?.name || 'Usuario',
+              sessionType: claimed.sessionType || 'draft',
+            },
           ])
         } catch (error) {
           return {
