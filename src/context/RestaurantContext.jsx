@@ -1304,7 +1304,9 @@ export function RestaurantProvider({ children }) {
     setCurrentOrderId(existing?.id || null)
     setDraft(restoredDraft)
     setPager('')
+    setQuickCustomerName('')
     setCurrentDelivery(null)
+    draftContextServiceKeyRef.current = null
     return { ok: true, existing: Boolean(existing), restoredDraftCount: restoredDraft.length }
   }, [
     state.tables,
@@ -1850,6 +1852,7 @@ export function RestaurantProvider({ children }) {
       mode: orderMode,
       tableIds: orderMode === 'table' && currentTableId ? [currentTableId] : [],
       pager: orderMode === 'quick' ? (pager.trim() || null) : null,
+      customerName: orderMode === 'quick' ? quickCustomerName.trim() : '',
       delivery: orderMode === 'delivery' ? currentDelivery : null,
       deliveryStatus: orderMode === 'delivery' ? 'pending' : null,
       rounds: [],
@@ -1875,7 +1878,7 @@ export function RestaurantProvider({ children }) {
         )),
       },
     }
-  }, [currentOrderId, currentTableId, orderMode, pager, currentDelivery])
+  }, [currentOrderId, currentTableId, orderMode, pager, quickCustomerName, currentDelivery])
 
   const sendDraft = useCallback(async ({ prepaid = false, paymentMethod = 'cash' } = {}) => {
     if (!draft.length) return { ok: false, message: 'Añade productos nuevos antes de enviar.' }
@@ -2629,10 +2632,12 @@ export function RestaurantProvider({ children }) {
     setCurrentOrderId(null)
     setDraft([])
     setPager('')
+    setQuickCustomerName('')
     setCurrentDelivery(null)
     setTableOrderSessions([])
     setTableDrafts({})
     draftContextTableIdRef.current = null
+    draftContextServiceKeyRef.current = null
     setProducts(DEMO_PRODUCTS)
     setMenuCategories([])
     setMenuStations([])
