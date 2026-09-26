@@ -75,6 +75,18 @@ function mapTableOrderSessions(payload) {
   }))
 }
 
+function applyOrderAttendants(orders, payload) {
+  const rows = Array.isArray(payload) ? payload : []
+  const byOrderId = new Map(
+    rows.map((row) => [String(row.order_id), row.opened_by_name || 'Usuario']),
+  )
+
+  return (orders || []).map((order) => ({
+    ...order,
+    openedByName: byOrderId.get(String(order.serverId)) || order.openedByName || 'Usuario',
+  }))
+}
+
 function mapOperationalOrders(payload) {
   const rawOrders = Array.isArray(payload?.orders) ? payload.orders : []
   const numberByServerId = new Map(
@@ -174,7 +186,7 @@ function mapOperationalOrders(payload) {
 export async function loadOperationalState(restaurantId, locationId) {
   const client = requireSupabase()
 
-  const [operationalResult, summaryResult] = await Promise.all([
+  const [operationalResult, summaryResult, attendantsResult] = await Promise.all([
     client.rpc('load_operational_state', {
       p_restaurant_id: restaurantId,
       p_location_id: locationId,
@@ -183,12 +195,24 @@ export async function loadOperationalState(restaurantId, locationId) {
       p_restaurant_id: restaurantId,
       p_location_id: locationId,
     }),
+    client.rpc('load_order_attendants', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+      p_order_ids: null,
+    }),
   ])
 
   if (operationalResult.error) throw operationalResult.error
   if (summaryResult.error) throw summaryResult.error
+  if (attendantsResult.error) throw attendantsResult.error
+
+  const orders = applyOrderAttendants(
+    mapOperationalOrders(operationalResult.data || {}),
+    attendantsResult.data || [],
+  )
+
   return {
-    orders: mapOperationalOrders(operationalResult.data || {}),
+    orders,
     summary: mapOperationalSummary(summaryResult.data || {}),
   }
 }
@@ -233,15 +257,27 @@ export async function loadOperationalOrdersByIds(restaurantId, locationId, order
   const ids = Array.from(new Set((orderIds || []).filter(Boolean)))
   if (!ids.length) return { orders: [] }
 
-  const { data, error } = await client.rpc('load_operational_orders_by_ids', {
-    p_restaurant_id: restaurantId,
-    p_location_id: locationId,
-    p_order_ids: ids,
-  })
+  const [ordersResult, attendantsResult] = await Promise.all([
+    client.rpc('load_operational_orders_by_ids', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+      p_order_ids: ids,
+    }),
+    client.rpc('load_order_attendants', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+      p_order_ids: ids,
+    }),
+  ])
 
-  if (error) throw error
+  if (ordersResult.error) throw ordersResult.error
+  if (attendantsResult.error) throw attendantsResult.error
+
   return {
-    orders: mapOperationalOrders(data || {}),
+    orders: applyOrderAttendants(
+      mapOperationalOrders(ordersResult.data || {}),
+      attendantsResult.data || [],
+    ),
   }
 }
 
