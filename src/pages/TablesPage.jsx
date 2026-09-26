@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 
 function formatTime(value) {
@@ -12,11 +12,14 @@ function formatTime(value) {
 }
 
 export default function TablesPage({ onOpenTable, onQuickService }) {
-  const { state, getTableVisualStatus } = useRestaurant()
+  const { state, getTableVisualStatus, formatMoney, orderTotal, tableSessionForTable } = useRestaurant()
+  const [pendingTable, setPendingTable] = useState(null)
+  const [openingTable, setOpeningTable] = useState(false)
   const labels = {
     free: 'LIBRE',
     reserved: 'RESERVADA',
     occupied: 'OCUPADA',
+    opening: 'TOMANDO PEDIDO',
     ready: 'PEDIDO LISTO',
     pay: 'POR COBRAR',
     waiting_food: 'PAGADA · ESPERANDO COMIDA',
@@ -32,12 +35,19 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
     if (status === 'free') return { borderColor: '#2f9e44', boxShadow: 'inset 0 0 0 1px #2f9e44' }
     if (status === 'reserved') return { borderColor: '#e0a800', boxShadow: 'inset 0 0 0 1px #e0a800' }
     if (status === 'occupied') return { borderColor: '#d64545', boxShadow: 'inset 0 0 0 1px #d64545' }
+    if (status === 'opening') return { borderColor: '#2f6fed', boxShadow: 'inset 0 0 0 1px #2f6fed' }
     if (status === 'waiting_food') return { borderColor: '#5b6fc7', boxShadow: 'inset 0 0 0 1px #5b6fc7' }
     if (status === 'refund_due') return { borderColor: '#b84b4b', boxShadow: 'inset 0 0 0 1px #b84b4b' }
     return undefined
   }
 
   function tableTimeText(table, status) {
+    if (status === 'opening') {
+      const session = tableSessionForTable(table.id)
+      const time = formatTime(session?.claimedAt)
+      return time ? `Tomando pedido desde las ${time}` : 'Tomando pedido ahora'
+    }
+
     const isOpen = ['occupied', 'ready', 'pay', 'waiting_food', 'refund_due'].includes(status)
 
     const relatedOrders = state.orders
@@ -54,6 +64,60 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
     const time = formatTime(value)
     if (!time) return isOpen ? 'Hora de apertura sin registrar' : 'Hora de liberación sin registrar'
     return isOpen ? `Abierta a las ${time}` : `Liberada a las ${time}`
+  }
+
+  function sentAccountTotal(tableId) {
+    const relatedOrders = state.orders.filter((order) => (
+      order.mode === 'table'
+      && (order.tableIds || []).includes(tableId)
+      && !['closed', 'cancelled', 'merged'].includes(order.status)
+      && (order.rounds || []).some((round) => (
+        (round.items || []).some((item) => !item.voided)
+      ))
+    ))
+
+    if (!relatedOrders.length) return null
+    return relatedOrders.reduce((sum, order) => sum + Number(orderTotal(order) || 0), 0)
+  }
+
+  async function openExistingOrClaimedTable(table) {
+    const result = await onOpenTable(table.id, { confirmed: true })
+    if (result?.ok === false && !result?.cancelled) {
+      window.alert(result.message || 'No se pudo abrir la mesa.')
+    }
+    return result
+  }
+
+  function handleTableClick(table) {
+    const status = getTableVisualStatus(table.id)
+    const session = tableSessionForTable(table.id)
+
+    if (status === 'free') {
+      setPendingTable(table)
+      return
+    }
+
+    if (status === 'opening' && !session?.claimedByMe) {
+      window.alert('Esta mesa ya está siendo atendida por otro usuario.')
+      return
+    }
+
+    openExistingOrClaimedTable(table)
+  }
+
+  async function confirmOpenTable() {
+    if (!pendingTable || openingTable) return
+    setOpeningTable(true)
+    try {
+      const result = await onOpenTable(pendingTable.id, { confirmed: true })
+      if (result?.ok) {
+        setPendingTable(null)
+      } else if (!result?.cancelled) {
+        window.alert(result?.message || 'No se pudo abrir la mesa.')
+      }
+    } finally {
+      setOpeningTable(false)
+    }
   }
 
   return (
@@ -87,13 +151,25 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
               <div className="tables">
                 {tables.map((table) => {
                   const status = getTableVisualStatus(table.id)
+                  const sentTotal = sentAccountTotal(table.id)
+                  const session = tableSessionForTable(table.id)
+                  const blockedByOther = status === 'opening' && !session?.claimedByMe
                   return (
-                    <button className={`table ${status}`} style={statusStyle(status)} key={table.id} onClick={() => onOpenTable(table.id)}>
+                    <button
+                      className={`table ${status}`}
+                      style={statusStyle(status)}
+                      key={table.id}
+                      onClick={() => handleTableClick(table)}
+                      aria-label={blockedByOther ? `${table.name}, otro usuario está tomando el pedido` : table.name}
+                    >
                       <div className="table-head">
                         <b>{table.name}</b>
                         <small className="table-capacity">{table.capacity} puestos</small>
                       </div>
                       <small className="table-time">◷ {tableTimeText(table, status)}</small>
+                      {sentTotal !== null && (
+                        <strong className="table-account-total">{formatMoney(sentTotal)}</strong>
+                      )}
                       <span className="table-status">{labels[status] || status}</span>
                     </button>
                   )
@@ -103,6 +179,24 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
           </div>
         )
       })}
+      <div className={`modal ${pendingTable ? 'open' : ''}`} onClick={() => !openingTable && setPendingTable(null)}>
+        <div className="modal-card table-open-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="table-open-icon">🍽️</div>
+          <h3>Abrir {pendingTable?.name || 'mesa'}</h3>
+          <p>
+            ¿Deseas abrir esta mesa para tomar el pedido? Mientras la estés atendiendo,
+            los demás usuarios verán que el pedido ya se está tomando.
+          </p>
+          <div className="table-open-actions">
+            <button className="btn" onClick={() => setPendingTable(null)} disabled={openingTable}>
+              Cancelar
+            </button>
+            <button className="btn primary" onClick={confirmOpenTable} disabled={openingTable}>
+              {openingTable ? 'Abriendo…' : 'Abrir mesa'}
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
   )
 }
