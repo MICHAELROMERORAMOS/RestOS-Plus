@@ -6,6 +6,7 @@ import AppShell from './components/layout/AppShell.jsx'
 import { NAV_ITEMS } from './config/navigation.js'
 import DashboardPage from './pages/DashboardPage.jsx'
 import TablesPage from './pages/TablesPage.jsx'
+import QuickServicePage from './pages/QuickServicePage.jsx'
 import DeliveriesPage from './pages/DeliveriesPage.jsx'
 import OrderPage from './pages/OrderPage.jsx'
 import StationPage from './pages/StationPage.jsx'
@@ -72,9 +73,10 @@ function MainApplication() {
     return result
   }
 
-  function quickService() {
-    restaurant.setOrderMode('quick')
-    navigate('order')
+  async function quickService() {
+    const result = await restaurant.startQuickOrder()
+    if (result.ok) navigate('order')
+    return result
   }
 
   function openQuickOrder(orderId) {
@@ -97,13 +99,11 @@ function MainApplication() {
 
   const pages = {
     dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={() => navigate('tables')} />,
-    tables: (
-      <TablesPage
-        onOpenTable={openTable}
-        onQuickService={auth.can('orders.create') ? quickService : null}
+    tables: <TablesPage onOpenTable={openTable} />,
+    'quick-service': (
+      <QuickServicePage
+        onStartQuickOrder={quickService}
         onOpenQuickOrder={openQuickOrder}
-        onOpenDelivery={openDelivery}
-        onOpenDeliveries={() => navigate('deliveries')}
       />
     ),
     deliveries: <DeliveriesPage onStartDelivery={startDelivery} onOpenDelivery={openDelivery} />,
