@@ -41,6 +41,40 @@ import {
 const RestaurantContext = createContext(null)
 const STORAGE_KEY = 'restos-plus-demo-state-v3'
 const OLD_STORAGE_KEYS = ['restos-plus-demo-state-v2', 'restos-demo']
+const TABLE_DRAFT_STORAGE_PREFIX = 'restos-plus-table-drafts-v1'
+const TABLE_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+function loadStoredTableDrafts(storageKey) {
+  if (!storageKey) return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}')
+    const now = Date.now()
+    const next = {}
+
+    Object.entries(parsed || {}).forEach(([tableId, entry]) => {
+      const updatedAt = Number(entry?.updatedAt || 0)
+      const items = Array.isArray(entry?.items) ? entry.items : []
+      if (!items.length) return
+      if (!updatedAt || now - updatedAt > TABLE_DRAFT_MAX_AGE_MS) return
+      next[tableId] = { items, updatedAt }
+    })
+
+    localStorage.setItem(storageKey, JSON.stringify(next))
+    return next
+  } catch {
+    localStorage.removeItem(storageKey)
+    return {}
+  }
+}
+
+function storeTableDrafts(storageKey, drafts) {
+  if (!storageKey) return
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(drafts || {}))
+  } catch {
+    // A local draft must never break order taking if browser storage is unavailable.
+  }
+}
 
 function cleanName(value) {
   return String(value || '').trim()
