@@ -54,6 +54,7 @@ export default function ReportsPage() {
   )
 
   async function runReport(type, range) {
+    if (loading) return
     setSelection(type)
     setReport(null)
     setError('')
@@ -104,27 +105,35 @@ export default function ReportsPage() {
       </div>
 
       <div className="report-periods">
-        <button className={`report-period ${selection === 'today' ? 'active' : ''}`} onClick={selectToday}>
+        <button className={`report-period ${selection === 'today' ? 'active' : ''}`} onClick={selectToday} disabled={loading}>
           <span>📅</span><b>Reporte del día</b><small>Ventas de hoy</small>
         </button>
-        <button className={`report-period ${selection === 'week' ? 'active' : ''}`} onClick={selectWeek}>
+        <button className={`report-period ${selection === 'week' ? 'active' : ''}`} onClick={selectWeek} disabled={loading}>
           <span>📆</span><b>Reporte semanal</b><small>Lunes a domingo</small>
         </button>
-        <button className={`report-period ${selection === 'custom' ? 'active' : ''}`} onClick={selectCustom}>
+        <button className={`report-period ${selection === 'custom' ? 'active' : ''}`} onClick={selectCustom} disabled={loading}>
           <span>🗓️</span><b>Rango de fechas</b><small>Período personalizado</small>
         </button>
       </div>
 
       {selection === 'custom' && (
         <div className="card report-range">
-          <label><span>Fecha inicial</span><input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} /></label>
-          <label><span>Fecha final</span><input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} /></label>
+          <label><span>Fecha inicial</span><input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} disabled={loading} /></label>
+          <label><span>Fecha final</span><input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} disabled={loading} /></label>
           <button className="btn primary" onClick={generateCustom} disabled={loading}>Generar reporte</button>
         </div>
       )}
 
       {error && <div className="notice warn section-gap">{error}</div>}
-      {loading && <div className="card empty-block section-gap">Generando reporte…</div>}
+      {loading && (
+        <div className="card report-loading section-gap" role="status" aria-live="polite">
+          <span className="report-loading-spinner" aria-hidden="true" />
+          <div>
+            <strong>Generando reporte…</strong>
+            <small>Estamos procesando las ventas del período seleccionado. Espera un momento.</small>
+          </div>
+        </div>
+      )}
 
       {!selection && !loading && (
         <div className="card placeholder compact-placeholder section-gap">
