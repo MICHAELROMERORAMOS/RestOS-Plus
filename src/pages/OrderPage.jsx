@@ -246,6 +246,30 @@ export default function OrderPage({ onNavigate }) {
   const tableAccountUnpaid = orderMode === 'table'
     && tableAccountPaid <= 0.005
 
+  const accountOrders = useMemo(() => {
+    if (orderMode === 'table') return tableOrders
+    if (!currentOrder || !(currentOrder.rounds || []).length) return []
+    if (['closed', 'cancelled', 'merged'].includes(currentOrder.status)) return []
+    return [currentOrder]
+  }, [orderMode, tableOrders, currentOrder])
+
+  const paymentAccountTotal = accountOrders.reduce((sum, order) => sum + orderTotal(order), 0)
+  const paymentAccountPaid = accountOrders.reduce((sum, order) => sum + orderPaidTotal(order), 0)
+  const paymentAccountBalance = accountOrders.reduce((sum, order) => sum + orderBalance(order), 0)
+  const paymentAccountRefundDue = accountOrders.reduce(
+    (sum, order) => sum + Number(order.refundDue || 0),
+    0,
+  )
+  const paymentAccountFullyPaid = accountOrders.length > 0
+    && paymentAccountTotal > 0.005
+    && paymentAccountBalance <= 0.005
+
+  const paymentAccountLabel = orderMode === 'table'
+    ? accountTableLabel
+    : orderMode === 'delivery'
+      ? `Domicilio #${currentOrder?.id || '—'} · ${deliveryInfo?.customerName || 'Cliente'}`
+      : `Rápido #${currentOrder?.id || '—'}${currentOrder?.pager || pager ? ` · Pager ${currentOrder?.pager || pager}` : ''}`
+
   useEffect(() => {
     if (orderMode !== 'table' || !currentTableId) {
       tableAccountLifecycleRef.current = null
@@ -333,11 +357,11 @@ export default function OrderPage({ onNavigate }) {
     return map
   }, [myVoidRequests])
 
-  function allocateTablePayment(requestedAmount) {
-    let remaining = Math.min(Number(requestedAmount || 0), tableAccountBalance)
+  function allocateAccountPayment(requestedAmount) {
+    let remaining = Math.min(Number(requestedAmount || 0), paymentAccountBalance)
     const allocations = []
 
-    for (const order of tableOrders) {
+    for (const order of accountOrders) {
       if (remaining <= 0.005) break
       const balance = orderBalance(order)
       if (balance <= 0.005) continue
@@ -351,8 +375,10 @@ export default function OrderPage({ onNavigate }) {
 
   function openChargeModal() {
     if (!canCharge) return window.alert('Tu rol no tiene permiso para cobrar cuentas.')
-    if (!currentTableId || !tableOrders.length) return window.alert('No hay una cuenta enviada para cobrar en esta mesa.')
-    if (tableAccountBalance <= 0.005) return window.alert('La cuenta de esta mesa ya está pagada.')
+    if (!accountOrders.length) {
+      return window.alert('Primero debes enviar productos a preparación antes de cobrar.')
+    }
+    if (paymentAccountBalance <= 0.005) return window.alert('Esta cuenta ya está pagada.')
 
     if (draft.length) {
       const continueAnyway = window.confirm(
@@ -361,16 +387,18 @@ export default function OrderPage({ onNavigate }) {
       if (!continueAnyway) return
     }
 
-    setChargeAmount(tableAccountBalance.toFixed(2))
+    setChargeAmount(paymentAccountBalance.toFixed(2))
     setChargeMethod('card')
-    setChargeInvoiceCustomer(invoiceCustomerFromOrders(tableOrders))
+    setChargeInvoiceCustomer(invoiceCustomerFromOrders(accountOrders))
     setShowCharge(true)
   }
 
   function openSplitModal() {
     if (!canCharge) return window.alert('Tu rol no tiene permiso para dividir o cobrar cuentas.')
-    if (!currentTableId || !tableOrders.length) return window.alert('No hay una cuenta enviada para dividir en esta mesa.')
-    if (tableAccountBalance <= 0.005) return window.alert('La cuenta de esta mesa ya está pagada.')
+    if (!accountOrders.length) {
+      return window.alert('Primero debes enviar productos a preparación antes de dividir o cobrar la cuenta.')
+    }
+    if (paymentAccountBalance <= 0.005) return window.alert('Esta cuenta ya está pagada.')
 
     if (draft.length) {
       const continueAnyway = window.confirm(
@@ -379,7 +407,7 @@ export default function OrderPage({ onNavigate }) {
       if (!continueAnyway) return
     }
 
-    if (!showCharge) setChargeInvoiceCustomer(invoiceCustomerFromOrders(tableOrders))
+    if (!showCharge) setChargeInvoiceCustomer(invoiceCustomerFromOrders(accountOrders))
     setShowCharge(false)
     setShowSplit(true)
   }
@@ -574,9 +602,9 @@ export default function OrderPage({ onNavigate }) {
 
     const amount = Number(String(chargeAmount).replace(',', '.'))
     if (!Number.isFinite(amount) || amount <= 0) return window.alert('Introduce un importe válido.')
-    if (amount > tableAccountBalance + 0.005) return window.alert('El importe supera el saldo pendiente de la mesa.')
+    if (amount > paymentAccountBalance + 0.005) return window.alert('El importe supera el saldo pendiente.')
 
-    const allocations = allocateTablePayment(amount)
+    const allocations = allocateAccountPayment(amount)
     if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
 
     const customerResult = validateInvoiceCustomer(chargeInvoiceCustomer)
@@ -586,7 +614,7 @@ export default function OrderPage({ onNavigate }) {
       ? `${customerResult.customer.fullName} · ${customerResult.customer.documentType} ${customerResult.customer.documentNumber}`
       : 'Consumidor final'
     const confirmed = window.confirm(
-      `¿Confirmar cobro de ${formatMoney(amount)} para ${accountTableLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}\nFactura: ${invoiceText}`,
+      `¿Confirmar cobro de ${formatMoney(amount)} para ${paymentAccountLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}\nFactura: ${invoiceText}`,
     )
     if (!confirmed) return
 
@@ -602,12 +630,6 @@ export default function OrderPage({ onNavigate }) {
   async function handleSend() {
     const result = await sendDraft({ prepaid: false })
     if (!result.ok) window.alert(result.message)
-  }
-
-  async function handleQuickPay() {
-    const result = await sendDraft({ prepaid: false })
-    if (!result.ok) return window.alert(result.message)
-    onNavigate('kitchen')
   }
 
   function openTableSelector(action) {
@@ -649,7 +671,7 @@ export default function OrderPage({ onNavigate }) {
         <div>
           <h2>{
             orderMode === 'quick'
-              ? 'Servicio rápido · Prepago'
+              ? 'Servicio rápido'
               : orderMode === 'delivery'
                 ? `Domicilio · ${deliveryInfo?.customerName || 'Nuevo cliente'}`
                 : currentTableId
@@ -695,13 +717,21 @@ export default function OrderPage({ onNavigate }) {
           onChange={(event) => setSearch(event.target.value)}
         />
         {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
-        {orderMode === 'table' && canCharge && (
-          <button className="btn pay-inline-btn" disabled={!tableOrders.length || tableAccountBalance <= 0.005} onClick={openChargeModal}>
-            💳 Cobrar mesa
+        {canCharge && (
+          <button
+            className="btn pay-inline-btn"
+            disabled={!accountOrders.length || paymentAccountBalance <= 0.005}
+            onClick={openChargeModal}
+          >
+            💳 {orderMode === 'table' ? 'Cobrar mesa' : 'Cobrar pedido'}
           </button>
         )}
-        {orderMode === 'table' && canCharge && (
-          <button className="btn" disabled={!tableOrders.length || tableAccountBalance <= 0.005} onClick={openSplitModal}>
+        {canCharge && (
+          <button
+            className="btn"
+            disabled={!accountOrders.length || paymentAccountBalance <= 0.005}
+            onClick={openSplitModal}
+          >
             ✂ Dividir cuenta
           </button>
         )}
@@ -753,7 +783,7 @@ export default function OrderPage({ onNavigate }) {
           <div className="section-title">
             <h3>{orderMode === 'quick' ? 'Nueva orden' : orderMode === 'delivery' ? 'Pedido a domicilio' : 'Cuenta abierta'}</h3>
             <span className="badge">
-              {orderMode === 'quick' ? 'Prepago' : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
+              {orderMode === 'quick' ? (currentOrder?.pager ? `Pager ${currentOrder.pager}` : 'Servicio rápido') : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
             </span>
           </div>
           {orderMode === 'quick' && (
@@ -861,12 +891,12 @@ export default function OrderPage({ onNavigate }) {
 
           <div className="order-summary">
             <div className="row plain"><b>Total cuenta</b><strong>{formatMoney(accountTotal)}</strong></div>
-            {orderMode === 'table' && tableOrders.length > 0 && (
+            {accountOrders.length > 0 && (
               <>
-                <div className="row plain"><span>Pagado</span><strong>{formatMoney(tableAccountPaid)}</strong></div>
-                <div className="row plain"><b>Saldo pendiente</b><strong>{formatMoney(tableAccountBalance)}</strong></div>
-                {tableRefundDue > 0.005 && (
-                  <div className="row plain refund-due-row"><b>Reembolso pendiente</b><strong>{formatMoney(tableRefundDue)}</strong></div>
+                <div className="row plain"><span>Pagado</span><strong>{formatMoney(paymentAccountPaid)}</strong></div>
+                <div className="row plain"><b>Saldo pendiente</b><strong>{formatMoney(paymentAccountBalance)}</strong></div>
+                {paymentAccountRefundDue > 0.005 && (
+                  <div className="row plain refund-due-row"><b>Reembolso pendiente</b><strong>{formatMoney(paymentAccountRefundDue)}</strong></div>
                 )}
               </>
             )}
@@ -876,24 +906,24 @@ export default function OrderPage({ onNavigate }) {
               El inventario cambió y ya no alcanza para todos los productos sin enviar. Reduce las cantidades antes de enviar a preparación.
             </div>
           )}
-          {orderMode === 'table' && canCharge && tableOrders.length > 0 && !tableAccountFullyPaid && (
+          {canCharge && accountOrders.length > 0 && !paymentAccountFullyPaid && (
             <button
               className="btn payment-from-order full"
-              disabled={tableAccountBalance <= 0.005}
+              disabled={paymentAccountBalance <= 0.005}
               onClick={openChargeModal}
             >
-              💳 Cobrar mesa desde esta pantalla
+              💳 {orderMode === 'table' ? 'Cobrar mesa desde esta pantalla' : 'Cobrar pedido desde esta pantalla'}
             </button>
           )}
-          {orderMode === 'quick' ? (
-            <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleQuickPay}>🍳 Enviar a preparación</button>
-          ) : (
-            <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleSend}>
-              {orderMode === 'delivery' ? '🚚 Enviar domicilio a preparación' : 'Enviar nuevos productos'}
-            </button>
-          )}
-          {orderMode === 'quick' && <div className="notice">El servicio rápido se envía a preparación y luego se cobra desde Caja, igual que una cuenta de mesa.</div>}
-          {orderMode === 'delivery' && <div className="notice">El domicilio quedará identificado con los datos del cliente en Cocina/Bar y en el módulo Domicilios.</div>}
+          <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleSend}>
+            {orderMode === 'delivery'
+              ? '🚚 Enviar domicilio a preparación'
+              : orderMode === 'quick'
+                ? '🍳 Enviar a preparación'
+                : 'Enviar nuevos productos'}
+          </button>
+          {orderMode === 'quick' && <div className="notice">Después de enviar, puedes cobrar este pedido aquí mismo o volver a “Pedidos activos” y abrirlo nuevamente.</div>}
+          {orderMode === 'delivery' && <div className="notice">Después de enviar, puedes cobrar el domicilio aquí mismo. El pedido conserva los datos del cliente en Cocina/Bar y en Domicilios.</div>}
         </div>
       </div>
 
@@ -1027,16 +1057,16 @@ export default function OrderPage({ onNavigate }) {
           <div className="modal-card order-payment-modal" onClick={(event) => event.stopPropagation()}>
             <div className="section-title">
               <div>
-                <h3>💳 Cobrar · {accountTableLabel}</h3>
-                <p className="muted">Cuenta consolidada de la mesa</p>
+                <h3>💳 Cobrar · {paymentAccountLabel}</h3>
+                <p className="muted">{orderMode === 'table' ? 'Cuenta consolidada de la mesa' : 'Pedido activo'}</p>
               </div>
               <button className="btn" disabled={chargeBusy} onClick={() => setShowCharge(false)}>×</button>
             </div>
 
             <div className="order-payment-totals">
-              <div><span>Total</span><strong>{formatMoney(tableAccountTotal)}</strong></div>
-              <div><span>Pagado</span><strong>{formatMoney(tableAccountPaid)}</strong></div>
-              <div className="balance"><span>Saldo</span><strong>{formatMoney(tableAccountBalance)}</strong></div>
+              <div><span>Total</span><strong>{formatMoney(paymentAccountTotal)}</strong></div>
+              <div><span>Pagado</span><strong>{formatMoney(paymentAccountPaid)}</strong></div>
+              <div className="balance"><span>Saldo</span><strong>{formatMoney(paymentAccountBalance)}</strong></div>
             </div>
 
             {draft.length > 0 && (
@@ -1071,8 +1101,8 @@ export default function OrderPage({ onNavigate }) {
             />
 
             <div className="order-payment-shortcuts">
-              <button className="btn" onClick={() => setChargeAmount((tableAccountBalance / 2).toFixed(2))}>½ saldo</button>
-              <button className="btn" onClick={() => setChargeAmount(tableAccountBalance.toFixed(2))}>Saldo completo</button>
+              <button className="btn" onClick={() => setChargeAmount((paymentAccountBalance / 2).toFixed(2))}>½ saldo</button>
+              <button className="btn" onClick={() => setChargeAmount(paymentAccountBalance.toFixed(2))}>Saldo completo</button>
               <button className="btn" onClick={openSplitModal}>✂ Dividir cuenta</button>
             </div>
 
@@ -1083,10 +1113,10 @@ export default function OrderPage({ onNavigate }) {
         </div>
       )}
 
-      {showSplit && tableOrders.length > 0 && (
+      {showSplit && accountOrders.length > 0 && (
         <SplitBillModal
-          orders={tableOrders}
-          tableText={accountTableLabel}
+          orders={accountOrders}
+          tableText={paymentAccountLabel}
           initialInvoiceCustomer={chargeInvoiceCustomer}
           onClose={() => setShowSplit(false)}
         />
