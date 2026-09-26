@@ -2069,24 +2069,22 @@ html, body {
 
 .inventory-tabs {
   display: flex;
-  gap: 7px;
-  padding: 5px;
+  gap: 12px;
   margin-bottom: 14px;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-  background: #eaf0ed;
   width: max-content;
   max-width: 100%;
   overflow-x: auto;
+  padding: 2px;
 }
 
 .inventory-tabs button {
-  min-height: 42px;
-  padding: 0 15px;
-  border: 0;
-  border-radius: 11px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   color: #53665d;
-  background: transparent;
+  background: #fff;
+  box-shadow: 0 3px 10px #173c2c0d;
   font-weight: 900;
   white-space: nowrap;
 }
