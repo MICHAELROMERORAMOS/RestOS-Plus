@@ -14,9 +14,11 @@ function formatTime(value) {
 export default function TablesPage({ onOpenTable, onQuickService }) {
   const {
     state, getTableVisualStatus, formatMoney, orderTotal, tableSessionForTable, getTableDraftCount,
+    abandonTableDraftSession,
   } = useRestaurant()
   const [pendingTable, setPendingTable] = useState(null)
   const [openingTable, setOpeningTable] = useState(false)
+  const [releasingTableId, setReleasingTableId] = useState(null)
   const labels = {
     free: 'LIBRE',
     reserved: 'RESERVADA',
@@ -107,6 +109,31 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
     openExistingOrClaimedTable(table)
   }
 
+  async function releaseMyTable(table) {
+    const session = tableSessionForTable(table.id)
+    if (!session?.claimedByMe || session.sessionType !== 'draft') {
+      window.alert('Solo el usuario que abrió la mesa puede liberarla antes de enviar el pedido.')
+      return
+    }
+
+    const draftCount = getTableDraftCount(table.id)
+    const message = draftCount > 0
+      ? `Esta mesa tiene ${draftCount} producto${draftCount === 1 ? '' : 's'} sin enviar. Si la liberas, ese borrador se eliminará. ¿Deseas continuar?`
+      : '¿Deseas liberar esta mesa? Aún no se ha enviado ningún pedido.'
+
+    if (!window.confirm(message)) return
+
+    setReleasingTableId(table.id)
+    try {
+      const result = await abandonTableDraftSession(table.id, { discardDraft: true })
+      if (!result?.ok) {
+        window.alert(result?.message || 'No se pudo liberar la mesa.')
+      }
+    } finally {
+      setReleasingTableId(null)
+    }
+  }
+
   async function confirmOpenTable() {
     if (!pendingTable || openingTable) return
     setOpeningTable(true)
@@ -157,29 +184,47 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
                   const draftCount = getTableDraftCount(table.id)
                   const session = tableSessionForTable(table.id)
                   const blockedByOther = status === 'opening' && !session?.claimedByMe
+                  const canReleaseDraft = status === 'opening'
+                    && session?.sessionType === 'draft'
+                    && session?.claimedByMe
                   return (
-                    <button
-                      className={`table ${status}`}
-                      style={statusStyle(status)}
-                      key={table.id}
-                      onClick={() => handleTableClick(table)}
-                      aria-label={blockedByOther ? `${table.name}, otro usuario está tomando el pedido` : table.name}
-                    >
-                      <div className="table-head">
-                        <b>{table.name}</b>
-                        <small className="table-capacity">{table.capacity} puestos</small>
-                      </div>
-                      <small className="table-time">◷ {tableTimeText(table, status)}</small>
-                      {sentTotal !== null && (
-                        <strong className="table-account-total">{formatMoney(sentTotal)}</strong>
+                    <div className="table-shell" key={table.id}>
+                      <button
+                        className={`table ${status}`}
+                        style={statusStyle(status)}
+                        onClick={() => handleTableClick(table)}
+                        aria-label={blockedByOther ? `${table.name}, otro usuario está tomando el pedido` : table.name}
+                      >
+                        {session?.attendantName && (
+                          <small className="table-attendant" title={session.attendantName}>
+                            Atiende: {session.attendantName}
+                          </small>
+                        )}
+                        <div className="table-head">
+                          <b>{table.name}</b>
+                          <small className="table-capacity">{table.capacity} puestos</small>
+                        </div>
+                        <small className="table-time">◷ {tableTimeText(table, status)}</small>
+                        {sentTotal !== null && (
+                          <strong className="table-account-total">{formatMoney(sentTotal)}</strong>
+                        )}
+                        {draftCount > 0 && (
+                          <small className="table-draft-count">
+                            🛒 {draftCount} {draftCount === 1 ? 'producto' : 'productos'} sin enviar
+                          </small>
+                        )}
+                        <span className="table-status">{labels[status] || status}</span>
+                      </button>
+                      {canReleaseDraft && (
+                        <button
+                          className="table-release-btn"
+                          onClick={() => releaseMyTable(table)}
+                          disabled={releasingTableId === table.id}
+                        >
+                          {releasingTableId === table.id ? 'Liberando…' : 'Liberar mesa'}
+                        </button>
                       )}
-                      {draftCount > 0 && (
-                        <small className="table-draft-count">
-                          🛒 {draftCount} {draftCount === 1 ? 'producto' : 'productos'} sin enviar
-                        </small>
-                      )}
-                      <span className="table-status">{labels[status] || status}</span>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
