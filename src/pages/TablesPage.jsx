@@ -18,44 +18,18 @@ function shortName(value) {
   return `${parts[0]} ${parts[1]}`
 }
 
-function activeOrderStatus(order) {
-  const items = (order.rounds || [])
-    .flatMap((round) => round.items || [])
-    .filter((item) => !item.voided)
-
-  if (Number(order.refundDue || 0) > 0.005 || order.status === 'refund_due') return 'REEMBOLSO PENDIENTE'
-  if (!items.length) return 'SIN ENVIAR'
-  if (order.status === 'waiting_food') return 'PAGADO · ESPERANDO COMIDA'
-  if (order.status === 'ready') return 'PEDIDO LISTO'
-  if (order.status === 'pay') return 'POR COBRAR'
-  if (items.every((item) => item.prepStatus === 'delivered')) {
-    return order.paymentStatus === 'paid' ? 'PAGADO · ENTREGADO' : 'POR COBRAR'
-  }
-  if (items.every((item) => ['ready', 'delivered'].includes(item.prepStatus))) return 'PEDIDO LISTO'
-  if (items.some((item) => item.prepStatus === 'preparing')) return 'EN PREPARACIÓN'
-  return 'ENVIADO'
-}
-
-function operationalVisualStatus(order) {
-  if (Number(order.refundDue || 0) > 0.005 || order.status === 'refund_due') return 'refund_due'
-  if (!(order.rounds || []).some((round) => (round.items || []).some((item) => !item.voided))) return 'opening'
-  if (order.status === 'ready') return 'ready'
-  if (order.status === 'pay') return 'pay'
-  if (order.status === 'waiting_food') return 'waiting_food'
-  return 'occupied'
-}
-
-export default function TablesPage({
-  onOpenTable,
-  onQuickService,
-  onOpenQuickOrder,
-  onOpenDelivery,
-  onOpenDeliveries,
-}) {
+export default function TablesPage({ onOpenTable }) {
   const {
-    state, getTableVisualStatus, formatMoney, orderTotal, tableSessionForTable, getTableDraftCount,
-    canReleaseTableDraftSession, abandonTableDraftSession,
+    state,
+    getTableVisualStatus,
+    formatMoney,
+    orderTotal,
+    tableSessionForTable,
+    getTableDraftCount,
+    canReleaseTableDraftSession,
+    abandonTableDraftSession,
   } = useRestaurant()
+
   const [pendingTable, setPendingTable] = useState(null)
   const [openingTable, setOpeningTable] = useState(false)
   const [releasingTableId, setReleasingTableId] = useState(null)
@@ -78,17 +52,6 @@ export default function TablesPage({
     [state.zones],
   )
 
-  const activeServiceOrders = useMemo(
-    () => state.orders
-      .filter((order) => (
-        ['quick', 'delivery'].includes(order.mode)
-        && !['closed', 'cancelled', 'merged'].includes(order.status)
-      ))
-      .slice()
-      .sort((a, b) => (b.created || 0) - (a.created || 0)),
-    [state.orders],
-  )
-
   const statusStyle = (status) => {
     if (status === 'free') return { borderColor: '#2f9e44', boxShadow: 'inset 0 0 0 1px #2f9e44' }
     if (status === 'reserved') return { borderColor: '#e0a800', boxShadow: 'inset 0 0 0 1px #e0a800' }
@@ -107,6 +70,7 @@ export default function TablesPage({
     }
 
     const isOpen = ['occupied', 'ready', 'pay', 'waiting_food', 'refund_due'].includes(status)
+
     const relatedOrders = state.orders
       .filter((order) => order.mode === 'table' && (order.tableIds || []).includes(table.id))
       .sort((a, b) => (b.created || 0) - (a.created || 0))
@@ -207,110 +171,33 @@ export default function TablesPage({
     }
   }
 
-  function openServiceOrder(order) {
-    const result = order.mode === 'delivery'
-      ? onOpenDelivery?.(order.id)
-      : onOpenQuickOrder?.(order.id)
-
-    if (result?.ok === false) {
-      window.alert(result.message || 'No se pudo abrir el pedido.')
-    }
-  }
-
   return (
     <section className="view active">
       <div className="hero tables-hero">
         <div>
-          <h2>Pedidos activos</h2>
-          <p>Mesas, pedidos rápidos y domicilios visibles en una sola pantalla.</p>
-        </div>
-        <div className="actions">
-          {onOpenDeliveries && (
-            <button className="btn" onClick={onOpenDeliveries}>🚚 Nuevo domicilio</button>
-          )}
-          {onQuickService && (
-            <button className="btn primary quick-service-entry" onClick={onQuickService}>
-              <span className="quick-service-icon">⚡</span>
-              <span>
-                <b>Servicio rápido</b>
-                <small>Sin mesa</small>
-              </span>
-            </button>
-          )}
+          <h2>Mesas y salones</h2>
+          <p>Selecciona una mesa para abrir o continuar su pedido.</p>
         </div>
       </div>
 
-      {activeServiceOrders.length > 0 && (
-        <div className="card section-gap">
-          <div className="section-title">
-            <div>
-              <h3>Rápidos y domicilios</h3>
-              <p className="muted">Abre cualquier tarjeta para continuar el pedido o cobrarlo.</p>
-            </div>
-            <span className="badge">{activeServiceOrders.length} activos</span>
-          </div>
-
-          <div className="tables service-orders-grid">
-            {activeServiceOrders.map((order) => {
-              const visualStatus = operationalVisualStatus(order)
-              const hasSentItems = (order.rounds || []).some((round) => (
-                (round.items || []).some((item) => !item.voided)
-              ))
-              const identifier = order.mode === 'delivery'
-                ? `Domicilio #${order.id}`
-                : `Rápido #${order.id}`
-              const reference = order.mode === 'delivery'
-                ? (order.delivery?.customerName || order.customerName || 'Cliente sin nombre')
-                : (order.pager ? `Pager ${order.pager}` : (order.customerName || 'Sin pager'))
-              const openedTime = formatTime(order.created)
-              const releasedTime = formatTime(order.closedAt)
-              const responsible = shortName(order.openedByName)
-
-              return (
-                <button
-                  key={order.id}
-                  className={`table service-order-card ${visualStatus}`}
-                  style={statusStyle(visualStatus)}
-                  onClick={() => openServiceOrder(order)}
-                >
-                  <div className="service-order-kind">
-                    <span>{order.mode === 'delivery' ? '🚚 DOMICILIO' : '⚡ RÁPIDO'}</span>
-                  </div>
-                  <div className="table-head service-order-head">
-                    <b>{identifier}</b>
-                  </div>
-                  <strong className="service-order-reference">{reference}</strong>
-                  <small className="table-time">
-                    ◷ {releasedTime ? `Liberado a las ${releasedTime}` : openedTime ? `Abierto a las ${openedTime}` : 'Hora sin registrar'}
-                  </small>
-                  {hasSentItems && (
-                    <strong className="table-account-total">{formatMoney(orderTotal(order))}</strong>
-                  )}
-                  <span className="table-status">{activeOrderStatus(order)}</span>
-                  {responsible && (
-                    <small className="table-attendant service-attendant" title={order.openedByName}>
-                      {responsible}
-                    </small>
-                  )}
-                </button>
-              )
-            })}
+      {!activeZones.length && (
+        <div className="card">
+          <div className="empty-inline">
+            No hay mesas configuradas. Ve a Configuración → Salones / áreas y mesas para crear la distribución del restaurante.
           </div>
         </div>
-      )}
-
-      {!activeZones.length && (
-        <div className="card"><div className="empty-inline">No hay mesas configuradas. Ve a Configuración → Salones / áreas y mesas para crear la distribución del restaurante.</div></div>
       )}
 
       {activeZones.map((zone) => {
         const tables = state.tables.filter((table) => table.active !== false && table.zoneId === zone.id)
+
         return (
           <div className="card section-gap" key={zone.id}>
             <div className="section-title">
               <h3>{zone.name}</h3>
               <span className="badge">{tables.length} {tables.length === 1 ? 'mesa' : 'mesas'}</span>
             </div>
+
             {tables.length ? (
               <div className="tables">
                 {tables.map((table) => {
@@ -319,8 +206,7 @@ export default function TablesPage({
                   const draftCount = getTableDraftCount(table.id)
                   const session = tableSessionForTable(table.id)
                   const blockedByOther = status === 'opening' && !session?.claimedByMe
-                  const canReleaseDraft = status === 'opening'
-                    && canReleaseTableDraftSession(table.id)
+                  const canReleaseDraft = status === 'opening' && canReleaseTableDraftSession(table.id)
                   const responsible = shortName(session?.attendantName)
 
                   return (
@@ -335,16 +221,21 @@ export default function TablesPage({
                           <b>{table.name}</b>
                           <small className="table-capacity">{table.capacity} puestos</small>
                         </div>
+
                         <small className="table-time">◷ {tableTimeText(table, status)}</small>
+
                         {sentTotal !== null && (
                           <strong className="table-account-total">{formatMoney(sentTotal)}</strong>
                         )}
+
                         {draftCount > 0 && (
                           <small className="table-draft-count">
                             🛒 {draftCount} {draftCount === 1 ? 'producto' : 'productos'} sin enviar
                           </small>
                         )}
+
                         <span className="table-status">{labels[status] || status}</span>
+
                         {responsible && (
                           <small className="table-attendant" title={session?.attendantName}>
                             {responsible}
@@ -365,7 +256,9 @@ export default function TablesPage({
                   )
                 })}
               </div>
-            ) : <div className="empty-inline">Esta área todavía no tiene mesas.</div>}
+            ) : (
+              <div className="empty-inline">Esta área todavía no tiene mesas.</div>
+            )}
           </div>
         )
       })}
@@ -379,6 +272,7 @@ export default function TablesPage({
               ? `Esta mesa tiene ${getTableDraftCount(pendingTable.id)} producto${getTableDraftCount(pendingTable.id) === 1 ? '' : 's'} sin enviar guardado${getTableDraftCount(pendingTable.id) === 1 ? '' : 's'}. ¿Deseas continuar el pedido?`
               : '¿Deseas abrir esta mesa para tomar el pedido? Mientras la estés atendiendo, los demás usuarios verán que el pedido ya se está tomando.'}
           </p>
+
           <div className="table-open-actions">
             <button className="btn" onClick={() => setPendingTable(null)} disabled={openingTable}>
               Cancelar
