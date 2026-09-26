@@ -12,7 +12,9 @@ function formatTime(value) {
 }
 
 export default function TablesPage({ onOpenTable, onQuickService }) {
-  const { state, getTableVisualStatus, formatMoney, orderTotal, tableSessionForTable } = useRestaurant()
+  const {
+    state, getTableVisualStatus, formatMoney, orderTotal, tableSessionForTable, getTableDraftCount,
+  } = useRestaurant()
   const [pendingTable, setPendingTable] = useState(null)
   const [openingTable, setOpeningTable] = useState(false)
   const labels = {
@@ -152,6 +154,7 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
                 {tables.map((table) => {
                   const status = getTableVisualStatus(table.id)
                   const sentTotal = sentAccountTotal(table.id)
+                  const draftCount = getTableDraftCount(table.id)
                   const session = tableSessionForTable(table.id)
                   const blockedByOther = status === 'opening' && !session?.claimedByMe
                   return (
@@ -170,6 +173,11 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
                       {sentTotal !== null && (
                         <strong className="table-account-total">{formatMoney(sentTotal)}</strong>
                       )}
+                      {draftCount > 0 && (
+                        <small className="table-draft-count">
+                          🛒 {draftCount} {draftCount === 1 ? 'producto' : 'productos'} sin enviar
+                        </small>
+                      )}
                       <span className="table-status">{labels[status] || status}</span>
                     </button>
                   )
@@ -184,8 +192,9 @@ export default function TablesPage({ onOpenTable, onQuickService }) {
           <div className="table-open-icon">🍽️</div>
           <h3>Abrir {pendingTable?.name || 'mesa'}</h3>
           <p>
-            ¿Deseas abrir esta mesa para tomar el pedido? Mientras la estés atendiendo,
-            los demás usuarios verán que el pedido ya se está tomando.
+            {pendingTable && getTableDraftCount(pendingTable.id) > 0
+              ? `Esta mesa tiene ${getTableDraftCount(pendingTable.id)} producto${getTableDraftCount(pendingTable.id) === 1 ? '' : 's'} sin enviar guardado${getTableDraftCount(pendingTable.id) === 1 ? '' : 's'}. ¿Deseas continuar el pedido?`
+              : '¿Deseas abrir esta mesa para tomar el pedido? Mientras la estés atendiendo, los demás usuarios verán que el pedido ya se está tomando.'}
           </p>
           <div className="table-open-actions">
             <button className="btn" onClick={() => setPendingTable(null)} disabled={openingTable}>
