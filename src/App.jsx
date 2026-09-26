@@ -103,6 +103,7 @@ function MainApplication() {
         onQuickService={auth.can('orders.create') ? quickService : null}
         onOpenQuickOrder={openQuickOrder}
         onOpenDelivery={openDelivery}
+        onOpenDeliveries={() => navigate('deliveries')}
       />
     ),
     deliveries: <DeliveriesPage onStartDelivery={startDelivery} onOpenDelivery={openDelivery} />,
