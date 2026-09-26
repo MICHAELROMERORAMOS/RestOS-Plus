@@ -81,10 +81,16 @@ function applyOrderAttendants(orders, payload) {
     rows.map((row) => [String(row.order_id), row.opened_by_name || 'Usuario']),
   )
 
-  return (orders || []).map((order) => ({
-    ...order,
-    openedByName: byOrderId.get(String(order.serverId)) || order.openedByName || 'Usuario',
-  }))
+  const rowByOrderId = new Map(rows.map((row) => [String(row.order_id), row]))
+
+  return (orders || []).map((order) => {
+    const row = rowByOrderId.get(String(order.serverId))
+    return {
+      ...order,
+      openedByName: row?.opened_by_name || order.openedByName || 'Usuario',
+      openedByMe: Boolean(row?.opened_by_me),
+    }
+  })
 }
 
 function mapOperationalOrders(payload) {
@@ -325,6 +331,43 @@ export async function releaseTableOrderSession(tableId) {
   const client = requireSupabase()
   const { data, error } = await client.rpc('release_table_order_session', {
     p_table_id: tableId,
+  })
+
+  if (error) throw error
+  return Boolean(data)
+}
+
+export async function createQuickOrderRemote({ restaurantId, locationId }) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('create_quick_order', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function updateQuickOrderIdentityRemote({
+  orderServerId,
+  pager,
+  customerName,
+}) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('update_quick_order_identity', {
+    p_order_id: orderServerId,
+    p_pager_number: pager || null,
+    p_customer_name: customerName || null,
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function releaseEmptyQuickOrderRemote(orderServerId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('release_empty_quick_order', {
+    p_order_id: orderServerId,
   })
 
   if (error) throw error
