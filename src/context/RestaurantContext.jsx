@@ -422,7 +422,7 @@ export function RestaurantProvider({ children }) {
       setRemoteError(message)
       return { ok: false, message }
     }
-  }, [auth.isDesignMode, restaurantId, activeLocation, tableOrderSessions])
+  }, [auth.isDesignMode, restaurantId, activeLocation])
 
   const refreshOperationalData = useCallback(async (locationOverride = null) => {
     if (auth.isDesignMode) return { ok: true }
