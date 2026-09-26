@@ -70,6 +70,8 @@ function mapTableOrderSessions(payload) {
     claimedAt: asTimestamp(session.claimed_at),
     lastSeenAt: asTimestamp(session.last_seen_at),
     claimedByMe: Boolean(session.claimed_by_me),
+    attendantName: session.attendant_name || 'Usuario',
+    sessionType: session.session_type || 'draft',
   }))
 }
 
