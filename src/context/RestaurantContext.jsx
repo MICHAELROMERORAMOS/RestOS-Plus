@@ -372,6 +372,29 @@ export function RestaurantProvider({ children }) {
     })
   }, [draft, orderMode, currentTableId, saveTableDraftMap])
 
+  useEffect(() => {
+    const staleTableIds = Object.entries(tableDrafts)
+      .filter(([tableId, entry]) => {
+        const table = state.tables.find((candidate) => String(candidate.id) === String(tableId))
+        const releasedAt = Number(table?.releasedAt || 0)
+        return releasedAt > Number(entry?.updatedAt || 0)
+      })
+      .map(([tableId]) => tableId)
+
+    if (!staleTableIds.length) return
+
+    const staleSet = new Set(staleTableIds)
+    saveTableDraftMap((previous) => {
+      const next = { ...previous }
+      staleTableIds.forEach((tableId) => delete next[tableId])
+      return next
+    })
+
+    if (currentTableId && staleSet.has(String(currentTableId))) {
+      setDraft([])
+    }
+  }, [state.tables, tableDrafts, currentTableId, saveTableDraftMap])
+
   const canLoadInventoryAvailability = auth.isDesignMode
     || auth.can('orders.create')
     || auth.can('inventory.view')
