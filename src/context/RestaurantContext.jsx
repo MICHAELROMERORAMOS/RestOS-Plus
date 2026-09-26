@@ -1640,6 +1640,119 @@ export function RestaurantProvider({ children }) {
     tableDrafts,
   ])
 
+  const updateQuickOrderIdentity = useCallback(async ({ pager: nextPager = '', customerName: nextCustomerName = '' } = {}) => {
+    const normalizedPager = cleanName(nextPager)
+    const normalizedCustomer = cleanName(nextCustomerName)
+
+    if (normalizedPager && normalizedCustomer) {
+      return { ok: false, message: 'Usa número de pager o nombre del cliente, no ambos.' }
+    }
+    if (orderMode !== 'quick' || !currentOrderId) {
+      return { ok: false, message: 'No hay un pedido rápido abierto.' }
+    }
+
+    setPager(normalizedPager)
+    setQuickCustomerName(normalizedCustomer)
+
+    if (auth.isDesignMode) {
+      updateState((previous) => ({
+        ...previous,
+        orders: previous.orders.map((order) => order.id === currentOrderId
+          ? { ...order, pager: normalizedPager || null, customerName: normalizedCustomer }
+          : order),
+      }))
+      return { ok: true }
+    }
+
+    const order = state.orders.find((item) => item.id === currentOrderId && item.mode === 'quick')
+    if (!order?.serverId) {
+      return { ok: false, message: 'El pedido rápido todavía no está sincronizado.' }
+    }
+
+    try {
+      await updateQuickOrderIdentityRemote({
+        orderServerId: order.serverId,
+        pager: normalizedPager,
+        customerName: normalizedCustomer,
+      })
+      await refreshOperationalOrdersByIds([order.serverId], activeLocation)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: error?.message || 'No se pudo guardar la identificación del pedido rápido.' }
+    }
+  }, [
+    orderMode,
+    currentOrderId,
+    auth.isDesignMode,
+    state.orders,
+    updateState,
+    refreshOperationalOrdersByIds,
+    activeLocation,
+  ])
+
+  const releaseEmptyQuickOrder = useCallback(async (orderId) => {
+    const order = state.orders.find((item) => item.id === orderId && item.mode === 'quick')
+    if (!order) return { ok: false, message: 'El pedido rápido no existe o ya fue cerrado.' }
+
+    const hasSentItems = (order.rounds || []).some((round) => (
+      (round.items || []).some((item) => !item.voided)
+    ))
+    if (hasSentItems) {
+      return { ok: false, message: 'Este pedido ya tiene productos enviados y no puede liberarse como vacío.' }
+    }
+
+    const allowed = order.openedByMe || auth.can('tables.manage')
+    if (!allowed) {
+      return { ok: false, message: 'Solo quien creó el pedido, un supervisor o el owner pueden liberarlo vacío.' }
+    }
+
+    if (auth.isDesignMode) {
+      updateState((previous) => ({
+        ...previous,
+        orders: previous.orders.map((candidate) => candidate.id === orderId
+          ? { ...candidate, status: 'cancelled', closedAt: Date.now() }
+          : candidate),
+      }))
+    } else {
+      if (!order.serverId) return { ok: false, message: 'El pedido no está sincronizado.' }
+      try {
+        const released = await releaseEmptyQuickOrderRemote(order.serverId)
+        if (!released) return { ok: false, message: 'El pedido ya no estaba disponible para liberar.' }
+        await refreshOperationalOrdersByIds([order.serverId], activeLocation)
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo liberar el pedido rápido.' }
+      }
+    }
+
+    const key = `quick:${orderId}`
+    saveTableDraftMap((previous) => {
+      if (!previous[key]) return previous
+      const next = { ...previous }
+      delete next[key]
+      return next
+    })
+
+    if (currentOrderId === orderId && orderMode === 'quick') {
+      setDraft([])
+      setPager('')
+      setQuickCustomerName('')
+      setCurrentOrderId(null)
+      draftContextServiceKeyRef.current = null
+    }
+
+    return { ok: true }
+  }, [
+    state.orders,
+    auth.permissions,
+    auth.isDesignMode,
+    updateState,
+    refreshOperationalOrdersByIds,
+    activeLocation,
+    saveTableDraftMap,
+    currentOrderId,
+    orderMode,
+  ])
+
   const openQuickOrder = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'quick')
     if (!order) return { ok: false, message: 'El pedido rápido no existe o ya fue cerrado.' }
@@ -1770,6 +1883,12 @@ export function RestaurantProvider({ children }) {
     if (orderMode === 'delivery' && (!currentDelivery?.customerName || !currentDelivery?.address || !currentDelivery?.phone || !currentDelivery?.neighborhood || !currentDelivery?.city)) {
       return { ok: false, message: 'Faltan datos obligatorios del domicilio.' }
     }
+    if (orderMode === 'quick' && !pager.trim() && !quickCustomerName.trim()) {
+      return { ok: false, message: 'Digita el número del pager o el nombre del cliente antes de enviar.' }
+    }
+    if (orderMode === 'quick' && pager.trim() && quickCustomerName.trim()) {
+      return { ok: false, message: 'Usa número de pager o nombre del cliente, no ambos.' }
+    }
     if (!auth.isDesignMode) {
       if (!restaurantId || !activeLocation?.id) {
         return { ok: false, message: 'No hay restaurante o sucursal activa.' }
@@ -1787,8 +1906,12 @@ export function RestaurantProvider({ children }) {
           tableIds: orderMode === 'table'
             ? (existingOrder?.tableIds?.length ? existingOrder.tableIds : [currentTableId])
             : [],
-          customerId: currentDelivery?.customerId || null,
-          customerName: currentDelivery?.customerName || null,
+          customerId: orderMode === 'delivery' ? (currentDelivery?.customerId || null) : null,
+          customerName: orderMode === 'delivery'
+            ? (currentDelivery?.customerName || null)
+            : orderMode === 'quick'
+              ? (quickCustomerName.trim() || null)
+              : null,
           delivery: orderMode === 'delivery' ? currentDelivery : null,
           pager: orderMode === 'quick' ? (pager.trim() || null) : null,
           items: draft,
@@ -1881,7 +2004,7 @@ export function RestaurantProvider({ children }) {
     return { ok: true, orderId: createdOrderId }
   }, [
     draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
-    auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager,
+    auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager, quickCustomerName,
     openOrderForTable, refreshOperationalOrdersByIds, refreshOperationalSummary,
     refreshInventoryAvailability, clearStoredTableDraft,
   ])
@@ -2574,12 +2697,17 @@ export function RestaurantProvider({ children }) {
     draft,
     pager,
     setPager,
+    quickCustomerName,
+    setQuickCustomerName,
     setOrderMode,
     openTable,
     touchTableDraftSession,
     releaseTableDraftSession,
     canReleaseTableDraftSession,
     abandonTableDraftSession,
+    startQuickOrder,
+    updateQuickOrderIdentity,
+    releaseEmptyQuickOrder,
     startDelivery,
     openQuickOrder,
     openDelivery,
@@ -2620,8 +2748,8 @@ export function RestaurantProvider({ children }) {
     state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
-    refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager,
-    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
+    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
