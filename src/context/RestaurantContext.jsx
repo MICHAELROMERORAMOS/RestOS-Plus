@@ -378,6 +378,31 @@ export function RestaurantProvider({ children }) {
   }, [draft, orderMode, currentTableId, saveTableDraftMap])
 
   useEffect(() => {
+    if (!['quick', 'delivery'].includes(orderMode) || !currentOrderId) return
+
+    const key = `${orderMode}:${currentOrderId}`
+    if (draftContextServiceKeyRef.current !== key) return
+
+    saveTableDraftMap((previous) => {
+      const existing = previous[key]
+      if (!draft.length) {
+        if (!existing) return previous
+        const next = { ...previous }
+        delete next[key]
+        return next
+      }
+
+      return {
+        ...previous,
+        [key]: {
+          items: draft,
+          updatedAt: Date.now(),
+        },
+      }
+    })
+  }, [draft, orderMode, currentOrderId, saveTableDraftMap])
+
+  useEffect(() => {
     const staleTableIds = Object.entries(tableDrafts)
       .filter(([tableId, entry]) => {
         const table = state.tables.find((candidate) => String(candidate.id) === String(tableId))
