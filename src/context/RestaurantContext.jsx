@@ -22,6 +22,7 @@ import {
   advanceStationRoundRemote,
   claimTableOrderSession as claimTableOrderSessionRemote,
   createDeliveryOrderRemote,
+  createQuickOrderRemote,
   isOperationalOrder,
   joinOrderTableRemote,
   loadOperationalOrdersByIds,
@@ -30,11 +31,13 @@ import {
   loadTableOrderSessions,
   markRoundServedRemote,
   recordOrderPaymentsRemote,
+  releaseEmptyQuickOrderRemote,
   releaseTableOrderSession as releaseTableOrderSessionRemote,
   sendOrderRoundRemote,
   subscribeOperationalChanges,
   touchTableOrderSession as touchTableOrderSessionRemote,
   transferOrderTableRemote,
+  updateQuickOrderIdentityRemote,
   unsubscribeOperationalChanges,
 } from '../services/operationalService.js'
 
@@ -261,6 +264,7 @@ export function RestaurantProvider({ children }) {
   const inventoryRefreshTimer = useRef(null)
   const pendingOperationalOrderIds = useRef(new Set())
   const draftContextTableIdRef = useRef(null)
+  const draftContextServiceKeyRef = useRef(null)
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
   const [menuStations, setMenuStations] = useState([])
@@ -285,6 +289,7 @@ export function RestaurantProvider({ children }) {
   const [currentOrderId, setCurrentOrderId] = useState(null)
   const [draft, setDraft] = useState([])
   const [pager, setPager] = useState('')
+  const [quickCustomerName, setQuickCustomerName] = useState('')
   const [currentDelivery, setCurrentDelivery] = useState(null)
 
   const persist = useCallback((next) => {
