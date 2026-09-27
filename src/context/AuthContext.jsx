@@ -31,9 +31,29 @@ const statusCopy = {
     icon: '×',
   },
   missing_membership: {
-    title: 'Falta asignar restaurante y rol',
-    message: 'Tu cuenta está aprobada, pero todavía no tiene una membresía activa con restaurante y rol.',
+    title: 'Falta asignar empresa y rol',
+    message: 'Tu cuenta está aprobada, pero todavía no tiene una membresía activa con una empresa y un rol.',
     icon: '⏳',
+  },
+  company_pending: {
+    title: 'Empresa pendiente de aprobación',
+    message: 'Tu solicitud para crear la empresa fue enviada a RestOS+. Podrás ingresar cuando sea aprobada.',
+    icon: '🏢',
+  },
+  employee_pending: {
+    title: 'Acceso solicitado',
+    message: 'Tu solicitud fue enviada al Owner de la empresa. Podrás ingresar cuando te asigne un rol y una sucursal.',
+    icon: '⏳',
+  },
+  company_approved: {
+    title: 'Empresa aprobada',
+    message: 'La empresa fue aprobada. Vuelve a ingresar para cargar tu acceso de Owner.',
+    icon: '✓',
+  },
+  employee_approved: {
+    title: 'Acceso aprobado',
+    message: 'Tu acceso fue aprobado. Vuelve a ingresar para cargar tu empresa y rol.',
+    icon: '✓',
   },
 }
 
@@ -63,11 +83,49 @@ export function AuthProvider({ children }) {
     try {
       const access = await loadUserAccess(user)
       if (!access.active) {
+        const onboarding = access.onboarding || {}
+        const actionable = ['onboarding_required', 'company_rejected', 'employee_rejected'].includes(access.status)
+
+        if (actionable) {
+          setPendingState({
+            title: access.status === 'company_rejected'
+              ? 'Solicitud de empresa no aprobada'
+              : access.status === 'employee_rejected'
+                ? 'Solicitud de acceso no aprobada'
+                : 'Completa tu registro',
+            message: access.status === 'company_rejected'
+              ? (onboarding.review_note || 'Puedes corregir los datos y enviar una nueva solicitud de empresa.')
+              : access.status === 'employee_rejected'
+                ? 'Puedes solicitar acceso nuevamente usando el código de empresa correcto.'
+                : 'Indica si vas a crear una empresa nueva o si quieres unirte a una empresa existente.',
+            icon: access.status === 'onboarding_required' ? '🏢' : '×',
+          })
+          setUserContext({
+            id: user.id,
+            name: access.profile?.full_name || access.profile?.username || user.email,
+            email: access.profile?.email || user.email,
+            phone: access.profile?.phone || '',
+            onboarding,
+          })
+          setPermissions(new Set())
+          setMode('onboarding')
+          return
+        }
+
         await remoteSignOut()
-        const copy = statusCopy[access.status] || {
+        const baseCopy = statusCopy[access.status] || {
           title: 'Acceso no disponible',
           message: 'Tu cuenta no está habilitada para entrar en RestOS+.',
           icon: '!',
+        }
+        const companyName = onboarding.company_name
+        const copy = {
+          ...baseCopy,
+          message: access.status === 'company_pending' && companyName
+            ? `La solicitud para crear “${companyName}” está pendiente de aprobación por RestOS+.`
+            : access.status === 'employee_pending' && companyName
+              ? `Tu solicitud de acceso a “${companyName}” está pendiente de aprobación por el Owner de esa empresa.`
+              : baseCopy.message,
         }
         setPendingState(copy)
         setUserContext(null)
@@ -82,6 +140,7 @@ export function AuthProvider({ children }) {
         role: access.role?.name || 'Rol',
         restaurant: access.restaurant?.name || 'Restaurante',
         membership: access.membership,
+        platformAdmin: Boolean(access.platformAdmin),
       })
       sessionStorage.removeItem(DESIGN_SESSION_KEY)
       setPendingState(null)
@@ -166,6 +225,7 @@ export function AuthProvider({ children }) {
     mode,
     isDesignMode: mode === 'design',
     isAuthenticated: mode === 'authenticated' || mode === 'design',
+    isOnboarding: mode === 'onboarding',
     userContext,
     permissions,
     pendingState,
