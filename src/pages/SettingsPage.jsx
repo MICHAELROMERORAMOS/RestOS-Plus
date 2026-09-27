@@ -33,12 +33,13 @@ function SettingsSection({
 
 export default function SettingsPage() {
   const {
-    state, updateSettings,
+    state,
     addZone, updateZone, deleteZone,
     addTable, updateTable, deleteTable,
     activeLocation, remoteLoading, remoteError,
     setCurrency,
     setInventoryStockControl,
+    setOperationalBehavior,
   } = useRestaurant()
   const auth = useAuth()
   const canManageTables = auth.can('tables.manage')
@@ -67,6 +68,7 @@ export default function SettingsPage() {
   const [editingTable, setEditingTable] = useState(null)
   const [currencySaving, setCurrencySaving] = useState(false)
   const [inventoryControlSaving, setInventoryControlSaving] = useState(false)
+  const [operationSaving, setOperationSaving] = useState(false)
 
   async function changeCurrency(event) {
     const code = event.target.value
@@ -81,6 +83,30 @@ export default function SettingsPage() {
     setInventoryControlSaving(true)
     const result = await setInventoryStockControl(enabled)
     setInventoryControlSaving(false)
+    if (!result.ok) window.alert(result.message)
+  }
+
+  async function changeManualQuickIdentity(event) {
+    const allowPager = event.target.checked
+    setOperationSaving(true)
+    const result = await setOperationalBehavior({ allowPager })
+    setOperationSaving(false)
+    if (!result.ok) window.alert(result.message)
+  }
+
+  async function changeStationSeparation(event) {
+    const splitStations = event.target.checked
+
+    if (!splitStations) {
+      const confirmed = window.confirm(
+        '¿Unificar Cocina y Bar?\n\nLas nuevas comandas de productos configurados como Bar también se enviarán a Cocina. Las comandas ya enviadas conservarán su estación actual.',
+      )
+      if (!confirmed) return
+    }
+
+    setOperationSaving(true)
+    const result = await setOperationalBehavior({ splitStations })
+    setOperationSaving(false)
     if (!result.ok) window.alert(result.message)
   }
 
@@ -134,7 +160,7 @@ export default function SettingsPage() {
 
       <SettingsSection
         title="Operación e integraciones"
-        description="Ajustes generales del restaurante, moneda, modo de servicio y conexiones."
+        description="Moneda, identificación de servicio rápido, preparación e inventario."
         icon="⚙️"
         defaultOpen
       >
@@ -142,7 +168,6 @@ export default function SettingsPage() {
         <div className="card">
           <h3>Operación</h3>
           <div className="settings-form">
-            <label><span>Nombre del restaurante</span><input value={settings.restaurantName} onChange={(event) => updateSettings({ restaurantName: event.target.value })} /></label>
             <label>
               <span>Moneda del restaurante</span>
               <select
@@ -164,17 +189,54 @@ export default function SettingsPage() {
                     : 'Solo Owner / usuarios con settings.manage pueden cambiarla.'}
               </small>
             </label>
-            <label><span>Modo predeterminado</span><select value={settings.defaultOrderMode} onChange={(event) => updateSettings({ defaultOrderMode: event.target.value })}><option value="table">Servicio de mesa / cuenta abierta</option><option value="quick">Servicio rápido / prepago</option></select></label>
-            <label><span>Identificador servicio rápido</span><select value={settings.quickIdentifier} onChange={(event) => updateSettings({ quickIdentifier: event.target.value })}><option value="order">Número consecutivo de orden</option><option value="pager">Pager / vibrador</option><option value="turn">Número de turno</option><option value="name">Nombre del cliente</option></select></label>
-            <label className="toggle-row"><span>Permitir pager / turno manual</span><input type="checkbox" checked={settings.allowPager} onChange={(event) => updateSettings({ allowPager: event.target.checked })} /></label>
-            <label className="toggle-row"><span>Separar Cocina / Bar</span><input type="checkbox" checked={settings.splitStations} onChange={(event) => updateSettings({ splitStations: event.target.checked })} /></label>
+
+            <label className="toggle-row operational-setting-row">
+              <span>
+                <b>Permitir pager / identificación manual</b>
+                <small>
+                  {operationSaving
+                    ? 'Guardando en Supabase…'
+                    : settings.allowPager !== false
+                      ? 'Activo: en Servicio rápido se escribe el número del pager o el nombre del cliente.'
+                      : 'Desactivado: RestOS+ asigna automáticamente Turno 1, 2, 3… y reinicia el consecutivo después de cada cierre de turno.'}
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.allowPager !== false}
+                onChange={changeManualQuickIdentity}
+                disabled={!canManageSettings || operationSaving}
+              />
+            </label>
+
+            <label className="toggle-row operational-setting-row">
+              <span>
+                <b>Separar Cocina / Bar</b>
+                <small>
+                  {operationSaving
+                    ? 'Guardando en Supabase…'
+                    : settings.splitStations !== false
+                      ? 'Activo: cada producto se envía a su estación configurada, Cocina o Bar.'
+                      : 'Desactivado: toda nueva preparación se envía únicamente a Cocina.'}
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.splitStations !== false}
+                onChange={changeStationSeparation}
+                disabled={!canManageSettings || operationSaving}
+              />
+            </label>
+
             <label className="toggle-row inventory-control-toggle">
               <span>
                 <b>Bloquear productos sin insumos suficientes</b>
                 <small>
                   {inventoryControlSaving
                     ? 'Guardando en Supabase…'
-                    : 'Si está activo, no se podrá enviar una cantidad mayor que la disponible según las recetas.'}
+                    : settings.blockInsufficientInventory !== false
+                      ? 'Activo: bloquea el producto cuando la receta o el inventario directo no alcanzan para otra unidad.'
+                      : 'Desactivado: permite vender aunque el stock disponible sea insuficiente.'}
                 </small>
               </span>
               <input
