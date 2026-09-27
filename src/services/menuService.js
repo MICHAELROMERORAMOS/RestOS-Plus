@@ -19,7 +19,6 @@ export async function loadMenuCatalog(restaurantId, locationId) {
     { data: products, error: productsError },
     { data: stations, error: stationsError },
     { data: routes, error: routesError },
-    { data: directInventory, error: directInventoryError },
   ] = await Promise.all([
     client
       .from('menu_categories')
@@ -29,7 +28,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       .order('name', { ascending: true }),
     client
       .from('products')
-      .select('id,restaurant_id,category_id,sku,name,description,base_price,tax_rate,track_inventory,active,created_at')
+      .select('id,restaurant_id,category_id,sku,name,description,base_price,tax_rate,track_inventory,inventory_mode,active,created_at')
       .eq('restaurant_id', restaurantId)
       .order('name', { ascending: true }),
     client
@@ -42,24 +41,16 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       .from('product_station_routes')
       .select('product_id,location_id,station_id')
       .eq('location_id', locationId),
-    client.rpc('get_direct_product_inventory_config', {
-      p_restaurant_id: restaurantId,
-      p_location_id: locationId,
-    }),
   ])
 
   if (categoriesError) throw categoriesError
   if (productsError) throw productsError
   if (stationsError) throw stationsError
   if (routesError) throw routesError
-  if (directInventoryError) throw directInventoryError
 
   const categoryById = new Map((categories || []).map((category) => [category.id, category]))
   const stationById = new Map((stations || []).map((station) => [station.id, station]))
   const routeByProduct = new Map((routes || []).map((route) => [route.product_id, route]))
-  const directInventoryByProduct = new Map(
-    (Array.isArray(directInventory) ? directInventory : []).map((item) => [String(item.productId), item]),
-  )
 
   return {
     categories: (categories || []).map((category) => ({
@@ -79,7 +70,6 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       const category = categoryById.get(product.category_id)
       const route = routeByProduct.get(product.id)
       const station = route ? stationById.get(route.station_id) : null
-      const directConfig = directInventoryByProduct.get(String(product.id)) || null
 
       return {
         id: product.id,
@@ -93,8 +83,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
         station: station?.station_type || 'kitchen',
         stationName: station?.name || 'Cocina',
         trackInventory: Boolean(product.track_inventory),
-        inventoryMode: directConfig ? 'direct' : (product.track_inventory ? 'recipe' : 'none'),
-        directInventory: directConfig,
+        inventoryMode: product.inventory_mode || (product.track_inventory ? 'recipe' : 'none'),
         available: product.active !== false,
         active: product.active !== false,
       }
@@ -170,4 +159,27 @@ export async function saveMenuProduct({
 
   if (error) throw error
   return data
+}
+
+
+export async function loadDirectProductInventoryConfig(restaurantId, locationId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('get_direct_product_inventory_config', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+  })
+  if (error) throw error
+
+  const byProduct = {}
+  ;(Array.isArray(data) ? data : []).forEach((item) => {
+    byProduct[String(item.productId)] = {
+      inventoryItemId: item.inventoryItemId,
+      unit: item.unit || 'unidad',
+      averageCost: Number(item.averageCost || 0),
+      minStock: Number(item.minStock || 0),
+      maxStock: item.maxStock == null ? null : Number(item.maxStock),
+      currentStock: Number(item.currentStock || 0),
+    }
+  })
+  return byProduct
 }
