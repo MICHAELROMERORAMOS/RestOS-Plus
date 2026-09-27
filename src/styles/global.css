@@ -4027,3 +4027,10 @@ html, body {
   .product-direct-inventory-fields{grid-template-columns:1fr}
   .product-direct-inventory-head{align-items:flex-start;flex-direction:column}
 }
+
+
+/* Operational settings */
+.operational-setting-row>span{display:grid;gap:4px}
+.operational-setting-row>span>b{color:var(--ink);font-size:13px}
+.operational-setting-row>span>small{max-width:560px;color:var(--muted);font-size:11px;font-weight:650;line-height:1.4}
+.quick-auto-turn-panel{background:#f5f8f6}
