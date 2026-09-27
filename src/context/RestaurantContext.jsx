@@ -32,6 +32,7 @@ import {
   markRoundServedRemote,
   recordOrderPaymentsRemote,
   releaseEmptyQuickOrderRemote,
+  releaseEmptyDeliveryOrderRemote,
   releaseTableOrderSession as releaseTableOrderSessionRemote,
   sendOrderRoundRemote,
   subscribeOperationalChanges,
@@ -1685,6 +1686,8 @@ export function RestaurantProvider({ children }) {
         invoiceIssuedAt: null,
         invoiceNumber: null,
         closedAt: null,
+        openedByName: auth.userContext?.name || 'Usuario',
+        openedByMe: true,
       }
 
       return {
@@ -1706,6 +1709,7 @@ export function RestaurantProvider({ children }) {
     return { ok: true, orderId: createdOrderId }
   }, [
     auth.isDesignMode,
+    auth.userContext?.name,
     restaurantId,
     activeLocation,
     refreshOperationalOrdersByIds,
@@ -1817,6 +1821,70 @@ export function RestaurantProvider({ children }) {
       setDraft([])
       setPager('')
       setQuickCustomerName('')
+      setCurrentOrderId(null)
+      draftContextServiceKeyRef.current = null
+    }
+
+    return { ok: true }
+  }, [
+    state.orders,
+    auth.permissions,
+    auth.isDesignMode,
+    updateState,
+    refreshOperationalOrdersByIds,
+    activeLocation,
+    saveTableDraftMap,
+    currentOrderId,
+    orderMode,
+  ])
+
+  const releaseEmptyDeliveryOrder = useCallback(async (orderId) => {
+    const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
+    if (!order) return { ok: false, message: 'El domicilio no existe o ya fue cerrado.' }
+
+    const hasSentItems = (order.rounds || []).some((round) => (
+      (round.items || []).some((item) => !item.voided)
+    ))
+    if (hasSentItems) {
+      return { ok: false, message: 'Este domicilio ya tiene productos enviados y no puede liberarse como vacío.' }
+    }
+
+    const allowed = order.openedByMe || auth.can('tables.manage')
+    if (!allowed) {
+      return { ok: false, message: 'Solo quien creó el domicilio, un supervisor o el owner pueden liberarlo vacío.' }
+    }
+
+    if (auth.isDesignMode) {
+      updateState((previous) => ({
+        ...previous,
+        orders: previous.orders.map((candidate) => candidate.id === orderId
+          ? { ...candidate, status: 'cancelled', closedAt: Date.now() }
+          : candidate),
+      }))
+    } else {
+      if (!order.serverId) return { ok: false, message: 'El domicilio no está sincronizado.' }
+      try {
+        const released = await releaseEmptyDeliveryOrderRemote(order.serverId)
+        if (!released) return { ok: false, message: 'El domicilio ya no estaba disponible para liberar.' }
+        await refreshOperationalOrdersByIds([order.serverId], activeLocation)
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo liberar el domicilio.' }
+      }
+    }
+
+    const key = `delivery:${orderId}`
+    saveTableDraftMap((previous) => {
+      if (!previous[key]) return previous
+      const next = { ...previous }
+      delete next[key]
+      return next
+    })
+
+    if (currentOrderId === orderId && orderMode === 'delivery') {
+      setDraft([])
+      setPager('')
+      setQuickCustomerName('')
+      setCurrentDelivery(null)
       setCurrentOrderId(null)
       draftContextServiceKeyRef.current = null
     }
@@ -2871,6 +2939,7 @@ export function RestaurantProvider({ children }) {
     startQuickOrder,
     updateQuickOrderIdentity,
     releaseEmptyQuickOrder,
+    releaseEmptyDeliveryOrder,
     startDelivery,
     openQuickOrder,
     openDelivery,
@@ -2912,7 +2981,7 @@ export function RestaurantProvider({ children }) {
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
-    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, releaseEmptyDeliveryOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,

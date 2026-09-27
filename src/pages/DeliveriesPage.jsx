@@ -28,7 +28,13 @@ function prepStatus(order) {
 
 export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
   const auth = useAuth()
-  const { state, formatMoney, activeLocation } = useRestaurant()
+  const {
+    state,
+    formatMoney,
+    activeLocation,
+    tableDrafts,
+    releaseEmptyDeliveryOrder,
+  } = useRestaurant()
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
 
   const [showForm, setShowForm] = useState(false)
@@ -36,6 +42,7 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
   const [lookupStatus, setLookupStatus] = useState('idle')
   const [matchedCustomer, setMatchedCustomer] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [releasingOrderId, setReleasingOrderId] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
   const [historyOrders, setHistoryOrders] = useState([])
   const [historyCursor, setHistoryCursor] = useState(null)
@@ -51,7 +58,11 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
 
   const deliveries = useMemo(
     () => state.orders
-      .filter((order) => order.mode === 'delivery' && !isPaidAndDelivered(order, orderBalance))
+      .filter((order) => (
+        order.mode === 'delivery'
+        && !['closed', 'cancelled', 'merged'].includes(order.status)
+        && !isPaidAndDelivered(order, orderBalance)
+      ))
       .slice()
       .sort((a, b) => (b.created || 0) - (a.created || 0)),
     [state.orders],
@@ -152,6 +163,38 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
     loadHistory({ reset: true })
   }
 
+  async function releaseDelivery(order) {
+    const hasSentItems = (order.rounds || []).some((round) => (
+      (round.items || []).some((item) => !item.voided)
+    ))
+    if (hasSentItems) {
+      window.alert('Este domicilio ya tiene productos enviados y no puede liberarse como vacío.')
+      return
+    }
+
+    const draftItems = tableDrafts[`delivery:${order.id}`]?.items || []
+    const draftCount = draftItems.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+      0,
+    )
+    const customerName = order.delivery?.customerName || `Domicilio #${order.id}`
+    const message = draftCount > 0
+      ? `${customerName} tiene ${draftCount} producto${draftCount === 1 ? '' : 's'} sin enviar. Si liberas el domicilio, ese borrador se eliminará. ¿Deseas continuar?`
+      : `¿Deseas liberar el domicilio de ${customerName}? Todavía no tiene productos enviados.`
+
+    if (!window.confirm(message)) return
+
+    setReleasingOrderId(order.id)
+    try {
+      const result = await releaseEmptyDeliveryOrder(order.id)
+      if (!result?.ok) {
+        window.alert(result?.message || 'No se pudo liberar el domicilio.')
+      }
+    } finally {
+      setReleasingOrderId(null)
+    }
+  }
+
   async function submit(event) {
     event.preventDefault()
 
@@ -224,6 +267,10 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
             {deliveries.map((order) => {
               const customer = order.delivery || {}
               const balance = orderBalance(order)
+              const hasSentItems = (order.rounds || []).some((round) => (
+                (round.items || []).some((item) => !item.voided)
+              ))
+              const canRelease = !hasSentItems && (order.openedByMe || auth.can('tables.manage'))
 
               return (
                 <article className="delivery-card" key={order.id}>
@@ -246,7 +293,18 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
                     {balance > 0.005 && <small>Saldo {formatMoney(balance)}</small>}
                   </div>
 
-                  <button className="btn" onClick={() => onOpenDelivery(order.id)}>Abrir pedido</button>
+                  <div className="delivery-card-actions">
+                    <button className="btn" onClick={() => onOpenDelivery(order.id)}>Abrir pedido</button>
+                    {canRelease && (
+                      <button
+                        className="btn delivery-release-btn"
+                        onClick={() => releaseDelivery(order)}
+                        disabled={releasingOrderId === order.id}
+                      >
+                        {releasingOrderId === order.id ? 'Liberando…' : 'Liberar domicilio'}
+                      </button>
+                    )}
+                  </div>
                 </article>
               )
             })}

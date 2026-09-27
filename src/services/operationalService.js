@@ -379,6 +379,16 @@ export async function releaseEmptyQuickOrderRemote(orderServerId) {
   return Boolean(data)
 }
 
+export async function releaseEmptyDeliveryOrderRemote(orderServerId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('release_empty_delivery_order', {
+    p_order_id: orderServerId,
+  })
+
+  if (error) throw error
+  return Boolean(data)
+}
+
 export async function createDeliveryOrderRemote({
   restaurantId,
   locationId,

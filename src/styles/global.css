@@ -1619,6 +1619,26 @@ html, body {
   font-size: 20px;
 }
 
+.delivery-card-actions {
+  display: grid;
+  gap: 7px;
+  min-width: 140px;
+}
+
+.delivery-card-actions .btn {
+  width: 100%;
+}
+
+.delivery-release-btn {
+  color: #a52b2b;
+  background: #fff7f7;
+  box-shadow: 0 0 0 1px #d6a4a4;
+}
+
+.delivery-release-btn:hover {
+  background: #ffecec;
+}
+
 .delivery-form-card {
   width: min(720px, 100%);
   max-height: calc(100dvh - 40px);
@@ -1687,6 +1707,11 @@ html, body {
   .delivery-card-meta {
     text-align: left;
   }
+
+  .delivery-card-actions {
+    grid-template-columns: 1fr 1fr;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 650px) {
@@ -1697,6 +1722,10 @@ html, body {
 
   .deliveries-hero .btn {
     width: 100%;
+  }
+
+  .delivery-card-actions {
+    grid-template-columns: 1fr;
   }
 
   .delivery-form-card {
