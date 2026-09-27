@@ -110,7 +110,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
     }
 
     const identifier = manualQuickIdentity
-      ? (order.pager ? `Pager ${order.pager}` : order.customerName || `Pedido #${order.id}`)
+      ? (order.pager ? String(order.pager) : order.customerName || `Pedido #${order.id}`)
       : `Turno ${order.pager || order.id}`
 
     if (!window.confirm(`¿Deseas liberar ${identifier}? Todavía no tiene productos enviados.`)) return
@@ -133,7 +133,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
           <h2>Servicio rápido</h2>
           <p>
             {manualQuickIdentity
-              ? 'Cada pedido funciona como una cuenta independiente identificada por pager o nombre del cliente.'
+              ? 'Cada pedido funciona como una cuenta independiente identificada por número o nombre del cliente.'
               : 'Cada pedido recibe un número de turno automático que se reinicia después del cierre de turno.'}
           </p>
         </div>
@@ -141,7 +141,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
           <span className="quick-service-icon">⚡</span>
           <span>
             <b>{creating ? 'Creando…' : 'Nuevo pedido rápido'}</b>
-            <small>{manualQuickIdentity ? 'Pager o nombre del cliente' : 'Turno automático'}</small>
+            <small>{manualQuickIdentity ? 'Número o nombre del cliente' : 'Turno automático'}</small>
           </span>
         </button>
       </div>
@@ -163,7 +163,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
                 (round.items || []).some((item) => !item.voided)
               ))
               const identifier = manualQuickIdentity
-                ? (order.pager ? `Pager ${order.pager}` : order.customerName || `Pedido #${order.id}`)
+                ? (order.pager ? String(order.pager) : order.customerName || `Pedido #${order.id}`)
                 : `Turno ${order.pager || order.id}`
               const openedAt = formatTime(order.created)
               const responsible = shortName(order.openedByName)
