@@ -3,6 +3,15 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { createMenuCategory, saveMenuProduct } from '../services/menuService.js'
 
+const INVENTORY_UNITS = [
+  { value: 'unidad', label: 'Unidad' },
+  { value: 'g', label: 'Gramo (g)' },
+  { value: 'kg', label: 'Kilogramo (kg)' },
+  { value: 'ml', label: 'Mililitro (ml)' },
+  { value: 'l', label: 'Litro (l)' },
+  { value: 'porcion', label: 'Porción' },
+]
+
 const emptyProduct = {
   id: null,
   name: '',
@@ -12,7 +21,14 @@ const emptyProduct = {
   sku: '',
   categoryId: '',
   station: 'kitchen',
-  trackInventory: false,
+  inventoryMode: 'none',
+  directInventory: false,
+  inventoryUnit: 'unidad',
+  inventoryAverageCost: '',
+  inventoryMinStock: '',
+  inventoryMaxStock: '',
+  inventoryOpeningStock: '',
+  currentStock: null,
   active: true,
 }
 
@@ -32,6 +48,7 @@ export default function ProductsPage() {
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const canManage = auth.can('products.manage')
+  const canManageInventory = auth.can('inventory.manage')
 
   const [showProduct, setShowProduct] = useState(false)
   const [form, setForm] = useState(emptyProduct)
@@ -75,7 +92,14 @@ export default function ProductsPage() {
       sku: product.sku || '',
       categoryId: product.categoryId || '',
       station: product.station || 'kitchen',
-      trackInventory: Boolean(product.trackInventory),
+      inventoryMode: product.inventoryMode || (product.trackInventory ? 'recipe' : 'none'),
+      directInventory: product.inventoryMode === 'direct',
+      inventoryUnit: product.directInventory?.unit || 'unidad',
+      inventoryAverageCost: String(product.directInventory?.averageCost ?? ''),
+      inventoryMinStock: String(product.directInventory?.minStock ?? ''),
+      inventoryMaxStock: product.directInventory?.maxStock == null ? '' : String(product.directInventory.maxStock),
+      inventoryOpeningStock: '',
+      currentStock: product.directInventory?.currentStock ?? null,
       active: product.active !== false,
     })
     setShowProduct(true)
@@ -117,10 +141,42 @@ export default function ProductsPage() {
 
     const price = Number(String(form.price).replace(',', '.'))
     const taxRate = Number(String(form.taxRate).replace(',', '.'))
+    const inventoryAverageCost = Number(String(form.inventoryAverageCost || 0).replace(',', '.'))
+    const inventoryMinStock = Number(String(form.inventoryMinStock || 0).replace(',', '.'))
+    const inventoryMaxStock = form.inventoryMaxStock === ''
+      ? null
+      : Number(String(form.inventoryMaxStock).replace(',', '.'))
+    const inventoryOpeningStock = Number(String(form.inventoryOpeningStock || 0).replace(',', '.'))
 
     if (!form.name.trim()) return window.alert('Escribe el nombre del producto.')
     if (!Number.isFinite(price) || price < 0) return window.alert('Escribe un precio válido.')
     if (!Number.isFinite(taxRate) || taxRate < 0) return window.alert('La tasa de impuesto no es válida.')
+
+    if (form.directInventory) {
+      if (!canManageInventory) {
+        return window.alert('Tu rol necesita permiso de inventario para vincular un producto directamente al stock.')
+      }
+      if (![inventoryAverageCost, inventoryMinStock, inventoryOpeningStock].every((value) => Number.isFinite(value) && value >= 0)) {
+        return window.alert('Revisa costo unitario, stock mínimo y stock inicial.')
+      }
+      if (inventoryMaxStock != null && (!Number.isFinite(inventoryMaxStock) || inventoryMaxStock < inventoryMinStock)) {
+        return window.alert('El stock máximo no puede ser menor que el stock mínimo.')
+      }
+    }
+
+    if (form.id && form.inventoryMode === 'recipe' && form.directInventory) {
+      const replaceRecipe = window.confirm(
+        'Este producto actualmente descuenta inventario mediante una receta.\n\nSi continúas, la receta será reemplazada por descuento directo de 1 unidad del producto. ¿Continuar?',
+      )
+      if (!replaceRecipe) return
+    }
+
+    if (form.id && form.inventoryMode === 'direct' && !form.directInventory) {
+      const disableDirect = window.confirm(
+        '¿Desactivar el descuento directo de inventario para este producto?\n\nLos movimientos históricos se conservarán, pero las próximas ventas dejarán de descontar este artículo hasta que configures otro método.',
+      )
+      if (!disableDirect) return
+    }
 
     setSaving(true)
     try {
@@ -135,7 +191,12 @@ export default function ProductsPage() {
         taxRate,
         sku: form.sku,
         station: form.station,
-        trackInventory: form.trackInventory,
+        directInventory: form.directInventory,
+        inventoryUnit: form.inventoryUnit,
+        inventoryAverageCost,
+        inventoryMinStock,
+        inventoryMaxStock,
+        inventoryOpeningStock: form.id ? 0 : inventoryOpeningStock,
         active: form.active,
       })
 
@@ -245,6 +306,8 @@ export default function ProductsPage() {
                   <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
                   {product.description && <p>{product.description}</p>}
                   {product.sku && <small>SKU: {product.sku}</small>}
+                  {product.inventoryMode === 'direct' && <span className="badge ok-badge">Inventario directo</span>}
+                  {product.inventoryMode === 'recipe' && <span className="badge">Por receta</span>}
                 </div>
 
                 <strong className="menu-product-price">{formatMoney(product.price)}</strong>
@@ -351,10 +414,98 @@ export default function ProductsPage() {
                 <input value={form.sku} onChange={(event) => updateField('sku', event.target.value)} placeholder="Opcional" />
               </label>
 
-              <label className="toggle-row">
-                <span>Controlar inventario</span>
-                <input type="checkbox" checked={form.trackInventory} onChange={(event) => updateField('trackInventory', event.target.checked)} />
-              </label>
+              <div className="product-direct-inventory wide">
+                <label className="toggle-row product-direct-inventory-toggle">
+                  <span>
+                    <b>Descontar directamente del inventario</b>
+                    <small>
+                      Actívalo para productos que se venden tal como se compran: bebidas, botellas, paquetes, postres empacados, etc.
+                      Cada unidad vendida descontará 1 unidad de este artículo.
+                    </small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={form.directInventory}
+                    disabled={!canManageInventory}
+                    onChange={(event) => updateField('directInventory', event.target.checked)}
+                  />
+                </label>
+
+                {!canManageInventory && (
+                  <div className="notice warn">Tu rol puede administrar productos, pero necesita <b>inventory.manage</b> para crear stock directo.</div>
+                )}
+
+                {form.inventoryMode === 'recipe' && !form.directInventory && (
+                  <div className="notice">Este producto actualmente descuenta inventario mediante <b>receta</b>. La receta se administra desde Inventario.</div>
+                )}
+
+                {form.directInventory && (
+                  <div className="product-direct-inventory-fields">
+                    <div className="product-direct-inventory-head">
+                      <div>
+                        <b>Artículo de inventario vinculado</b>
+                        <small>Se creará automáticamente con el mismo nombre y SKU del producto.</small>
+                      </div>
+                      {form.id && form.currentStock != null && (
+                        <span className="badge">Stock actual: {Number(form.currentStock || 0).toLocaleString('es-CO', { maximumFractionDigits: 3 })}</span>
+                      )}
+                    </div>
+
+                    <label>
+                      <span>Unidad base *</span>
+                      <select value={form.inventoryUnit} onChange={(event) => updateField('inventoryUnit', event.target.value)}>
+                        {INVENTORY_UNITS.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Costo unitario / compra ({currencyCode})</span>
+                      <input
+                        inputMode="decimal"
+                        value={form.inventoryAverageCost}
+                        onChange={(event) => updateField('inventoryAverageCost', event.target.value)}
+                        placeholder="0.00"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Stock mínimo</span>
+                      <input
+                        inputMode="decimal"
+                        value={form.inventoryMinStock}
+                        onChange={(event) => updateField('inventoryMinStock', event.target.value)}
+                        placeholder="0"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Stock máximo</span>
+                      <input
+                        inputMode="decimal"
+                        value={form.inventoryMaxStock}
+                        onChange={(event) => updateField('inventoryMaxStock', event.target.value)}
+                        placeholder="Opcional"
+                      />
+                    </label>
+
+                    {!form.id && (
+                      <label>
+                        <span>Stock inicial</span>
+                        <input
+                          inputMode="decimal"
+                          value={form.inventoryOpeningStock}
+                          onChange={(event) => updateField('inventoryOpeningStock', event.target.value)}
+                          placeholder="0"
+                        />
+                      </label>
+                    )}
+
+                    <div className="notice">
+                      <b>Precio de venta:</b> se toma del campo Precio del producto. <b>Costo unitario:</b> se usa para valorar inventario, FIFO y margen.
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <label className="toggle-row wide">
                 <span>Producto activo / disponible</span>
