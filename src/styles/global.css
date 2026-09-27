@@ -3926,3 +3926,44 @@ html, body {
 .performance-track{height:12px;border-radius:999px;background:#edf1ee;overflow:hidden}.performance-track i{display:block;height:100%;border-radius:inherit;background:var(--brand)}
 @media(max-width:1000px){.report-kpis{grid-template-columns:1fr 1fr}.report-columns{grid-template-columns:1fr}.performance-row{grid-template-columns:110px 1fr 110px}}
 @media(max-width:650px){.report-periods{grid-template-columns:1fr}.report-range{grid-template-columns:1fr}.report-kpis{grid-template-columns:1fr 1fr}.report-heading{align-items:start;flex-direction:column}.performance-row{grid-template-columns:1fr 90px}.performance-row .performance-track{grid-column:1/-1;grid-row:2}.performance-row>small{display:none}.report-product{grid-template-columns:34px minmax(0,1fr)}.report-product>strong{grid-column:2;text-align:left}}
+
+
+/* Company / branch management */
+.top-title-block{min-width:0;display:grid;gap:4px}
+.top-title-block h1{min-width:0}
+.top-branch-context{display:flex;align-items:center;gap:6px;min-width:0;color:var(--muted);font-size:12px;font-weight:800}
+.top-company-name,.top-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-context-separator{opacity:.55}
+.top-branch-select{max-width:220px;height:30px;border:1px solid var(--line);border-radius:9px;padding:0 28px 0 9px;background:#fff;color:var(--ink);font-weight:850;font-size:12px}
+.branch-stats{margin-top:4px}
+.branch-company-name{font-size:21px!important;line-height:1.2;overflow-wrap:anywhere}
+.branch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.branch-card{display:grid;gap:15px;padding:17px;border:1px solid var(--line);border-radius:17px;background:#fbfcfb}
+.branch-card.current{border-color:#8fc6a8;background:#f5fbf7;box-shadow:0 0 0 2px #2f9e4412}
+.branch-card.inactive{opacity:.68;background:#f5f6f5}
+.branch-card-head{display:flex;justify-content:space-between;gap:12px}
+.branch-name-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.branch-name-line h3{margin:0}
+.branch-card-head small{display:block;margin-top:4px;color:var(--muted);font-weight:800}
+.branch-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.branch-meta>div{display:grid;gap:3px;padding:10px;border-radius:11px;background:#fff;border:1px solid var(--line)}
+.branch-meta span{font-size:10px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:900}
+.branch-meta b{font-size:13px;overflow-wrap:anywhere}
+.branch-actions{display:flex;gap:8px;flex-wrap:wrap}
+.branch-form-card{width:min(760px,100%);max-height:calc(100dvh - 40px);overflow-y:auto}
+.branch-form-grid{grid-template-columns:1fr 1fr;margin-bottom:15px}
+@media(max-width:800px){
+  .top{align-items:center}
+  .top-branch-select{max-width:160px}
+  .branch-meta,.branch-form-grid{grid-template-columns:1fr}
+}
+@media(max-width:650px){
+  .top-title-block{gap:2px}
+  .top-branch-context{max-width:180px}
+  .top-company-name{display:none}
+  .top-context-separator{display:none}
+  .top-branch-select{max-width:180px}
+  .branch-grid{grid-template-columns:1fr}
+  .branch-actions{display:grid;grid-template-columns:1fr}
+  .branch-actions .btn{width:100%}
+}
