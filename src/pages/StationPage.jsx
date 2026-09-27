@@ -326,7 +326,9 @@ export default function StationPage({ station }) {
                     ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
                     : order.mode === 'delivery'
                       ? `🚚 Domicilio · ${order.delivery?.customerName || `Orden #${order.id}`}`
-                      : `Orden #${order.id}`
+                      : order.mode === 'quick'
+                        ? `⚡ ${order.pager ? `Pager ${order.pager}` : order.customerName || `Orden #${order.id}`}`
+                        : `Orden #${order.id}`
                 }</h3>
                 <small>
                   Orden #{order.id} · Comanda {round.id} · {items.length} producto{items.length === 1 ? '' : 's'}
@@ -340,7 +342,7 @@ export default function StationPage({ station }) {
               {status === 'new' ? 'NUEVO' : 'PREPARANDO'}
             </div>
 
-            {order.pager && <div className="badge">Pager / turno {order.pager}</div>}
+            {order.mode !== 'quick' && order.pager && <div className="badge">Pager / turno {order.pager}</div>}
 
             <div className="station-job-items kds-item-list">
               {items.map((item) => (
