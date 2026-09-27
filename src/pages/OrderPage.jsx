@@ -873,97 +873,81 @@ export default function OrderPage({ onNavigate }) {
         </div>
       )}
 
-      <div className="hero order-hero">
-        <div>
-          <h2>{
-            orderMode === 'quick'
-              ? `Servicio rápido · ${quickIdentifier}`
-              : orderMode === 'delivery'
-                ? `Domicilio · ${deliveryInfo?.customerName || 'Nuevo cliente'}`
-                : currentTableId
-                  ? currentTableLabel
-                  : 'Pedido'
-          }</h2>
-          {orderMode === 'delivery' && (
-            <p>Pedido a domicilio · {deliveryInfo?.customerName || 'Nuevo cliente'}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="order-category-filter" role="group" aria-label="Categorías del menú">
-        <button
-          type="button"
-          className={`order-category-btn ${category === 'all' ? 'active' : ''}`}
-          aria-pressed={category === 'all'}
-          onClick={() => setCategory('all')}
-        >
-          Todas
-        </button>
-
-        {categoryOptions.map((categoryName) => (
-          <button
-            type="button"
-            key={categoryName}
-            className={`order-category-btn ${category === categoryName ? 'active' : ''}`}
-            aria-pressed={category === categoryName}
-            onClick={() => setCategory(categoryName)}
-          >
-            {categoryName}
-          </button>
-        ))}
-      </div>
-
-      <div className="order-tools">
-        <input
-          className="order-product-search"
-          value={search}
-          placeholder="Buscar producto…"
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
-        {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
-      </div>
-
       <div className="order-layout order-workspace">
-        <div className="card order-menu-panel">
-          <div className="section-title order-panel-header">
-            <h3>Menú</h3>
-            <span className={`badge ${inventoryControlEnabled ? 'ok-badge' : ''}`}>
-              {inventoryControlEnabled ? 'Stock protegido' : 'Bloqueo de stock desactivado'}
-            </span>
+        <div className="order-menu-column">
+          <div className="order-tools order-tools-compact">
+            <input
+              className="order-product-search"
+              value={search}
+              placeholder="Buscar producto…"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
+            {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
+          </div>
+          <div className="order-category-filter order-category-filter-compact" role="group" aria-label="Categorías del menú">
+            <button
+              type="button"
+              className={`order-category-btn ${category === 'all' ? 'active' : ''}`}
+              aria-pressed={category === 'all'}
+              onClick={() => setCategory('all')}
+            >
+              Todas
+            </button>
+
+            {categoryOptions.map((categoryName) => (
+              <button
+                type="button"
+                key={categoryName}
+                className={`order-category-btn ${category === categoryName ? 'active' : ''}`}
+                aria-pressed={category === categoryName}
+                onClick={() => setCategory(categoryName)}
+              >
+                {categoryName}
+              </button>
+            ))}
+          </div>
+          <div className="card order-menu-panel">
+            <div className="section-title order-panel-header">
+              <h3>Menú</h3>
+              <span className={`badge ${inventoryControlEnabled ? 'ok-badge' : ''}`}>
+                {inventoryControlEnabled ? 'Stock protegido' : 'Bloqueo de stock desactivado'}
+              </span>
+            </div>
+
+            <div className="products order-menu-scroll">
+              {filteredProducts.length ? filteredProducts.map((product) => {
+                const availability = inventoryStateFor(product.id)
+                const availabilityText = availability.controlled
+                  ? availability.blocked
+                    ? 'No disponible · faltan insumos'
+                    : `${availability.remaining} ${availability.remaining === 1 ? 'unidad disponible' : 'unidades disponibles'}`
+                  : product.trackInventory
+                    ? 'Sin receta de inventario'
+                    : 'Sin control de inventario'
+
+                return (
+                  <button
+                    className={`product order-menu-product ${availability.blocked ? 'stock-blocked' : availability.controlled ? 'stock-controlled' : ''}`}
+                    key={product.id}
+                    onClick={() => addAvailableProduct(product)}
+                    disabled={availability.blocked}
+                  >
+                    <strong>{product.name}</strong>
+                    <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
+                    <span className="product-stock-count">{availabilityText}</span>
+                    {!inventoryControlEnabled && availability.controlled && availability.remaining < 1 && (
+                      <span className="product-stock-warning">Se permite vender aunque el stock llegue a negativo</span>
+                    )}
+                    <em>{formatMoney(product.price)}</em>
+                  </button>
+                )
+              }) : (
+                <div className="empty-inline">No hay productos activos que coincidan con este filtro.</div>
+              )}
+            </div>
           </div>
 
-          <div className="products order-menu-scroll">
-            {filteredProducts.length ? filteredProducts.map((product) => {
-              const availability = inventoryStateFor(product.id)
-              const availabilityText = availability.controlled
-                ? availability.blocked
-                  ? 'No disponible · faltan insumos'
-                  : `${availability.remaining} ${availability.remaining === 1 ? 'unidad disponible' : 'unidades disponibles'}`
-                : product.trackInventory
-                  ? 'Sin receta de inventario'
-                  : 'Sin control de inventario'
-
-              return (
-                <button
-                  className={`product order-menu-product ${availability.blocked ? 'stock-blocked' : availability.controlled ? 'stock-controlled' : ''}`}
-                  key={product.id}
-                  onClick={() => addAvailableProduct(product)}
-                  disabled={availability.blocked}
-                >
-                  <strong>{product.name}</strong>
-                  <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
-                  <span className="product-stock-count">{availabilityText}</span>
-                  {!inventoryControlEnabled && availability.controlled && availability.remaining < 1 && (
-                    <span className="product-stock-warning">Se permite vender aunque el stock llegue a negativo</span>
-                  )}
-                  <em>{formatMoney(product.price)}</em>
-                </button>
-              )
-            }) : (
-              <div className="empty-inline">No hay productos activos que coincidan con este filtro.</div>
-            )}
-          </div>
         </div>
 
         <div className="order-cart-column">
