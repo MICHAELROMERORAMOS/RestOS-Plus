@@ -11,21 +11,37 @@ function clean(value) {
   return String(value || '').trim()
 }
 
-export async function loadRestaurantStructure(restaurantId) {
+export async function loadRestaurantStructure(restaurantId, preferredLocationId = null) {
   const client = requireSupabase()
 
   const { data: locations, error: locationsError } = await client
     .from('locations')
-    .select('id,restaurant_id,name,active,created_at')
+    .select('id,restaurant_id,name,code,address_line1,address_line2,city,country,phone,active,created_at,updated_at')
     .eq('restaurant_id', restaurantId)
     .eq('active', true)
     .order('created_at', { ascending: true })
 
   if (locationsError) throw locationsError
 
-  const location = locations?.[0] || null
+  const availableLocations = (locations || []).map((location) => ({
+    id: location.id,
+    restaurantId: location.restaurant_id,
+    name: location.name,
+    code: location.code || '',
+    addressLine1: location.address_line1 || '',
+    addressLine2: location.address_line2 || '',
+    city: location.city || '',
+    country: location.country || '',
+    phone: location.phone || '',
+    active: location.active,
+  }))
+
+  const location = availableLocations.find(
+    (candidate) => String(candidate.id) === String(preferredLocationId || ''),
+  ) || availableLocations[0] || null
+
   if (!location) {
-    return { location: null, zones: [], tables: [] }
+    return { location: null, locations: [], zones: [], tables: [] }
   }
 
   const [{ data: zones, error: zonesError }, { data: tables, error: tablesError }] = await Promise.all([
@@ -47,6 +63,7 @@ export async function loadRestaurantStructure(restaurantId) {
 
   return {
     location,
+    locations: availableLocations,
     zones: (zones || []).map((zone) => ({
       id: zone.id,
       locationId: zone.location_id,
