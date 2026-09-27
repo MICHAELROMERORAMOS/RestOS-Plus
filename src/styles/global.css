@@ -4608,3 +4608,106 @@ html, body {
     bottom:11px;
   }
 }
+
+
+/* Product menu cards: balanced compact layout */
+@media (min-width:1001px){
+  .order-menu-scroll .order-menu-product{
+    position:relative;
+    display:flex!important;
+    flex-direction:column;
+    align-items:stretch;
+    min-height:118px!important;
+    padding:11px 12px 10px!important;
+    gap:4px!important;
+    overflow:hidden;
+  }
+
+  .order-menu-scroll .order-menu-product>strong{
+    display:-webkit-box!important;
+    min-height:32px;
+    max-height:32px;
+    overflow:hidden;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+    line-height:16px!important;
+    font-size:13px!important;
+  }
+
+  .order-menu-scroll .order-menu-product>small{
+    display:block;
+    min-height:14px;
+    line-height:14px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    font-size:9px!important;
+  }
+
+  .order-menu-scroll .order-menu-product .product-stock-count{
+    width:max-content;
+    max-width:100%;
+    min-height:22px;
+    display:flex;
+    align-items:center;
+    margin:2px 0 0!important;
+    padding:4px 7px;
+    border-radius:8px;
+    font-size:9px!important;
+    line-height:1.1;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .order-menu-scroll .order-menu-product .product-stock-warning{
+    font-size:8px;
+    line-height:1.15;
+    margin-top:1px;
+  }
+
+  .order-menu-scroll .order-menu-product>em{
+    position:static!important;
+    left:auto!important;
+    bottom:auto!important;
+    display:block!important;
+    margin:auto 0 0!important;
+    padding-top:5px;
+    line-height:1.1;
+    font-size:12px!important;
+    font-weight:950;
+  }
+
+  .order-menu-scroll .order-menu-product.stock-blocked{
+    opacity:.78;
+  }
+}
+
+@media (max-width:1000px){
+  .order-menu-product{
+    position:relative;
+    display:flex!important;
+    flex-direction:column;
+    min-height:128px!important;
+    padding:12px!important;
+    gap:5px!important;
+    overflow:hidden;
+  }
+
+  .order-menu-product>strong{
+    display:-webkit-box!important;
+    min-height:34px;
+    overflow:hidden;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+    line-height:17px!important;
+  }
+
+  .order-menu-product>em{
+    position:static!important;
+    left:auto!important;
+    bottom:auto!important;
+    margin:auto 0 0!important;
+    padding-top:6px;
+  }
+}
