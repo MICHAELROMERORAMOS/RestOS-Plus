@@ -1,29 +1,29 @@
 import React, { useMemo, useState } from 'react'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../../context/RestaurantContext.jsx'
+import InvoiceCustomerFields, {
+  invoiceCustomerFromOrders,
+  validateInvoiceCustomer,
+} from './InvoiceCustomerFields.jsx'
+import PaymentMethodPicker, { paymentMethodLabel } from './PaymentMethodPicker.jsx'
 
-function money(value) {
-  return Number(value || 0).toFixed(2)
-}
-
-function askPaymentMethod() {
-  const raw = window.prompt('Método de pago: escribe cash o card. Pulsa Cancelar para abortar.', 'card')
-  if (raw === null) return null
-
-  const method = raw.trim().toLowerCase()
-  if (!['cash', 'card'].includes(method)) {
-    window.alert('Método inválido. Usa cash o card.')
-    return null
-  }
-
-  return method
-}
-
-export default function SplitBillModal({ orders, tableText, onClose, onAccountPaid }) {
+export default function SplitBillModal({
+  orders,
+  tableText,
+  initialInvoiceCustomer,
+  onClose,
+  onAccountPaid,
+}) {
   const { recordPayments, formatMoney } = useRestaurant()
   const [mode, setMode] = useState('choose')
   const [parts, setParts] = useState(2)
   const [paidParts, setPaidParts] = useState(0)
   const [selected, setSelected] = useState({})
+  const [paymentMethod, setPaymentMethod] = useState('card')
+  const [invoiceCustomer, setInvoiceCustomer] = useState(
+    initialInvoiceCustomer || invoiceCustomerFromOrders(orders || []),
+  )
+  const [busy, setBusy] = useState(false)
+  const [lastInvoices, setLastInvoices] = useState([])
 
   const activeOrders = useMemo(
     () => (orders || [])
@@ -59,7 +59,7 @@ export default function SplitBillModal({ orders, tableText, onClose, onAccountPa
             }
           })
       ))
-    )).filter((line) => line.availableQuantity > 0)
+    )).filter((line) => line.availableQuantity > 0.0001)
   ), [activeOrders])
 
   function allocateAcrossOrders(requestedAmount) {
@@ -79,27 +79,52 @@ export default function SplitBillModal({ orders, tableText, onClose, onAccountPa
     return allocations
   }
 
-  async function performPayment(allocations, label, onSuccess) {
+  function allocateSelectedProducts(itemAllocations) {
+    const byOrder = new Map()
+
+    itemAllocations.forEach((item) => {
+      const amount = Number(item.quantity || 0) * Number(item.unitPrice || 0)
+      if (amount <= 0) return
+
+      const current = byOrder.get(item.sourceOrderId) || {
+        orderId: item.sourceOrderId,
+        amount: 0,
+        itemAllocations: [],
+      }
+
+      current.amount += amount
+      current.itemAllocations.push(item)
+      byOrder.set(item.sourceOrderId, current)
+    })
+
+    return Array.from(byOrder.values())
+  }
+
+  async function performPayment(allocations, onSuccess) {
     const amount = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
     if (amount <= 0.005) return window.alert('No hay importe pendiente para cobrar.')
 
-    const method = askPaymentMethod()
-    if (!method) return
+    const customerResult = validateInvoiceCustomer(invoiceCustomer)
+    if (!customerResult.ok) return window.alert(customerResult.message)
 
-    const confirmed = window.confirm(
-      `¿Confirmar cobro de ${formatMoney(amount)} para ${tableText}?\n\n${label}\n\nSi todavía hay productos pendientes, la mesa seguirá marcada como Esperando comida.`,
-    )
-    if (!confirmed) return
-
-    const result = await recordPayments(allocations, method)
-    if (!result.ok) return window.alert(result.message)
-
+    setBusy(true)
     try {
-      await onAccountPaid?.(allocations)
-    } catch (error) {
-      window.alert(`El pago se registró, pero no se pudo abrir la factura: ${error?.message || 'error de vista previa'}.`)
+      const result = await recordPayments(allocations, paymentMethod, customerResult.customer)
+      if (!result.ok) return window.alert(result.message)
+
+      const invoices = Array.isArray(result.invoices) ? result.invoices : []
+      setLastInvoices(invoices)
+
+      try {
+        await onAccountPaid?.(allocations, invoices)
+      } catch (error) {
+        window.alert(`El pago se registró, pero no se pudo completar una acción posterior: ${error?.message || 'error inesperado'}.`)
+      }
+
+      onSuccess?.(result)
+    } finally {
+      setBusy(false)
     }
-    onSuccess?.()
   }
 
   function chargeEqualPart() {
@@ -112,7 +137,6 @@ export default function SplitBillModal({ orders, tableText, onClose, onAccountPa
 
     performPayment(
       allocateAcrossOrders(amount),
-      `Parte ${paidParts + 1} de ${parts}.`,
       () => {
         const nextPaid = paidParts + 1
         if (nextPaid >= parts || balance - amount <= 0.005) {
@@ -163,17 +187,11 @@ export default function SplitBillModal({ orders, tableText, onClose, onAccountPa
       return window.alert('Los productos seleccionados superan el saldo pendiente de la mesa.')
     }
 
-    const allocations = allocateAcrossOrders(selectedProductData.total)
-    if (!allocations.length) return window.alert('No hay saldo pendiente para cobrar.')
-
-    allocations[0] = {
-      ...allocations[0],
-      itemAllocations: selectedProductData.itemAllocations,
-    }
+    const allocations = allocateSelectedProducts(selectedProductData.itemAllocations)
+    if (!allocations.length) return window.alert('No hay productos pendientes para cobrar.')
 
     performPayment(
       allocations,
-      `Productos seleccionados · ${formatMoney(selectedProductData.total)}.`,
       () => setSelected({}),
     )
   }
@@ -181,102 +199,172 @@ export default function SplitBillModal({ orders, tableText, onClose, onAccountPa
   if (balance <= 0.005) return null
 
   return (
-    <div className="modal open split-bill-modal" onClick={onClose}>
-      <div className="modal-card split-bill-card" onClick={(event) => event.stopPropagation()}>
-        <div className="section-title">
+    <div className="modal open split-bill-modal" onClick={() => !busy && onClose()}>
+      <div className="modal-card split-bill-card split-bill-professional" onClick={(event) => event.stopPropagation()}>
+        <div className="payment-checkout-header">
           <div>
-            <h3>Dividir cuenta · {tableText}</h3>
-            <p className="muted">Saldo pendiente {formatMoney(balance)} · Total {formatMoney(total)} · Pagado {formatMoney(paid)}</p>
+            <span className="payment-checkout-kicker">DIVIDIR CUENTA</span>
+            <h3>{tableText}</h3>
+            <p>Selecciona cómo se repartirá el saldo y cobra cada factura por separado.</p>
           </div>
-          <button className="btn" onClick={onClose}>×</button>
+          <button className="payment-close" disabled={busy} onClick={onClose}>×</button>
         </div>
+
+        <div className="order-payment-totals payment-checkout-totals">
+          <div><span>Total cuenta</span><strong>{formatMoney(total)}</strong></div>
+          <div><span>Pagado</span><strong>{formatMoney(paid)}</strong></div>
+          <div className="balance"><span>Pendiente</span><strong>{formatMoney(balance)}</strong></div>
+        </div>
+
+        {lastInvoices.length > 0 && (
+          <div className="notice ok split-payment-success">
+            ✓ Factura{lastInvoices.length === 1 ? '' : 's'} generada{lastInvoices.length === 1 ? '' : 's'}: {' '}
+            <b>{lastInvoices.map((invoice) => invoice.invoiceNumber).filter(Boolean).join(' · ')}</b>
+          </div>
+        )}
 
         {mode === 'choose' && (
           <div className="split-choice-grid">
             <button className="split-choice" onClick={() => setMode('equal')}>
               <span className="split-choice-icon">÷</span>
               <b>Partes iguales</b>
-              <small>Divide el saldo entre 2, 3, 4 o más cuentas.</small>
+              <small>Cada cobro genera una factura independiente por el valor de esa parte.</small>
             </button>
 
             <button className="split-choice" onClick={() => setMode('products')}>
               <span className="split-choice-icon">🍽️</span>
               <b>Por productos</b>
-              <small>Selecciona exactamente qué productos paga cada cliente.</small>
+              <small>Elige exactamente qué productos paga cada persona. Lo pagado desaparece de la lista pendiente.</small>
             </button>
           </div>
         )}
 
-        {mode === 'equal' && (
-          <div className="split-equal-panel">
-            <button className="linkbtn" onClick={() => { setMode('choose'); setPaidParts(0) }}>← Cambiar tipo de división</button>
-
-            <label className="split-parts-field">
-              <span>Número de cuentas</span>
-              <select
-                value={parts}
-                disabled={paidParts > 0}
-                onChange={(event) => { setParts(Number(event.target.value)); setPaidParts(0) }}
+        {mode !== 'choose' && (
+          <div className="split-checkout-grid">
+            <div className="split-main-panel">
+              <button
+                className="linkbtn"
+                disabled={busy}
+                onClick={() => {
+                  setMode('choose')
+                  setPaidParts(0)
+                  setSelected({})
+                  setLastInvoices([])
+                }}
               >
-                {[2,3,4,5,6,7,8,9,10].map((count) => <option value={count} key={count}>{count} cuentas</option>)}
-              </select>
-            </label>
+                ← Cambiar tipo de división
+              </button>
 
-            <div className="split-equal-summary">
-              <span>Parte {paidParts + 1} de {parts}</span>
-              <strong>
-                {formatMoney(
-                  (parts - paidParts) <= 1
-                    ? balance
-                    : Math.round((balance / (parts - paidParts)) * 100) / 100,
-                )}
-              </strong>
-              <small>Después de cobrar esta parte, RestOS+ recalcula automáticamente el saldo restante.</small>
-            </div>
+              {mode === 'equal' && (
+                <div className="split-equal-panel">
+                  <label className="split-parts-field">
+                    <span>Número de facturas / personas</span>
+                    <select
+                      value={parts}
+                      disabled={paidParts > 0 || busy}
+                      onChange={(event) => { setParts(Number(event.target.value)); setPaidParts(0) }}
+                    >
+                      {[2,3,4,5,6,7,8,9,10].map((count) => (
+                        <option value={count} key={count}>{count} facturas</option>
+                      ))}
+                    </select>
+                  </label>
 
-            <button className="btn primary full" onClick={chargeEqualPart}>Cobrar esta parte</button>
-          </div>
-        )}
-
-        {mode === 'products' && (
-          <div className="split-products-panel">
-            <button className="linkbtn" onClick={() => { setMode('choose'); setSelected({}) }}>← Cambiar tipo de división</button>
-
-            <div className="split-products-list">
-              {productLines.length ? productLines.map((line) => {
-                const selectedQty = Number(selected[line.key] || 0)
-
-                return (
-                  <div className="split-product-row" key={line.key}>
-                    <div className="split-product-copy">
-                      <b>{line.name}</b>
-                      <small>{formatMoney(line.price)} c/u · {line.availableQuantity} disponible{line.availableQuantity === 1 ? '' : 's'}</small>
-                    </div>
-
-                    <div className="split-product-qty">
-                      <button onClick={() => setProductQuantity(line, selectedQty - 1)} disabled={selectedQty <= 0}>−</button>
-                      <strong>{selectedQty}</strong>
-                      <button onClick={() => setProductQuantity(line, selectedQty + 1)} disabled={selectedQty >= line.availableQuantity}>+</button>
-                    </div>
-
-                    <strong className="split-product-total">{formatMoney(selectedQty * line.price)}</strong>
+                  <div className="split-equal-summary">
+                    <span>Factura {paidParts + 1} de {parts}</span>
+                    <strong>
+                      {formatMoney(
+                        (parts - paidParts) <= 1
+                          ? balance
+                          : Math.round((balance / (parts - paidParts)) * 100) / 100,
+                      )}
+                    </strong>
+                    <small>Después del cobro se recalcula el saldo antes de generar la siguiente factura.</small>
                   </div>
-                )
-              }) : <div className="empty-inline">No hay productos disponibles para dividir.</div>}
+                </div>
+              )}
+
+              {mode === 'products' && (
+                <div className="split-products-panel">
+                  <div className="split-products-heading">
+                    <b>Productos pendientes de cobro</b>
+                    <small>Los productos ya facturados no vuelven a aparecer aquí.</small>
+                  </div>
+
+                  <div className="split-products-list">
+                    {productLines.length ? productLines.map((line) => {
+                      const selectedQty = Number(selected[line.key] || 0)
+
+                      return (
+                        <div className="split-product-row" key={line.key}>
+                          <div className="split-product-copy">
+                            <b>{line.name}</b>
+                            <small>
+                              {formatMoney(line.price)} c/u · {line.availableQuantity} pendiente{line.availableQuantity === 1 ? '' : 's'}
+                            </small>
+                          </div>
+
+                          <div className="split-product-qty">
+                            <button type="button" onClick={() => setProductQuantity(line, selectedQty - 1)} disabled={busy || selectedQty <= 0}>−</button>
+                            <strong>{selectedQty}</strong>
+                            <button type="button" onClick={() => setProductQuantity(line, selectedQty + 1)} disabled={busy || selectedQty >= line.availableQuantity}>+</button>
+                          </div>
+
+                          <strong className="split-product-total">{formatMoney(selectedQty * line.price)}</strong>
+                        </div>
+                      )
+                    }) : <div className="empty-inline">No quedan productos pendientes de facturar.</div>}
+                  </div>
+
+                  <div className="split-selected-total">
+                    <span>Esta factura</span>
+                    <strong>{formatMoney(selectedProductData.total)}</strong>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="split-selected-total">
-              <span>Productos seleccionados</span>
-              <strong>{formatMoney(selectedProductData.total)}</strong>
-            </div>
+            <aside className="split-payment-panel">
+              <div className="payment-checkout-section-head">
+                <div>
+                  <span>MÉTODO DE PAGO</span>
+                  <b>{paymentMethodLabel(paymentMethod)}</b>
+                </div>
+              </div>
+              <PaymentMethodPicker
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                disabled={busy}
+              />
 
-            <button
-              className="btn primary full"
-              disabled={selectedProductData.total <= 0.005 || selectedProductData.total > balance + 0.005}
-              onClick={chargeSelectedProducts}
-            >
-              Cobrar productos seleccionados
-            </button>
+              <div className="split-invoice-customer">
+                <div className="payment-checkout-section-head">
+                  <div>
+                    <span>FACTURAR A</span>
+                    <b>Cliente de esta factura</b>
+                  </div>
+                </div>
+                <InvoiceCustomerFields
+                  value={invoiceCustomer}
+                  onChange={setInvoiceCustomer}
+                  disabled={busy}
+                />
+              </div>
+
+              {mode === 'equal' ? (
+                <button className="btn primary full" disabled={busy} onClick={chargeEqualPart}>
+                  {busy ? 'Registrando…' : `Cobrar factura ${paidParts + 1}`}
+                </button>
+              ) : (
+                <button
+                  className="btn primary full"
+                  disabled={busy || selectedProductData.total <= 0.005 || selectedProductData.total > balance + 0.005}
+                  onClick={chargeSelectedProducts}
+                >
+                  {busy ? 'Registrando…' : 'Cobrar y generar factura'}
+                </button>
+              )}
+            </aside>
           </div>
         )}
       </div>
