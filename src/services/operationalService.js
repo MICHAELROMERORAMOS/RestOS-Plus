@@ -53,7 +53,9 @@ export function isOperationalOrder(order) {
 function mapOperationalSummary(payload) {
   return {
     salesToday: asNumber(payload?.sales_today),
-    shiftSales: asNumber(payload?.sales_shift),
+    shiftGrossSales: asNumber(payload?.sales_shift),
+    shiftRefunds: asNumber(payload?.refunds_shift),
+    shiftSales: asNumber(payload?.net_sales_shift ?? payload?.sales_shift),
     shiftNumber: payload?.shift_number == null ? null : asNumber(payload?.shift_number),
     shiftOpenedAt: asTimestamp(payload?.shift_opened_at),
     completedOrdersToday: asNumber(payload?.completed_orders_today),
