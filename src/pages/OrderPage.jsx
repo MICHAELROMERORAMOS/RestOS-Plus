@@ -288,9 +288,14 @@ export default function OrderPage({ onNavigate }) {
     && orderTotal(currentOrder) > 0.005
     && orderBalance(currentOrder) <= 0.005
 
-  const quickIdentifier = pager.trim()
-    ? `Pager ${pager.trim()}`
-    : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
+  const manualQuickIdentity = state.settings.allowPager !== false
+  const quickIdentifier = manualQuickIdentity
+    ? (
+      pager.trim()
+        ? `Pager ${pager.trim()}`
+        : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
+    )
+    : `Turno ${String(pager || currentOrder?.pager || currentOrder?.id || '—').trim()}`
 
   const paymentAccountLabel = orderMode === 'table'
     ? accountTableLabel
@@ -299,7 +304,7 @@ export default function OrderPage({ onNavigate }) {
       : quickIdentifier
 
   useEffect(() => {
-    if (orderMode !== 'quick' || !currentOrder) {
+    if (orderMode !== 'quick' || !currentOrder || !manualQuickIdentity) {
       setShowQuickIdentitySetup(false)
       return
     }
@@ -315,6 +320,7 @@ export default function OrderPage({ onNavigate }) {
     currentOrder?.id,
     currentOrder?.pager,
     currentOrder?.customerName,
+    manualQuickIdentity,
   ])
 
   useEffect(() => {
@@ -498,6 +504,7 @@ export default function OrderPage({ onNavigate }) {
 
   async function saveQuickIdentity({ required = false, closeSetup = false } = {}) {
     if (orderMode !== 'quick' || !currentOrder) return { ok: false }
+    if (!manualQuickIdentity) return { ok: true }
 
     const normalizedPager = pager.trim()
     const normalizedCustomer = quickCustomerName.trim()
@@ -992,11 +999,11 @@ export default function OrderPage({ onNavigate }) {
               {orderMode === 'quick' ? quickIdentifier : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
             </span>
           </div>
-          {orderMode === 'quick' && (
+          {orderMode === 'quick' && manualQuickIdentity && (
             <div className="quick-identity-panel">
               <div className="quick-identity-title">
                 <b>Identificación del pedido</b>
-                <small>Usa uno de los dos campos. Este dato reemplaza el número de mesa.</small>
+                <small>Usa número de pager o nombre del cliente.</small>
               </div>
               <div className="quick-identity-grid">
                 <label>
@@ -1020,6 +1027,16 @@ export default function OrderPage({ onNavigate }) {
                     placeholder="Ej. Mariana"
                   />
                 </label>
+              </div>
+              <strong className="quick-identity-preview">{quickIdentifier}</strong>
+            </div>
+          )}
+
+          {orderMode === 'quick' && !manualQuickIdentity && (
+            <div className="quick-identity-panel quick-auto-turn-panel">
+              <div className="quick-identity-title">
+                <b>Turno automático</b>
+                <small>El consecutivo se asigna en Supabase y vuelve a 1 después del cierre de turno.</small>
               </div>
               <strong className="quick-identity-preview">{quickIdentifier}</strong>
             </div>
