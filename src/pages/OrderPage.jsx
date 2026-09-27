@@ -826,7 +826,7 @@ export default function OrderPage({ onNavigate }) {
   }
 
   return (
-    <section className="view active">
+    <section className="view active order-view">
       {showQuickIdentitySetup && orderMode === 'quick' && currentOrder && (
         <div className="modal open quick-identity-setup-modal">
           <div className="modal-card quick-identity-setup-card">
@@ -873,7 +873,7 @@ export default function OrderPage({ onNavigate }) {
         </div>
       )}
 
-      <div className="hero">
+      <div className="hero order-hero">
         <div>
           <h2>{
             orderMode === 'quick'
@@ -881,14 +881,12 @@ export default function OrderPage({ onNavigate }) {
               : orderMode === 'delivery'
                 ? `Domicilio · ${deliveryInfo?.customerName || 'Nuevo cliente'}`
                 : currentTableId
-                  ? `${currentOrder ? 'Continuar cuenta' : 'Abrir cuenta'} · ${currentTableLabel}`
+                  ? currentTableLabel
                   : 'Pedido'
           }</h2>
-          <p>{
-            orderMode === 'delivery'
-              ? 'Pedido a domicilio. Los productos se envían a Cocina/Bar y conservan los datos de entrega.'
-              : 'Una cuenta puede tener varias comandas. Solo los productos nuevos se envían en cada ronda.'
-          }</p>
+          {orderMode === 'delivery' && (
+            <p>Pedido a domicilio · {deliveryInfo?.customerName || 'Nuevo cliente'}</p>
+          )}
         </div>
       </div>
 
@@ -923,36 +921,19 @@ export default function OrderPage({ onNavigate }) {
           onChange={(event) => setSearch(event.target.value)}
         />
         {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
-        {canCharge && (
-          <button
-            className="btn pay-inline-btn"
-            disabled={!accountOrders.length || paymentAccountBalance <= 0.005}
-            onClick={openChargeModal}
-          >
-            💳 {orderMode === 'table' ? 'Cobrar mesa' : 'Cobrar pedido'}
-          </button>
-        )}
-        {canCharge && (
-          <button
-            className="btn"
-            disabled={!accountOrders.length || paymentAccountBalance <= 0.005}
-            onClick={openSplitModal}
-          >
-            ✂ Dividir cuenta
-          </button>
-        )}
         {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
       </div>
 
-      <div className="order-layout">
-        <div className="card">
-          <div className="section-title">
+      <div className="order-layout order-workspace">
+        <div className="card order-menu-panel">
+          <div className="section-title order-panel-header">
             <h3>Menú</h3>
             <span className={`badge ${inventoryControlEnabled ? 'ok-badge' : ''}`}>
               {inventoryControlEnabled ? 'Stock protegido' : 'Bloqueo de stock desactivado'}
             </span>
           </div>
-          <div className="products">
+
+          <div className="products order-menu-scroll">
             {filteredProducts.length ? filteredProducts.map((product) => {
               const availability = inventoryStateFor(product.id)
               const availabilityText = availability.controlled
@@ -985,190 +966,214 @@ export default function OrderPage({ onNavigate }) {
           </div>
         </div>
 
-        <div className="card order-cart">
-          <div className="section-title">
-            <h3>{orderMode === 'quick' ? 'Nueva orden' : orderMode === 'delivery' ? 'Pedido a domicilio' : 'Cuenta abierta'}</h3>
-            <span className="badge">
-              {orderMode === 'quick' ? quickIdentifier : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
-            </span>
-          </div>
-          {orderMode === 'quick' && manualQuickIdentity && (
-            <div className="quick-identity-panel">
-              <div className="quick-identity-title">
-                <b>Identificación del pedido</b>
-                <small>Usa número de pager o nombre del cliente.</small>
-              </div>
-              <div className="quick-identity-grid">
-                <label>
-                  <span>Número del pager</span>
-                  <input
-                    value={pager}
-                    disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
-                    onChange={(event) => setPager(event.target.value)}
-                    onBlur={() => saveQuickIdentity()}
-                    placeholder="Ej. 16"
-                  />
-                </label>
-                <div className="quick-identity-or">o</div>
-                <label>
-                  <span>Nombre del cliente</span>
-                  <input
-                    value={quickCustomerName}
-                    disabled={Boolean(pager.trim()) || quickIdentitySaving}
-                    onChange={(event) => setQuickCustomerName(event.target.value)}
-                    onBlur={saveQuickIdentity}
-                    placeholder="Ej. Mariana"
-                  />
-                </label>
-              </div>
-              <strong className="quick-identity-preview">{quickIdentifier}</strong>
+        <div className="order-cart-column">
+          <div className="card order-cart">
+            <div className="section-title order-panel-header">
+              <h3>{orderMode === 'quick' ? 'Nueva orden' : orderMode === 'delivery' ? 'Pedido a domicilio' : 'Cuenta'}</h3>
+              <span className="badge">
+                {orderMode === 'quick' ? quickIdentifier : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
+              </span>
             </div>
-          )}
 
-          {orderMode === 'quick' && !manualQuickIdentity && (
-            <div className="quick-identity-panel quick-auto-turn-panel">
-              <div className="quick-identity-title">
-                <b>Turno automático</b>
-                <small>El consecutivo se asigna en Supabase y vuelve a 1 después del cierre de turno.</small>
-              </div>
-              <strong className="quick-identity-preview">{quickIdentifier}</strong>
-            </div>
-          )}
-
-          {orderMode === 'delivery' && deliveryInfo && (
-            <div className="delivery-order-summary">
-              <div>
-                <b>🚚 {deliveryInfo.customerName}</b>
-                <span>{deliveryInfo.address}</span>
-                <small>{deliveryInfo.neighborhood} · {deliveryInfo.city}</small>
-              </div>
-              <div>
-                <b>📱 {deliveryInfo.phone}</b>
-                {deliveryInfo.email && <small>✉ {deliveryInfo.email}</small>}
-              </div>
-            </div>
-          )}
-
-          {(currentOrder?.rounds || []).map((round) => (
-            <div className="sent-block" key={round.id}>
-              <div className="sent-head"><span>COMANDA {round.id} · {new Date(round.created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><span>{roundStatus(round)}</span></div>
-              {round.items.map((item) => (
-                <div className={`sent-line ${item.voided ? 'voided' : ''}`} key={item.lineId}>
-                  <div>
-                    <b>{item.quantity} × {item.name}</b>
-                    {item.note && <small>↳ {item.note}</small>}
-                    <span className="station">{item.station === 'bar' ? 'BAR' : 'COCINA'} · {item.prepStatus.toUpperCase()} · bloqueado</span>
-                  </div>
-                  <div className="sent-price">
-                    <strong>{formatMoney(item.price * item.quantity)}</strong>
-
-                    {!item.voided && tableAccountUnpaid && latestVoidRequestByLine.get(String(item.lineId))?.status === 'pending' && (
-                      <span className="void-request-state pending">Pendiente Cocina</span>
-                    )}
-
-                    {!item.voided && tableAccountUnpaid && latestVoidRequestByLine.get(String(item.lineId))?.status === 'approved' && (
-                      <span className="void-request-state approved">Aprobada · aplicando</span>
-                    )}
-
-                    {!item.voided && tableAccountUnpaid && latestVoidRequestByLine.get(String(item.lineId))?.status === 'rejected' && (
-                      <span className="void-request-state rejected">Rechazada</span>
-                    )}
-
-                    {item.voided && item.voidReason && (
-                      <small className="voided-reason">Motivo: {item.voidReason}</small>
-                    )}
-                  </div>
+            {orderMode === 'quick' && manualQuickIdentity && (
+              <div className="quick-identity-panel order-cart-identity">
+                <div className="quick-identity-title">
+                  <b>Identificación del pedido</b>
+                  <small>Usa número de pager o nombre del cliente.</small>
                 </div>
-              ))}
-              {roundStatus(round) === 'LISTA' && <button className="btn" onClick={async () => {
+                <div className="quick-identity-grid">
+                  <label>
+                    <span>Número del pager</span>
+                    <input
+                      value={pager}
+                      disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
+                      onChange={(event) => setPager(event.target.value)}
+                      onBlur={() => saveQuickIdentity()}
+                      placeholder="Ej. 16"
+                    />
+                  </label>
+                  <div className="quick-identity-or">o</div>
+                  <label>
+                    <span>Nombre del cliente</span>
+                    <input
+                      value={quickCustomerName}
+                      disabled={Boolean(pager.trim()) || quickIdentitySaving}
+                      onChange={(event) => setQuickCustomerName(event.target.value)}
+                      onBlur={saveQuickIdentity}
+                      placeholder="Ej. Mariana"
+                    />
+                  </label>
+                </div>
+                <strong className="quick-identity-preview">{quickIdentifier}</strong>
+              </div>
+            )}
+
+            {orderMode === 'quick' && !manualQuickIdentity && (
+              <div className="quick-identity-panel quick-auto-turn-panel order-cart-identity">
+                <div className="quick-identity-title">
+                  <b>Turno automático</b>
+                  <small>El consecutivo se asigna en Supabase y vuelve a 1 después del cierre de turno.</small>
+                </div>
+                <strong className="quick-identity-preview">{quickIdentifier}</strong>
+              </div>
+            )}
+
+            {orderMode === 'delivery' && deliveryInfo && (
+              <div className="delivery-order-summary order-cart-identity">
+                <div>
+                  <b>🚚 {deliveryInfo.customerName}</b>
+                  <span>{deliveryInfo.address}</span>
+                  <small>{deliveryInfo.neighborhood} · {deliveryInfo.city}</small>
+                </div>
+                <div>
+                  <b>📱 {deliveryInfo.phone}</b>
+                  {deliveryInfo.email && <small>✉ {deliveryInfo.email}</small>}
+                </div>
+              </div>
+            )}
+
+            <div className="order-cart-scroll">
+              {(currentOrder?.rounds || []).map((round) => (
+                <div className="sent-block" key={round.id}>
+                  <div className="sent-head">
+                    <span>COMANDA {round.id} · {new Date(round.created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>{roundStatus(round)}</span>
+                  </div>
+                  {round.items.map((item) => (
+                    <div className={`sent-line ${item.voided ? 'voided' : ''}`} key={item.lineId}>
+                      <div>
+                        <b>{item.quantity} × {item.name}</b>
+                        {item.note && <small>↳ {item.note}</small>}
+                        <span className="station">{item.station === 'bar' ? 'BAR' : 'COCINA'} · {item.prepStatus.toUpperCase()} · bloqueado</span>
+                      </div>
+                      <div className="sent-price">
+                        <strong>{formatMoney(item.price * item.quantity)}</strong>
+
+                        {!item.voided && tableAccountUnpaid && latestVoidRequestByLine.get(String(item.lineId))?.status === 'pending' && (
+                          <span className="void-request-state pending">Pendiente Cocina</span>
+                        )}
+
+                        {!item.voided && tableAccountUnpaid && latestVoidRequestByLine.get(String(item.lineId))?.status === 'approved' && (
+                          <span className="void-request-state approved">Aprobada · aplicando</span>
+                        )}
+
+                        {!item.voided && tableAccountUnpaid && latestVoidRequestByLine.get(String(item.lineId))?.status === 'rejected' && (
+                          <span className="void-request-state rejected">Rechazada</span>
+                        )}
+
+                        {item.voided && item.voidReason && (
+                          <small className="voided-reason">Motivo: {item.voidReason}</small>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {roundStatus(round) === 'LISTA' && (
+                    <button className="btn" onClick={async () => {
                       const result = await markRoundDelivered(currentOrder.id, round.id)
                       if (result?.ok === false) window.alert(result.message)
-                    }}>✓ Marcar comanda entregada</button>}
-            </div>
-          ))}
-
-          {orderMode === 'table' && tableAccountUnpaid && canRequestUnpaidVoid && requestableItems.length > 0 && (
-            <button className="btn void-request-main full" onClick={openUnpaidVoidRequest}>
-              ⚠ Solicitar anulación de productos a Cocina
-            </button>
-          )}
-
-          {orderMode === 'table' && tableAccountPartiallyPaid && canVoidPartialAccount && (
-            <button className="btn danger-outline full" onClick={openAccountVoid}>
-              🔐 Anular cuenta completa con autorización
-            </button>
-          )}
-
-          {draft.length ? (
-            <div>
-              <div className="sent-head"><span>NUEVOS · SIN ENVIAR</span><span>EDITABLE</span></div>
-              {draft.map((line) => (
-                <div className="draft-line" key={line.draftId}>
-                  <div>
-                    <b>{line.name}</b>
-                    <small>{line.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}{line.note ? ` · ${line.note}` : ''}</small>
-                    <div className="line-actions">
-                      <button className="mini" onClick={() => { setNoteLine(line); setNoteText(line.note || '') }}>✎ Nota</button>
-                      <button className="mini danger" onClick={() => removeDraft(line.draftId)}>× Quitar</button>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="qty">
-                      <button onClick={() => changeDraftQuantity(line.draftId, -1)}>−</button>
-                      <b>{line.quantity}</b>
-                      <button
-                        onClick={() => increaseDraftQuantity(line)}
-                        disabled={inventoryStateFor(line.productId).blocked}
-                        title={inventoryStateFor(line.productId).blocked ? 'No quedan insumos para otra unidad' : 'Agregar una unidad'}
-                      >+</button>
-                    </div>
-                    {inventoryStateFor(line.productId).controlled && (
-                      <small className="draft-stock-remaining">
-                        {inventoryStateFor(line.productId).remaining} adicionales posibles
-                      </small>
-                    )}
-                    <strong className="line-total">{formatMoney(line.price * line.quantity)}</strong>
-                  </div>
+                    }}>
+                      ✓ Marcar comanda entregada
+                    </button>
+                  )}
                 </div>
               ))}
-            </div>
-          ) : <div className="empty-inline">No hay productos nuevos por enviar</div>}
 
-          <div className="order-summary">
-            <div className="row plain"><b>Total cuenta</b><strong>{formatMoney(accountTotal)}</strong></div>
-            {accountOrders.length > 0 && (
-              <>
-                <div className="row plain"><span>Pagado</span><strong>{formatMoney(paymentAccountPaid)}</strong></div>
-                <div className="row plain"><b>Saldo pendiente</b><strong>{formatMoney(paymentAccountBalance)}</strong></div>
-                {paymentAccountRefundDue > 0.005 && (
-                  <div className="row plain refund-due-row"><b>Reembolso pendiente</b><strong>{formatMoney(paymentAccountRefundDue)}</strong></div>
+              {orderMode === 'table' && tableAccountUnpaid && canRequestUnpaidVoid && requestableItems.length > 0 && (
+                <button className="btn void-request-main full" onClick={openUnpaidVoidRequest}>
+                  ⚠ Solicitar anulación de productos a Cocina
+                </button>
+              )}
+
+              {orderMode === 'table' && tableAccountPartiallyPaid && canVoidPartialAccount && (
+                <button className="btn danger-outline full" onClick={openAccountVoid}>
+                  🔐 Anular cuenta completa con autorización
+                </button>
+              )}
+
+              {draft.length ? (
+                <div>
+                  <div className="sent-head"><span>NUEVOS · SIN ENVIAR</span><span>EDITABLE</span></div>
+                  {draft.map((line) => (
+                    <div className="draft-line" key={line.draftId}>
+                      <div>
+                        <b>{line.name}</b>
+                        <small>{line.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}{line.note ? ` · ${line.note}` : ''}</small>
+                        <div className="line-actions">
+                          <button className="mini" onClick={() => { setNoteLine(line); setNoteText(line.note || '') }}>✎ Nota</button>
+                          <button className="mini danger" onClick={() => removeDraft(line.draftId)}>× Quitar</button>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="qty">
+                          <button onClick={() => changeDraftQuantity(line.draftId, -1)}>−</button>
+                          <b>{line.quantity}</b>
+                          <button
+                            onClick={() => increaseDraftQuantity(line)}
+                            disabled={inventoryStateFor(line.productId).blocked}
+                            title={inventoryStateFor(line.productId).blocked ? 'No quedan insumos para otra unidad' : 'Agregar una unidad'}
+                          >+</button>
+                        </div>
+                        {inventoryStateFor(line.productId).controlled && (
+                          <small className="draft-stock-remaining">
+                            {inventoryStateFor(line.productId).remaining} adicionales posibles
+                          </small>
+                        )}
+                        <strong className="line-total">{formatMoney(line.price * line.quantity)}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="empty-inline">No hay productos nuevos por enviar</div>}
+
+              {draftInventoryBlocked && (
+                <div className="notice warn inventory-draft-warning">
+                  El inventario cambió y ya no alcanza para todos los productos sin enviar. Reduce las cantidades antes de enviar a preparación.
+                </div>
+              )}
+            </div>
+
+            <div className="order-cart-fixed">
+              <div className="order-summary">
+                <div className="row plain"><b>Total cuenta</b><strong>{formatMoney(accountTotal)}</strong></div>
+                {accountOrders.length > 0 && (
+                  <>
+                    <div className="row plain"><span>Pagado</span><strong>{formatMoney(paymentAccountPaid)}</strong></div>
+                    <div className="row plain"><b>Saldo pendiente</b><strong>{formatMoney(paymentAccountBalance)}</strong></div>
+                    {paymentAccountRefundDue > 0.005 && (
+                      <div className="row plain refund-due-row"><b>Reembolso pendiente</b><strong>{formatMoney(paymentAccountRefundDue)}</strong></div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
+              </div>
+
+              <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleSend}>
+                {orderMode === 'delivery'
+                  ? '🚚 Enviar domicilio a preparación'
+                  : orderMode === 'quick'
+                    ? '🍳 Enviar a preparación'
+                    : 'Enviar nuevos productos'}
+              </button>
+            </div>
           </div>
-          {draftInventoryBlocked && (
-            <div className="notice warn inventory-draft-warning">
-              El inventario cambió y ya no alcanza para todos los productos sin enviar. Reduce las cantidades antes de enviar a preparación.
+
+          {canCharge && (
+            <div className="order-cart-payment-actions">
+              <button
+                className="btn order-split-fixed"
+                disabled={!accountOrders.length || paymentAccountBalance <= 0.005}
+                onClick={openSplitModal}
+              >
+                ✂ Dividir cuenta
+              </button>
+              <button
+                className="btn primary order-charge-fixed"
+                disabled={!accountOrders.length || paymentAccountBalance <= 0.005}
+                onClick={openChargeModal}
+              >
+                💳 {orderMode === 'table' ? 'Cobrar mesa' : 'Cobrar pedido'}
+              </button>
             </div>
           )}
-          {canCharge && accountOrders.length > 0 && !paymentAccountFullyPaid && (
-            <button
-              className="btn payment-from-order full"
-              disabled={paymentAccountBalance <= 0.005}
-              onClick={openChargeModal}
-            >
-              💳 {orderMode === 'table' ? 'Cobrar mesa desde esta pantalla' : 'Cobrar pedido desde esta pantalla'}
-            </button>
-          )}
-          <button className="btn primary full action-main" disabled={!draft.length || draftInventoryBlocked} onClick={handleSend}>
-            {orderMode === 'delivery'
-              ? '🚚 Enviar domicilio a preparación'
-              : orderMode === 'quick'
-                ? '🍳 Enviar a preparación'
-                : 'Enviar nuevos productos'}
-          </button>
-          {orderMode === 'quick' && <div className="notice">Después de enviar, puedes cobrar este pedido aquí mismo o volver a “Pedidos activos” y abrirlo nuevamente.</div>}
-          {orderMode === 'delivery' && <div className="notice">Después de enviar, puedes cobrar el domicilio aquí mismo. El pedido conserva los datos del cliente en Cocina/Bar y en Domicilios.</div>}
         </div>
       </div>
 
