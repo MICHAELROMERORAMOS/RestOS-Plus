@@ -304,6 +304,31 @@ export default function OrderPage({ onNavigate }) {
       ? `Domicilio #${currentOrder?.id || '—'} · ${deliveryInfo?.customerName || 'Cliente'}`
       : quickIdentifier
 
+  const orderContext = orderMode === 'table'
+    ? {
+        icon: '🍽️',
+        type: 'MESA',
+        primary: accountTableLabel,
+        secondary: currentOrder?.tableIds?.length > 1 ? 'Mesas unidas' : 'Cuenta de mesa',
+      }
+    : orderMode === 'delivery'
+      ? {
+          icon: '🚚',
+          type: 'DOMICILIO',
+          primary: deliveryInfo?.customerName || 'Cliente',
+          secondary: [
+            deliveryInfo?.address,
+            deliveryInfo?.neighborhood,
+            deliveryInfo?.city,
+          ].filter(Boolean).join(' · ') || 'Pedido a domicilio',
+        }
+      : {
+          icon: '⚡',
+          type: 'SERVICIO RÁPIDO',
+          primary: quickIdentifier,
+          secondary: manualQuickIdentity ? 'Pedido identificado manualmente' : 'Turno automático',
+        }
+
   useEffect(() => {
     if (orderMode !== 'quick' || !currentOrder || !manualQuickIdentity) {
       setShowQuickIdentitySetup(false)
@@ -952,11 +977,13 @@ export default function OrderPage({ onNavigate }) {
 
         <div className="order-cart-column">
           <div className="card order-cart">
-            <div className="section-title order-panel-header">
-              <h3>{orderMode === 'quick' ? 'Nueva orden' : orderMode === 'delivery' ? 'Pedido a domicilio' : 'Cuenta'}</h3>
-              <span className="badge">
-                {orderMode === 'quick' ? quickIdentifier : orderMode === 'delivery' ? (deliveryInfo?.customerName || 'Domicilio') : accountTableLabel}
-              </span>
+            <div className="order-context-header">
+              <span className="order-context-icon" aria-hidden="true">{orderContext.icon}</span>
+              <div className="order-context-copy">
+                <span className="order-context-type">{orderContext.type}</span>
+                <strong>{orderContext.primary}</strong>
+                <small>{orderContext.secondary}</small>
+              </div>
             </div>
 
             {orderMode === 'quick' && manualQuickIdentity && (
