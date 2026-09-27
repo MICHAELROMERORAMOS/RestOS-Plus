@@ -2488,7 +2488,9 @@ export function RestaurantProvider({ children }) {
       .filter((allocation) => allocation.orderId != null && allocation.amount > 0)
 
     if (!normalized.length) return { ok: false, message: 'No hay importes válidos para cobrar.' }
-    if (!['cash', 'card'].includes(method)) return { ok: false, message: 'Método de pago inválido.' }
+    if (!['cash', 'card', 'transfer', 'nequi', 'other'].includes(method)) {
+      return { ok: false, message: 'Método de pago inválido.' }
+    }
 
     const requestedByOrder = new Map(normalized.map((allocation) => [allocation.orderId, allocation]))
     let expectedApplied = 0
@@ -2526,7 +2528,11 @@ export function RestaurantProvider({ children }) {
           activeLocation,
         )
         await refreshOperationalSummary(activeLocation)
-        return { ok: true, applied: Number(result?.applied || 0) }
+        return {
+          ok: true,
+          applied: Number(result?.applied || 0),
+          invoices: Array.isArray(result?.invoices) ? result.invoices : [],
+        }
       } catch (error) {
         return { ok: false, message: paymentErrorMessage(error) }
       }
@@ -2626,7 +2632,7 @@ export function RestaurantProvider({ children }) {
       }
     })
 
-    return { ok: true, applied: expectedApplied }
+    return { ok: true, applied: expectedApplied, invoices: [] }
   }, [
     state.orders, updateState, formatMoney, auth.isDesignMode,
     refreshOperationalOrdersByIds, refreshOperationalSummary, activeLocation,
