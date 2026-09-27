@@ -15,6 +15,7 @@ import { formatMoneyValue } from '../lib/currency.js'
 import {
   loadRestaurantSettings,
   saveInventoryStockControl,
+  saveOperationalBehaviorSettings,
   saveRestaurantCurrency,
 } from '../services/settingsService.js'
 import {
@@ -450,6 +451,8 @@ export function RestaurantProvider({ children }) {
       settings: {
         ...previous.settings,
         currency: remoteSettings.currency_code || previous.settings.currency,
+        allowPager: remoteSettings.pager_enabled !== false,
+        splitStations: remoteSettings.separate_kitchen_bar !== false,
         blockInsufficientInventory: remoteSettings.block_insufficient_inventory !== false,
       },
     }))
@@ -2683,6 +2686,66 @@ export function RestaurantProvider({ children }) {
     }
   }, [auth.isDesignMode, auth.permissions, restaurantId, updateSettings])
 
+  const setOperationalBehavior = useCallback(async ({ allowPager, splitStations }) => {
+    const nextAllowPager = allowPager == null
+      ? state.settings.allowPager !== false
+      : Boolean(allowPager)
+    const nextSplitStations = splitStations == null
+      ? state.settings.splitStations !== false
+      : Boolean(splitStations)
+
+    if (auth.isDesignMode) {
+      updateSettings({
+        allowPager: nextAllowPager,
+        splitStations: nextSplitStations,
+      })
+      return {
+        ok: true,
+        allowPager: nextAllowPager,
+        splitStations: nextSplitStations,
+      }
+    }
+
+    if (!restaurantId) {
+      return { ok: false, message: 'No se encontró el restaurante activo.' }
+    }
+
+    if (!auth.can('settings.manage')) {
+      return { ok: false, message: 'Tu rol no puede cambiar la configuración operativa.' }
+    }
+
+    try {
+      const saved = await saveOperationalBehaviorSettings(restaurantId, {
+        pagerEnabled: nextAllowPager,
+        separateKitchenBar: nextSplitStations,
+      })
+
+      updateSettings({
+        allowPager: saved.pager_enabled !== false,
+        splitStations: saved.separate_kitchen_bar !== false,
+      })
+
+      return {
+        ok: true,
+        allowPager: saved.pager_enabled !== false,
+        splitStations: saved.separate_kitchen_bar !== false,
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || 'No se pudo guardar la configuración operativa.',
+      }
+    }
+  }, [
+    auth.isDesignMode,
+    auth.permissions,
+    restaurantId,
+    state.settings.allowPager,
+    state.settings.splitStations,
+    updateSettings,
+  ])
+
+
   const resetDemo = useCallback(() => {
     if (!auth.isDesignMode) {
       return {
@@ -2764,6 +2827,7 @@ export function RestaurantProvider({ children }) {
     formatMoney,
     setCurrency,
     setInventoryStockControl,
+    setOperationalBehavior,
     orderMode,
     currentTableId,
     currentOrderId,
@@ -2823,7 +2887,7 @@ export function RestaurantProvider({ children }) {
     state, products, menuCategories, menuStations, locations, activeLocation, switchLocation, remoteLoading, remoteError,
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
-    refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
+    refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
     setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markRoundDelivered,
