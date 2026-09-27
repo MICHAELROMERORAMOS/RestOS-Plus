@@ -18,6 +18,7 @@ import ProductsPage from './pages/ProductsPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import ReservationsPage from './pages/ReservationsPage.jsx'
 import StaffPage from './pages/StaffPage.jsx'
+import BranchesPage from './pages/BranchesPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
@@ -119,6 +120,7 @@ function MainApplication() {
     customers: <CustomersPage />,
     reservations: <ReservationsPage />,
     staff: <StaffPage />,
+    branches: <BranchesPage />,
     reports: <ReportsPage />,
     'shift-close': <ShiftClosePage />,
     tv: <TvPage />,
@@ -133,6 +135,10 @@ function MainApplication() {
       userContext={auth.userContext}
       onLogout={auth.logout}
       canKitchen={auth.can('kitchen.view')}
+      companyName={auth.userContext?.restaurant || 'Empresa'}
+      locations={restaurant.locations}
+      activeLocation={restaurant.activeLocation}
+      onLocationChange={restaurant.switchLocation}
     >
       {pages[activeView] || pages.dashboard}
     </AppShell>
