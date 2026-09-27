@@ -118,6 +118,10 @@ export async function loadUserAccess(user) {
   if (profileError) throw profileError
 
   if ((profile.access_status || 'pending') !== 'active') {
+    if (profile.access_status === 'suspended') {
+      return { profile, status: 'suspended', active: false }
+    }
+
     const onboarding = await loadMyOnboardingStatus()
     return {
       profile,
