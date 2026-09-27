@@ -64,3 +64,15 @@ export async function rotateCompanyJoinCode(restaurantId) {
   if (error) throw error
   return String(data || '')
 }
+
+
+export async function setBranchInvoicePrefix({ restaurantId, locationId, prefix }) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('set_branch_invoice_prefix', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+    p_prefix: prefix,
+  })
+  if (error) throw error
+  return data
+}
