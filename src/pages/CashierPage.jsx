@@ -10,6 +10,7 @@ import {
   createKitchenVoidRequest,
   listMyKitchenVoidRequestsForOrders,
 } from '../services/voidAuthorizationService.js'
+import { processOrderRefund } from '../services/refundService.js'
 
 function money(value) {
   return Number(value || 0).toFixed(2)
@@ -44,6 +45,9 @@ export default function CashierPage() {
     tableLabel,
     formatMoney,
     voidRequestsVersion,
+    activeLocation,
+    refreshOperationalData,
+    refreshOperationalSummary,
   } = useRestaurant()
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
@@ -63,17 +67,29 @@ export default function CashierPage() {
   const [voidReason, setVoidReason] = useState('')
   const [voidBusy, setVoidBusy] = useState(false)
 
+  const [refundGroupKey, setRefundGroupKey] = useState(null)
+  const [refundMethod, setRefundMethod] = useState('cash')
+  const [refundReference, setRefundReference] = useState('')
+  const [refundNote, setRefundNote] = useState('')
+  const [refundBusy, setRefundBusy] = useState(false)
+
 
   const groups = useMemo(() => {
     const grouped = new Map()
 
     state.orders
-      .filter((order) => (
-        ['table', 'quick', 'delivery'].includes(order.mode)
-        && !['closed', 'cancelled', 'merged'].includes(order.status)
-        && (order.rounds?.length || 0) > 0
-        && (orderBalance(order) > 0.005 || Number(order.refundDue || 0) > 0.005)
-      ))
+      .filter((order) => {
+        if (!['table', 'quick', 'delivery'].includes(order.mode)) return false
+
+        const refundPending = Number(order.refundDue || 0) > 0.005
+        if (refundPending) return true
+
+        return (
+          !['closed', 'cancelled', 'merged'].includes(order.status)
+          && (order.rounds?.length || 0) > 0
+          && orderBalance(order) > 0.005
+        )
+      })
       .forEach((order) => {
         const key = groupKeyFor(order)
         const existing = grouped.get(key) || {
@@ -101,7 +117,9 @@ export default function CashierPage() {
             ? group.tableIds.map((id) => tableLabel(id)).join(' + ')
             : group.orders[0]?.mode === 'delivery'
               ? `Domicilio · ${group.orders[0]?.delivery?.customerName || 'Sin cliente'}`
-              : `Servicio rápido · Orden #${group.orders[0]?.id || ''}`,
+              : group.orders[0]?.mode === 'quick'
+                ? `Servicio rápido · ${group.orders[0]?.pager ? `Pager ${group.orders[0].pager}` : group.orders[0]?.customerName || `Orden #${group.orders[0]?.id || ''}`}`
+                : `Orden #${group.orders[0]?.id || ''}`,
         }
       })
       .sort((a, b) => (a.orders[0]?.created || 0) - (b.orders[0]?.created || 0))
@@ -117,6 +135,10 @@ export default function CashierPage() {
 
   const voidRequestGroup = voidRequestGroupKey
     ? groups.find((group) => group.key === voidRequestGroupKey) || null
+    : null
+
+  const refundGroup = refundGroupKey
+    ? groups.find((group) => group.key === refundGroupKey) || null
     : null
 
   const latestRequestByLine = useMemo(() => {
@@ -233,6 +255,76 @@ export default function CashierPage() {
     closeCharge()
   }
 
+  function openRefund(group) {
+    setRefundGroupKey(group.key)
+    setRefundMethod('cash')
+    setRefundReference('')
+    setRefundNote('')
+  }
+
+  function closeRefund() {
+    if (refundBusy) return
+    setRefundGroupKey(null)
+    setRefundReference('')
+    setRefundNote('')
+  }
+
+  async function confirmRefund() {
+    if (!refundGroup || refundBusy) return
+
+    const refundableOrders = refundGroup.orders.filter((order) => (
+      Number(order.refundDue || 0) > 0.005
+      && order.serverId
+    ))
+
+    if (!refundableOrders.length) {
+      return window.alert('No se encontró una orden sincronizada con reembolso pendiente.')
+    }
+
+    const confirmed = window.confirm(
+      `¿Confirmar devolución de ${formatMoney(refundGroup.refundDue)} para ${refundGroup.tableText}?\n\nMétodo: ${
+        refundMethod === 'cash'
+          ? 'Efectivo'
+          : refundMethod === 'card'
+            ? 'Tarjeta'
+            : refundMethod === 'transfer'
+              ? 'Transferencia'
+              : 'Otro'
+      }\n\nEsta operación quedará registrada en el cierre de turno.`,
+    )
+    if (!confirmed) return
+
+    setRefundBusy(true)
+    try {
+      for (const order of refundableOrders) {
+        await processOrderRefund({
+          orderServerId: order.serverId,
+          amount: Number(order.refundDue || 0),
+          method: refundMethod,
+          reference: refundReference.trim(),
+          note: refundNote.trim(),
+        })
+      }
+
+      setRefundGroupKey(null)
+      setRefundReference('')
+      setRefundNote('')
+
+      if (activeLocation?.id) {
+        await Promise.all([
+          refreshOperationalData(activeLocation),
+          refreshOperationalSummary(activeLocation),
+        ])
+      }
+
+      window.alert('Reembolso registrado correctamente.')
+    } catch (error) {
+      window.alert(error?.message || 'No se pudo registrar el reembolso.')
+    } finally {
+      setRefundBusy(false)
+    }
+  }
+
   function openVoidRequest(group) {
     if (!canRequestUnpaidVoid) return
     if (group.paid > 0.005) return window.alert('La cuenta ya tiene pagos. Debe usarse la anulación de cuenta completa con autorización.')
@@ -313,7 +405,12 @@ export default function CashierPage() {
 
                 <div className="cash-actions">
                   {refundPending ? (
-                    <strong>Reembolso {formatMoney(group.refundDue)}</strong>
+                    <>
+                      <strong>Reembolso {formatMoney(group.refundDue)}</strong>
+                      <button className="btn danger-outline" onClick={() => openRefund(group)}>
+                        Procesar reembolso
+                      </button>
+                    </>
                   ) : (
                     <>
                       <strong>Saldo {formatMoney(group.balance)}</strong>
@@ -335,6 +432,72 @@ export default function CashierPage() {
           }) : <div className="empty-block">No hay cuentas pendientes de cobro.</div>}
         </div>
       </div>
+
+      {refundGroup && (
+        <div className="modal open" onClick={closeRefund}>
+          <div className="modal-card cashier-payment-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title">
+              <div>
+                <h3>↩ Procesar reembolso</h3>
+                <p className="muted">
+                  {refundGroup.tableText} · Pendiente {formatMoney(refundGroup.refundDue)}
+                </p>
+              </div>
+              <button className="btn" disabled={refundBusy} onClick={closeRefund}>×</button>
+            </div>
+
+            <div className="notice warn">
+              Registra esta operación únicamente después de devolver realmente el dinero al cliente.
+              Al completarla, el reembolso dejará de bloquear el cierre de turno.
+            </div>
+
+            <div className="settings-form cashier-payment-fields">
+              <label>
+                <span>Importe a devolver</span>
+                <input value={money(refundGroup.refundDue)} readOnly />
+              </label>
+
+              <label>
+                <span>Método de devolución</span>
+                <select
+                  value={refundMethod}
+                  disabled={refundBusy}
+                  onChange={(event) => setRefundMethod(event.target.value)}
+                >
+                  <option value="cash">Efectivo</option>
+                  <option value="card">Tarjeta</option>
+                  <option value="transfer">Transferencia</option>
+                  <option value="other">Otro</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Referencia (opcional)</span>
+                <input
+                  value={refundReference}
+                  disabled={refundBusy}
+                  onChange={(event) => setRefundReference(event.target.value)}
+                  placeholder="Ej. comprobante o referencia bancaria"
+                />
+              </label>
+
+              <label>
+                <span>Nota (opcional)</span>
+                <input
+                  value={refundNote}
+                  disabled={refundBusy}
+                  onChange={(event) => setRefundNote(event.target.value)}
+                  placeholder="Ej. devolución al cliente por factura anulada"
+                />
+              </label>
+            </div>
+
+            <button className="btn primary full" disabled={refundBusy} onClick={confirmRefund}>
+              {refundBusy ? 'Registrando reembolso…' : `Confirmar devolución de ${formatMoney(refundGroup.refundDue)}`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {chargeGroup && (
         <div className="modal open" onClick={closeCharge}>
