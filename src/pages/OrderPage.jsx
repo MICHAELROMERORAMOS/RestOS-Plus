@@ -68,6 +68,7 @@ export default function OrderPage({ onNavigate }) {
   const [chargeBusy, setChargeBusy] = useState(false)
   const [quickIdentitySaving, setQuickIdentitySaving] = useState(false)
   const [showQuickIdentitySetup, setShowQuickIdentitySetup] = useState(false)
+  const [showDeliveryDetails, setShowDeliveryDetails] = useState(false)
   const [myVoidRequests, setMyVoidRequests] = useState([])
   const [showUnpaidVoidRequest, setShowUnpaidVoidRequest] = useState(false)
   const [unpaidVoidSelected, setUnpaidVoidSelected] = useState({})
@@ -984,21 +985,18 @@ export default function OrderPage({ onNavigate }) {
                 <strong>{orderContext.primary}</strong>
                 {orderContext.secondary && <small>{orderContext.secondary}</small>}
               </div>
+              {orderMode === 'delivery' && deliveryInfo && (
+                <button
+                  type="button"
+                  className="order-context-view"
+                  title="Ver datos del cliente"
+                  aria-label="Ver datos del cliente"
+                  onClick={() => setShowDeliveryDetails(true)}
+                >
+                  👁
+                </button>
+              )}
             </div>
-
-            {orderMode === 'delivery' && deliveryInfo && (
-              <div className="delivery-order-summary order-cart-identity">
-                <div>
-                  <b>🚚 {deliveryInfo.customerName}</b>
-                  <span>{deliveryInfo.address}</span>
-                  <small>{deliveryInfo.neighborhood} · {deliveryInfo.city}</small>
-                </div>
-                <div>
-                  <b>📱 {deliveryInfo.phone}</b>
-                  {deliveryInfo.email && <small>✉ {deliveryInfo.email}</small>}
-                </div>
-              </div>
-            )}
 
             <div className="order-cart-scroll">
               {(currentOrder?.rounds || []).map((round) => (
@@ -1144,6 +1142,39 @@ export default function OrderPage({ onNavigate }) {
           )}
         </div>
       </div>
+
+      {showDeliveryDetails && orderMode === 'delivery' && deliveryInfo && (
+        <div className="modal open delivery-details-modal" onClick={() => setShowDeliveryDetails(false)}>
+          <div className="modal-card delivery-details-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title">
+              <div>
+                <span className="order-context-type">DOMICILIO</span>
+                <h3>{deliveryInfo.customerName || 'Cliente'}</h3>
+              </div>
+              <button className="btn" type="button" onClick={() => setShowDeliveryDetails(false)}>×</button>
+            </div>
+
+            <div className="delivery-details-list">
+              <div>
+                <span>📱 Teléfono</span>
+                <b>{deliveryInfo.phone || 'No registrado'}</b>
+              </div>
+              <div>
+                <span>📍 Dirección</span>
+                <b>{deliveryInfo.address || 'No registrada'}</b>
+              </div>
+              <div>
+                <span>Zona</span>
+                <b>{[deliveryInfo.neighborhood, deliveryInfo.city].filter(Boolean).join(' · ') || 'No registrada'}</b>
+              </div>
+              <div>
+                <span>✉ Correo</span>
+                <b>{deliveryInfo.email || 'No registrado'}</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showUnpaidVoidRequest && currentOrder && (
         <div className="modal open controlled-void-modal" onClick={() => !unpaidVoidBusy && setShowUnpaidVoidRequest(false)}>
