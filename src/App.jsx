@@ -29,12 +29,18 @@ function MainApplication() {
   const auth = useAuth()
   const restaurant = useRestaurant()
   const accessibleItems = useMemo(
-    () => NAV_ITEMS.filter((item) => (
-      item.platformAdmin
+    () => NAV_ITEMS.filter((item) => {
+      if (item.id === 'bar' && restaurant.state.settings.splitStations === false) return false
+      return item.platformAdmin
         ? Boolean(auth.userContext?.platformAdmin)
         : auth.can(item.permission)
-    )),
-    [auth.permissions, auth.isDesignMode, auth.userContext?.platformAdmin],
+    }),
+    [
+      auth.permissions,
+      auth.isDesignMode,
+      auth.userContext?.platformAdmin,
+      restaurant.state.settings.splitStations,
+    ],
   )
   const visibleItems = useMemo(
     () => accessibleItems.filter((item) => !item.hidden),
