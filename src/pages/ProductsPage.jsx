@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
-import { createMenuCategory, saveMenuProduct } from '../services/menuService.js'
+import { createMenuCategory, loadDirectProductInventoryConfig, saveMenuProduct } from '../services/menuService.js'
 
 const INVENTORY_UNITS = [
   { value: 'unidad', label: 'Unidad' },
@@ -81,8 +81,20 @@ export default function ProductsPage() {
     setShowProduct(true)
   }
 
-  function openEditProduct(product) {
+  async function openEditProduct(product) {
     if (!canManage) return
+
+    let directConfig = null
+    if (product.inventoryMode === 'direct' && canManageInventory && restaurantId && activeLocation?.id) {
+      try {
+        const configs = await loadDirectProductInventoryConfig(restaurantId, activeLocation.id)
+        directConfig = configs[String(product.id)] || null
+      } catch (error) {
+        window.alert(error?.message || 'No se pudieron cargar los datos de inventario de este producto.')
+        return
+      }
+    }
+
     setForm({
       id: product.id,
       name: product.name || '',
@@ -94,12 +106,12 @@ export default function ProductsPage() {
       station: product.station || 'kitchen',
       inventoryMode: product.inventoryMode || (product.trackInventory ? 'recipe' : 'none'),
       directInventory: product.inventoryMode === 'direct',
-      inventoryUnit: product.directInventory?.unit || 'unidad',
-      inventoryAverageCost: String(product.directInventory?.averageCost ?? ''),
-      inventoryMinStock: String(product.directInventory?.minStock ?? ''),
-      inventoryMaxStock: product.directInventory?.maxStock == null ? '' : String(product.directInventory.maxStock),
+      inventoryUnit: directConfig?.unit || 'unidad',
+      inventoryAverageCost: String(directConfig?.averageCost ?? ''),
+      inventoryMinStock: String(directConfig?.minStock ?? ''),
+      inventoryMaxStock: directConfig?.maxStock == null ? '' : String(directConfig.maxStock),
       inventoryOpeningStock: '',
-      currentStock: product.directInventory?.currentStock ?? null,
+      currentStock: directConfig?.currentStock ?? null,
       active: product.active !== false,
     })
     setShowProduct(true)
@@ -313,7 +325,14 @@ export default function ProductsPage() {
                 <strong className="menu-product-price">{formatMoney(product.price)}</strong>
 
                 {canManage && (
-                  <button className="btn" onClick={() => openEditProduct(product)}>Editar</button>
+                  <button
+                    className="btn"
+                    onClick={() => openEditProduct(product)}
+                    disabled={product.inventoryMode === 'direct' && !canManageInventory}
+                    title={product.inventoryMode === 'direct' && !canManageInventory ? 'Requiere permiso de inventario para editar un producto de stock directo' : ''}
+                  >
+                    Editar
+                  </button>
                 )}
               </article>
             ))}
