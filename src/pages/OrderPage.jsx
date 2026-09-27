@@ -45,7 +45,7 @@ export default function OrderPage({ onNavigate }) {
   const canVoidPartialAccount = auth.can('orders.account_void.authorized')
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const {
-    products, formatMoney, orderMode, currentTableId, currentOrder, currentDelivery, draft,
+    products, formatMoney, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft,
     pager, setPager, quickCustomerName, setQuickCustomerName, setOrderMode,
     updateQuickOrderIdentity, addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
     voidPaidTableAccount, voidRequestsVersion,
