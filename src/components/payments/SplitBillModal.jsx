@@ -12,6 +12,8 @@ export default function SplitBillModal({
   initialInvoiceCustomer,
   onClose,
   onAccountPaid,
+  beforePayment,
+  deliveryCourierSection,
 }) {
   const { recordPayments, formatMoney } = useRestaurant()
   const [mode, setMode] = useState('choose')
@@ -109,6 +111,14 @@ export default function SplitBillModal({
 
     setBusy(true)
     try {
+      if (beforePayment) {
+        const gate = await beforePayment()
+        if (!gate?.ok) {
+          window.alert(gate?.message || 'Falta completar la información requerida antes de cobrar.')
+          return
+        }
+      }
+
       const result = await recordPayments(allocations, paymentMethod, customerResult.customer)
       if (!result.ok) return window.alert(result.message)
 
@@ -325,6 +335,18 @@ export default function SplitBillModal({
             </div>
 
             <aside className="split-payment-panel">
+              {deliveryCourierSection && (
+                <div className="split-delivery-courier">
+                  <div className="payment-checkout-section-head">
+                    <div>
+                      <span>DOMICILIARIO</span>
+                      <b>Quién recogió el pedido</b>
+                    </div>
+                  </div>
+                  {deliveryCourierSection}
+                </div>
+              )}
+
               <div className="payment-checkout-section-head">
                 <div>
                   <span>MÉTODO DE PAGO</span>

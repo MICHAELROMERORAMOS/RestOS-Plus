@@ -50,6 +50,28 @@ export default function DeliveredOrderModal({
                     return <div className="list-row" key={`${order.id}-${item.lineId}`}><span>{quantity} × {item.name}<small>{formatMoney(price)} c/u</small></span><b>{formatMoney(price * quantity)}</b></div>
                   })}
                 </div>
+                {order.mode === 'delivery' && order.delivery?.courier && (
+                  <div className="delivered-courier-card">
+                    <div>
+                      <span>🛵 Domiciliario</span>
+                      <b>{order.delivery.courier.name || 'Sin nombre'}</b>
+                    </div>
+                    <div>
+                      <span>Empresa</span>
+                      <b>{order.delivery.courier.company || 'Sin empresa'}</b>
+                    </div>
+                    <div>
+                      <span>Teléfono</span>
+                      <a href={`tel:${order.delivery.courier.phone || ''}`}>
+                        {order.delivery.courier.phone || 'Sin teléfono'}
+                      </a>
+                    </div>
+                    <div>
+                      <span>Dirección</span>
+                      <b>{order.delivery.courier.address || 'Sin dirección'}</b>
+                    </div>
+                  </div>
+                )}
                 <div className="section-title"><span>Total productos entregados</span><b>{formatMoney(order.total || items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0))}</b></div>
                 <div className="section-title"><span>Valor pagado</span><b>{formatMoney(paid)}</b></div>
               </article>

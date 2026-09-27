@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
 import PaymentMethodPicker, { paymentMethodLabel } from '../components/payments/PaymentMethodPicker.jsx'
+import DeliveryCourierSelector, {
+  EMPTY_DELIVERY_COURIER,
+  validateDeliveryCourierForm,
+} from '../components/delivery/DeliveryCourierSelector.jsx'
 import InvoiceCustomerFields, {
   invoiceCustomerFromOrders,
   validateInvoiceCustomer,
@@ -14,6 +18,11 @@ import {
   requestAccountVoidAuthorization,
   sendAccountVoidConfirmation,
 } from '../services/voidAuthorizationService.js'
+import {
+  assignDeliveryCourier,
+  listDeliveryCouriers,
+  saveDeliveryCourier,
+} from '../services/deliveryCourierService.js'
 
 const roundStatus = (round) => {
   const items = round.items.filter((item) => !item.voided)
@@ -51,6 +60,7 @@ export default function OrderPage({ onNavigate }) {
     updateQuickOrderIdentity, addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
     voidPaidTableAccount, voidRequestsVersion,
     markRoundDelivered, transferCurrentTable, joinTable, recordPayments, state,
+    refreshOperationalOrdersByIds, activeLocation,
     tableLabel: getTableLabel, getTableTransferStatus, inventoryAvailability,
   } = restaurant
   const [category, setCategory] = useState('all')
@@ -66,6 +76,12 @@ export default function OrderPage({ onNavigate }) {
   const [chargeMethod, setChargeMethod] = useState('card')
   const [chargeInvoiceCustomer, setChargeInvoiceCustomer] = useState(() => invoiceCustomerFromOrders([]))
   const [chargeBusy, setChargeBusy] = useState(false)
+  const [deliveryCouriers, setDeliveryCouriers] = useState([])
+  const [deliveryCourierMode, setDeliveryCourierMode] = useState('existing')
+  const [deliveryCourierId, setDeliveryCourierId] = useState('')
+  const [newDeliveryCourier, setNewDeliveryCourier] = useState(EMPTY_DELIVERY_COURIER)
+  const [deliveryCourierLoading, setDeliveryCourierLoading] = useState(false)
+  const [deliveryCourierError, setDeliveryCourierError] = useState('')
   const [quickIdentitySaving, setQuickIdentitySaving] = useState(false)
   const [showQuickIdentitySetup, setShowQuickIdentitySetup] = useState(false)
   const [showDeliveryDetails, setShowDeliveryDetails] = useState(false)
@@ -567,6 +583,117 @@ export default function OrderPage({ onNavigate }) {
     }
   }
 
+  useEffect(() => {
+    if (!(showCharge || showSplit) || orderMode !== 'delivery' || !restaurantId || !currentOrder) {
+      return undefined
+    }
+
+    let cancelled = false
+    const assignedCourier = currentOrder.delivery?.courier || null
+
+    setDeliveryCourierLoading(true)
+    setDeliveryCourierError('')
+    setNewDeliveryCourier(EMPTY_DELIVERY_COURIER)
+    setDeliveryCourierMode(assignedCourier?.id ? 'existing' : 'existing')
+    setDeliveryCourierId(assignedCourier?.id || '')
+
+    listDeliveryCouriers(restaurantId)
+      .then((couriers) => {
+        if (cancelled) return
+        const next = Array.isArray(couriers) ? couriers.slice() : []
+
+        if (assignedCourier?.id && !next.some((courier) => String(courier.id) === String(assignedCourier.id))) {
+          next.unshift(assignedCourier)
+        }
+
+        setDeliveryCouriers(next)
+        if (!assignedCourier?.id && !next.length) {
+          setDeliveryCourierMode('new')
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setDeliveryCouriers([])
+        setDeliveryCourierError(error?.message || 'No se pudieron cargar los domiciliarios.')
+        if (!assignedCourier?.id) setDeliveryCourierMode('new')
+      })
+      .finally(() => {
+        if (!cancelled) setDeliveryCourierLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    showCharge,
+    showSplit,
+    orderMode,
+    restaurantId,
+    currentOrder?.id,
+    currentOrder?.delivery?.courier?.id,
+  ])
+
+  async function ensureDeliveryCourierAssigned() {
+    if (orderMode !== 'delivery') return { ok: true }
+    if (!currentOrder) return { ok: false, message: 'No hay un domicilio abierto.' }
+    if (deliveryCourierLoading) {
+      return { ok: false, message: 'Espera a que termine de cargar la lista de domiciliarios.' }
+    }
+
+    if (auth.isDesignMode) {
+      if (deliveryCourierMode === 'new') {
+        return validateDeliveryCourierForm(newDeliveryCourier)
+      }
+      if (!deliveryCourierId) {
+        return { ok: false, message: 'Selecciona el domiciliario que recogió el pedido.' }
+      }
+      return { ok: true }
+    }
+
+    if (!restaurantId || !currentOrder.serverId) {
+      return { ok: false, message: 'El domicilio todavía no está sincronizado.' }
+    }
+
+    try {
+      let courierId = deliveryCourierId
+
+      if (deliveryCourierMode === 'new') {
+        const validation = validateDeliveryCourierForm(newDeliveryCourier)
+        if (!validation.ok) return validation
+
+        const courier = await saveDeliveryCourier(restaurantId, validation.courier)
+        if (!courier?.id) {
+          return { ok: false, message: 'No se pudo registrar el domiciliario.' }
+        }
+
+        courierId = courier.id
+        setDeliveryCourierId(courier.id)
+        setDeliveryCourierMode('existing')
+        setDeliveryCouriers((current) => {
+          const next = current.filter((item) => String(item.id) !== String(courier.id))
+          return [courier, ...next]
+        })
+      }
+
+      if (!courierId) {
+        return { ok: false, message: 'Selecciona el domiciliario que recogió el pedido.' }
+      }
+
+      const assigned = await assignDeliveryCourier(currentOrder.serverId, courierId)
+      if (!assigned?.id) {
+        return { ok: false, message: 'No se pudo asignar el domiciliario al pedido.' }
+      }
+
+      await refreshOperationalOrdersByIds([currentOrder.serverId], activeLocation)
+      return { ok: true, courier: assigned }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || 'No se pudo guardar el domiciliario del pedido.',
+      }
+    }
+  }
+
   function openChargeModal() {
     if (!canCharge) return window.alert('Tu rol no tiene permiso para cobrar cuentas.')
     if (!accountOrders.length) {
@@ -805,12 +932,18 @@ export default function OrderPage({ onNavigate }) {
     if (!customerResult.ok) return window.alert(customerResult.message)
 
     setChargeBusy(true)
-    const result = await recordPayments(allocations, chargeMethod, customerResult.customer)
-    setChargeBusy(false)
-    if (!result.ok) return window.alert(result.message)
+    try {
+      const courierResult = await ensureDeliveryCourierAssigned()
+      if (!courierResult.ok) return window.alert(courierResult.message)
 
-    setShowCharge(false)
-    setChargeAmount('')
+      const result = await recordPayments(allocations, chargeMethod, customerResult.customer)
+      if (!result.ok) return window.alert(result.message)
+
+      setShowCharge(false)
+      setChargeAmount('')
+    } finally {
+      setChargeBusy(false)
+    }
   }
 
   async function handleSend() {
@@ -1171,6 +1304,15 @@ export default function OrderPage({ onNavigate }) {
                 <span>✉ Correo</span>
                 <b>{deliveryInfo.email || 'No registrado'}</b>
               </div>
+              {deliveryInfo.courier && (
+                <div className="delivery-details-courier">
+                  <span>🛵 Domiciliario</span>
+                  <b>{deliveryInfo.courier.name || 'Sin nombre'}</b>
+                  <small>{deliveryInfo.courier.company || 'Sin empresa'}</small>
+                  <a href={`tel:${deliveryInfo.courier.phone || ''}`}>{deliveryInfo.courier.phone || 'Sin teléfono'}</a>
+                  <small>{deliveryInfo.courier.address || 'Sin dirección'}</small>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1360,10 +1502,37 @@ export default function OrderPage({ onNavigate }) {
               />
             </div>
 
+            {orderMode === 'delivery' && (
+              <div className="payment-checkout-section">
+                <div className="payment-checkout-section-head">
+                  <div>
+                    <span>PASO 3</span>
+                    <b>Domiciliario que recogió el pedido</b>
+                  </div>
+                  <small>Obligatorio para domicilios</small>
+                </div>
+                <DeliveryCourierSelector
+                  couriers={deliveryCouriers}
+                  selectedId={deliveryCourierId}
+                  onSelect={setDeliveryCourierId}
+                  mode={deliveryCourierMode}
+                  onModeChange={(mode) => {
+                    setDeliveryCourierMode(mode)
+                    setDeliveryCourierError('')
+                  }}
+                  newCourier={newDeliveryCourier}
+                  onNewCourierChange={setNewDeliveryCourier}
+                  loading={deliveryCourierLoading}
+                  error={deliveryCourierError}
+                  disabled={chargeBusy}
+                />
+              </div>
+            )}
+
             <div className="payment-checkout-section">
               <div className="payment-checkout-section-head">
                 <div>
-                  <span>PASO 3</span>
+                  <span>{orderMode === 'delivery' ? 'PASO 4' : 'PASO 3'}</span>
                   <b>Datos de facturación</b>
                 </div>
                 <small>Opcional · consumidor final si no se activa</small>
@@ -1380,7 +1549,11 @@ export default function OrderPage({ onNavigate }) {
                 <small>{paymentMethodLabel(chargeMethod)}</small>
                 <strong>{formatMoney(Number(String(chargeAmount || 0).replace(',', '.')) || 0)}</strong>
               </div>
-              <button className="btn primary payment-confirm-button" disabled={chargeBusy} onClick={confirmCharge}>
+              <button
+                className="btn primary payment-confirm-button"
+                disabled={chargeBusy || (orderMode === 'delivery' && deliveryCourierLoading)}
+                onClick={confirmCharge}
+              >
                 {chargeBusy ? 'Registrando cobro…' : 'Confirmar y generar factura'}
               </button>
             </div>
@@ -1393,6 +1566,25 @@ export default function OrderPage({ onNavigate }) {
           orders={accountOrders}
           tableText={paymentAccountLabel}
           initialInvoiceCustomer={chargeInvoiceCustomer}
+          beforePayment={orderMode === 'delivery' ? ensureDeliveryCourierAssigned : null}
+          deliveryCourierSection={orderMode === 'delivery' ? (
+            <DeliveryCourierSelector
+              couriers={deliveryCouriers}
+              selectedId={deliveryCourierId}
+              onSelect={setDeliveryCourierId}
+              mode={deliveryCourierMode}
+              onModeChange={(mode) => {
+                setDeliveryCourierMode(mode)
+                setDeliveryCourierError('')
+              }}
+              newCourier={newDeliveryCourier}
+              onNewCourierChange={setNewDeliveryCourier}
+              loading={deliveryCourierLoading}
+              error={deliveryCourierError}
+              disabled={false}
+              compact
+            />
+          ) : null}
           onClose={() => setShowSplit(false)}
         />
       )}

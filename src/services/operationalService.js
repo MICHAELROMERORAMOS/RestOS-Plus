@@ -158,6 +158,16 @@ function mapOperationalOrders(payload) {
           email: deliveryDetails.email || null,
           neighborhood: deliveryDetails.neighborhood || '',
           city: deliveryDetails.city || '',
+          courier: deliveryDetails.courierId
+            ? {
+                id: deliveryDetails.courierId,
+                name: deliveryDetails.courierName || '',
+                phone: deliveryDetails.courierPhone || '',
+                address: deliveryDetails.courierAddress || '',
+                company: deliveryDetails.courierCompany || '',
+                assignedAt: asTimestamp(deliveryDetails.courierAssignedAt),
+              }
+            : null,
         }
       : null
 

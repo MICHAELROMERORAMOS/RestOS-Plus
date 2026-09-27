@@ -284,6 +284,11 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
                       <b className="delivery-address">{customer.address || 'Sin dirección'}</b>
                       <small>{customer.neighborhood || 'Sin barrio'} · {customer.city || 'Sin ciudad'}</small>
                       <small>📱 {customer.phone || 'Sin celular'}{customer.email ? ` · ✉ ${customer.email}` : ''}</small>
+                      {customer.courier && (
+                        <small className="delivery-courier-inline">
+                          🛵 {customer.courier.name || 'Domiciliario'} · {customer.courier.company || 'Sin empresa'} · {customer.courier.phone || 'Sin teléfono'}
+                        </small>
+                      )}
                     </div>
                   </div>
 
