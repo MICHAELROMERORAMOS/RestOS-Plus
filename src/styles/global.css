@@ -4711,3 +4711,69 @@ html, body {
     padding-top:6px;
   }
 }
+
+
+/* Product menu availability colors */
+.order-menu-product{
+  background:#f1f8f4!important;
+  border-color:#bfd7ca!important;
+  box-shadow:0 2px 8px #123b2c0d;
+}
+
+.order-menu-product:not(:disabled):hover{
+  background:#e8f4ed!important;
+  border-color:#88b79d!important;
+  box-shadow:0 8px 18px #174c3618!important;
+}
+
+.order-menu-product.stock-controlled:not(.stock-blocked){
+  background:#e4f4ea!important;
+  border-color:#79b591!important;
+  box-shadow:0 2px 10px #28724d16;
+}
+
+.order-menu-product.stock-controlled:not(.stock-blocked)>strong{
+  color:#143f2d;
+}
+
+.order-menu-product.stock-controlled:not(.stock-blocked)>em{
+  color:#176341;
+}
+
+.order-menu-product.stock-controlled:not(.stock-blocked) .product-stock-count{
+  color:#0f5c39!important;
+  background:#ccebd9!important;
+  border:1px solid #9fd2b5;
+}
+
+.order-menu-product.stock-blocked,
+.order-menu-product.stock-blocked:disabled{
+  opacity:1!important;
+  background:#f5d6d6!important;
+  border-color:#cf6666!important;
+  color:#6f2424!important;
+  box-shadow:0 2px 10px #a735351c;
+}
+
+.order-menu-product.stock-blocked>strong{
+  color:#7a2424!important;
+}
+
+.order-menu-product.stock-blocked>small{
+  color:#915858!important;
+}
+
+.order-menu-product.stock-blocked>em{
+  color:#8f2d2d!important;
+}
+
+.order-menu-product.stock-blocked .product-stock-count{
+  color:#8a2020!important;
+  background:#efbcbc!important;
+  border:1px solid #dc8c8c;
+}
+
+.order-menu-product.stock-blocked:hover{
+  transform:none!important;
+  box-shadow:0 2px 10px #a735351c!important;
+}
