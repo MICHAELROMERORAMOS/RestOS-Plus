@@ -1,4 +1,12 @@
-const METHOD_LABELS = { cash: 'Efectivo', card: 'Tarjeta', bank: 'Transferencia', voucher: 'Vale', other: 'Otro' }
+const METHOD_LABELS = {
+  cash: 'Efectivo',
+  card: 'Tarjeta',
+  transfer: 'Transferencia',
+  nequi: 'Nequi',
+  bank: 'Transferencia',
+  voucher: 'Vale',
+  other: 'Otro',
+}
 
 function number(value) {
   const parsed = Number(value || 0)
