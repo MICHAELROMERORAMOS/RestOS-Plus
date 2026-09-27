@@ -189,8 +189,8 @@ export default function ShiftClosePage() {
                 <div className="row"><span>Efectivo devuelto</span><b>- {formatMoney(shift.cashRefundTotal)}</b></div>
                 <div className="row"><span>Tarjeta cobrada</span><b>{formatMoney(shift.cardTotal)}</b></div>
                 <div className="row"><span>Tarjeta devuelta</span><b>- {formatMoney(shift.cardRefundTotal)}</b></div>
-                <div className="row"><span>Transferencia cobrada</span><b>{formatMoney(shift.transferTotal)}</b></div>
-                <div className="row"><span>Transferencia devuelta</span><b>- {formatMoney(shift.transferRefundTotal)}</b></div>
+                <div className="row"><span>Transferencias / Nequi cobrados</span><b>{formatMoney(shift.transferTotal)}</b></div>
+                <div className="row"><span>Transferencias / Nequi devueltos</span><b>- {formatMoney(shift.transferRefundTotal)}</b></div>
                 <div className="row"><span>Otros cobros</span><b>{formatMoney(shift.otherTotal)}</b></div>
                 <div className="row"><span>Otros reembolsos</span><b>- {formatMoney(shift.otherRefundTotal)}</b></div>
                 <div className="row shift-total-row"><b>Neto del turno</b><strong>{formatMoney(shift.netSalesTotal)}</strong></div>
