@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import {
   loadCompanyBranches,
+  rotateCompanyJoinCode,
   saveCompanyBranch,
   setCompanyBranchActive,
 } from '../services/branchService.js'
@@ -139,6 +140,26 @@ export default function BranchesPage() {
     }
   }
 
+  async function rotateJoinCode() {
+    if (!canManage || saving || !restaurantId) return
+
+    const confirmed = window.confirm(
+      '¿Generar un nuevo código de empresa?\n\nEl código anterior dejará de servir para nuevas solicitudes de empleados.',
+    )
+    if (!confirmed) return
+
+    setSaving(true)
+    try {
+      const joinCode = await rotateCompanyJoinCode(restaurantId)
+      setCompany((previous) => previous ? { ...previous, joinCode } : previous)
+      window.alert(`Nuevo código de empresa: ${joinCode}`)
+    } catch (err) {
+      window.alert(branchError(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (auth.isDesignMode) {
     return (
       <section className="view active">
@@ -181,6 +202,31 @@ export default function BranchesPage() {
           <small>{company?.timezone || 'Zona horaria no configurada'}</small>
         </div>
       </div>
+
+      {canManage && company?.joinCode && (
+        <div className="card section-gap company-access-code-card">
+          <div className="section-title">
+            <div>
+              <h3>Código de empresa para empleados</h3>
+              <p className="muted">Compártelo únicamente con personas que deban solicitar acceso a esta empresa.</p>
+            </div>
+            <button className="btn" onClick={rotateJoinCode} disabled={saving}>↻ Cambiar código</button>
+          </div>
+          <div className="company-access-code">
+            <strong>{company.joinCode}</strong>
+            <button
+              className="btn"
+              onClick={() => navigator.clipboard?.writeText(company.joinCode)}
+            >
+              Copiar
+            </button>
+          </div>
+          <div className="notice">
+            Este código <b>no da acceso automáticamente</b>. Solo identifica la empresa durante el registro.
+            La solicitud seguirá apareciendo en <b>Personal</b> para que el Owner asigne rol y sucursal.
+          </div>
+        </div>
+      )}
 
       <div className="card section-gap">
         <div className="section-title">
