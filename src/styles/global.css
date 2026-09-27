@@ -11,15 +11,18 @@ html,body,#root{min-height:100%;min-height:100vh}button:disabled{cursor:not-allo
 .settings-section{margin-top:14px;border:1px solid var(--line);border-radius:18px;background:#fff;overflow:hidden;box-shadow:0 8px 24px #102f2408}
 .settings-section:first-of-type{margin-top:0}
 .settings-section-toggle{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:16px 18px;border:0;background:#fff;color:var(--ink);text-align:left;cursor:pointer}
+.settings-section-toggle::-webkit-details-marker{display:none}
+.settings-section-toggle::marker{content:""}
+
 .settings-section-toggle:hover{background:#f8faf9}
-.settings-section.open .settings-section-toggle{background:#f6faf8;border-bottom:1px solid var(--line)}
+.settings-section[open] .settings-section-toggle{background:#f6faf8;border-bottom:1px solid var(--line)}
 .settings-section-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:#eaf2ee;font-size:18px}
 .settings-section-copy{min-width:0;display:grid;gap:3px}
 .settings-section-copy>b{font-size:16px}
 .settings-section-copy>small{color:var(--muted);line-height:1.35}
 .settings-section-badge{white-space:nowrap}
 .settings-section-chevron{font-size:22px;line-height:1;transition:transform 180ms ease;color:var(--muted)}
-.settings-section.open .settings-section-chevron{transform:rotate(180deg)}
+.settings-section[open] .settings-section-chevron{transform:rotate(180deg)}
 .settings-section-content{padding:16px 18px 18px}
 .settings-section-content>.grid:first-child,
 .settings-section-content>.card:first-child,
