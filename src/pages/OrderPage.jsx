@@ -293,7 +293,7 @@ export default function OrderPage({ onNavigate }) {
   const quickIdentifier = manualQuickIdentity
     ? (
       pager.trim()
-        ? `Pager ${pager.trim()}`
+        ? pager.trim()
         : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
     )
     : `Turno ${String(pager || currentOrder?.pager || currentOrder?.id || '—').trim()}`
@@ -326,7 +326,7 @@ export default function OrderPage({ onNavigate }) {
           icon: '⚡',
           type: 'SERVICIO RÁPIDO',
           primary: quickIdentifier,
-          secondary: manualQuickIdentity ? 'Pedido identificado manualmente' : 'Turno automático',
+          secondary: manualQuickIdentity ? '' : 'Turno automático',
         }
 
   useEffect(() => {
@@ -536,13 +536,13 @@ export default function OrderPage({ onNavigate }) {
     const normalizedCustomer = quickCustomerName.trim()
 
     if (normalizedPager && normalizedCustomer) {
-      window.alert('Usa número de pager o nombre del cliente, no ambos.')
+      window.alert('Usa un número o el nombre del cliente, no ambos.')
       return { ok: false }
     }
 
     if (!normalizedPager && !normalizedCustomer) {
       if (required) {
-        window.alert('Digita el número del pager o el nombre del cliente para continuar.')
+        window.alert('Digita un número o el nombre del cliente para continuar.')
       }
       return { ok: !required }
     }
@@ -857,12 +857,12 @@ export default function OrderPage({ onNavigate }) {
           <div className="modal-card quick-identity-setup-card">
             <div className="quick-identity-title">
               <h3>Identificación del pedido</h3>
-              <p>Usa uno de los dos campos. Este dato reemplaza el número de mesa.</p>
+              <p>Usa un número o el nombre del cliente.</p>
             </div>
 
             <div className="quick-identity-grid quick-identity-grid-modal">
               <label>
-                <span>Número del pager</span>
+                <span>Número</span>
                 <input
                   autoFocus
                   value={pager}
@@ -985,49 +985,6 @@ export default function OrderPage({ onNavigate }) {
                 <small>{orderContext.secondary}</small>
               </div>
             </div>
-
-            {orderMode === 'quick' && manualQuickIdentity && (
-              <div className="quick-identity-panel order-cart-identity">
-                <div className="quick-identity-title">
-                  <b>Identificación del pedido</b>
-                  <small>Usa número de pager o nombre del cliente.</small>
-                </div>
-                <div className="quick-identity-grid">
-                  <label>
-                    <span>Número del pager</span>
-                    <input
-                      value={pager}
-                      disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
-                      onChange={(event) => setPager(event.target.value)}
-                      onBlur={() => saveQuickIdentity()}
-                      placeholder="Ej. 16"
-                    />
-                  </label>
-                  <div className="quick-identity-or">o</div>
-                  <label>
-                    <span>Nombre del cliente</span>
-                    <input
-                      value={quickCustomerName}
-                      disabled={Boolean(pager.trim()) || quickIdentitySaving}
-                      onChange={(event) => setQuickCustomerName(event.target.value)}
-                      onBlur={saveQuickIdentity}
-                      placeholder="Ej. Mariana"
-                    />
-                  </label>
-                </div>
-                <strong className="quick-identity-preview">{quickIdentifier}</strong>
-              </div>
-            )}
-
-            {orderMode === 'quick' && !manualQuickIdentity && (
-              <div className="quick-identity-panel quick-auto-turn-panel order-cart-identity">
-                <div className="quick-identity-title">
-                  <b>Turno automático</b>
-                  <small>El consecutivo se asigna en Supabase y vuelve a 1 después del cierre de turno.</small>
-                </div>
-                <strong className="quick-identity-preview">{quickIdentifier}</strong>
-              </div>
-            )}
 
             {orderMode === 'delivery' && deliveryInfo && (
               <div className="delivery-order-summary order-cart-identity">
