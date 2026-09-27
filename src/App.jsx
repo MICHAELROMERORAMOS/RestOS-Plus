@@ -19,6 +19,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import ReservationsPage from './pages/ReservationsPage.jsx'
 import StaffPage from './pages/StaffPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
+import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 
@@ -119,6 +120,7 @@ function MainApplication() {
     reservations: <ReservationsPage />,
     staff: <StaffPage />,
     reports: <ReportsPage />,
+    'shift-close': <ShiftClosePage />,
     tv: <TvPage />,
     settings: <SettingsPage />,
   }
