@@ -53,6 +53,9 @@ export function isOperationalOrder(order) {
 function mapOperationalSummary(payload) {
   return {
     salesToday: asNumber(payload?.sales_today),
+    shiftSales: asNumber(payload?.sales_shift),
+    shiftNumber: payload?.shift_number == null ? null : asNumber(payload?.shift_number),
+    shiftOpenedAt: asTimestamp(payload?.shift_opened_at),
     completedOrdersToday: asNumber(payload?.completed_orders_today),
     tableReleases: Array.isArray(payload?.table_releases)
       ? payload.table_releases.map((release) => ({
