@@ -22,7 +22,7 @@ function TableButton({ table, zoneName, status, onOpen }) {
 
 export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
   const auth = useAuth()
-  const { state, resetDemo, getTableVisualStatus, formatMoney } = useRestaurant()
+  const { state, resetDemo, getTableVisualStatus, formatMoney, operationalSummary } = useRestaurant()
   const activeTables = state.tables.filter((table) => table.active !== false)
   const activeZones = state.zones.filter((zone) => zone.active !== false)
   const zoneNameById = Object.fromEntries(activeZones.map((zone) => [zone.id, zone.name]))
@@ -45,7 +45,7 @@ export default function DashboardPage({ onNavigate, onOpenTable, onNewOrder }) {
         <div className="card stat"><span className="label">Mesas ocupadas</span><strong>{occupied} / {activeTables.length}</strong><small>Estado en tiempo real</small></div>
         <div className="card stat"><span className="label">Pedidos activos</span><strong>{activeOrders}</strong><small>Cocina, bar y salón</small></div>
         <div className="card stat"><span className="label">Por cobrar</span><strong>{toPay}</strong><small>Cuentas pendientes</small></div>
-        <div className="card stat"><span className="label">Ventas del día</span><strong>{formatMoney(state.sales)}</strong><small>Pagos registrados</small></div>
+        <div className="card stat"><span className="label">Ventas del turno</span><strong>{formatMoney(state.sales)}</strong><small>{operationalSummary.shiftNumber ? `Turno #${operationalSummary.shiftNumber} · desde último cierre` : 'Desde el último cierre'}</small></div>
       </div>
       <div className="grid two" style={{ marginTop: 16 }}>
         <div className="card">
