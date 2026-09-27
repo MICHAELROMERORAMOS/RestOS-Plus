@@ -318,7 +318,10 @@ export default function StationPage({ station }) {
 
       <div className="kds kds-large">
         {jobs.length ? jobs.map(({ order, round, items, status }) => (
-          <article className="card ticket kds-ticket" key={`${order.id}-${round.id}`}>
+          <article
+            className={`card ticket kds-ticket kds-order-${order.mode || 'table'}`}
+            key={`${order.id}-${round.id}`}
+          >
             <div className="section-title kds-ticket-head">
               <div>
                 <h3>{
