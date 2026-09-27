@@ -4,6 +4,7 @@ import { useRestaurant } from '../context/RestaurantContext.jsx'
 import {
   loadInventoryWorkspace,
   recordInventoryMovement,
+  subscribeInventoryMovements,
   saveInventoryItem,
   saveProductRecipe,
 } from '../services/inventoryService.js'
@@ -113,6 +114,27 @@ export default function InventoryPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (!locationId) return undefined
+
+    let refreshTimer = null
+    const unsubscribe = subscribeInventoryMovements(locationId, () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => {
+        load()
+      }, 150)
+    })
+
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer)
+      unsubscribe?.()
+    }
+  }, [locationId, load])
+
+  useEffect(() => {
+    if (tab === 'movements') load()
+  }, [tab, load])
 
   const itemById = useMemo(
     () => new Map(workspace.items.map((item) => [item.id, item])),
@@ -421,8 +443,11 @@ export default function InventoryPage() {
       {tab === 'movements' && (
         <div className="card inventory-section-card">
           <div className="section-title">
-            <div><h3>Últimos movimientos</h3><p className="muted">Entradas positivas y salidas negativas. Se muestran los 150 más recientes.</p></div>
-            <button className="btn" onClick={load} disabled={loading}>{loading ? 'Cargando…' : '↻ Actualizar'}</button>
+            <div><h3>Últimos movimientos</h3><p className="muted">Entradas positivas y salidas negativas. Se muestran los 150 más recientes y se actualizan automáticamente.</p></div>
+            <div className="inventory-toolbar">
+              <span className="badge ok-badge">● En vivo</span>
+              <button className="btn" onClick={load} disabled={loading}>{loading ? 'Cargando…' : '↻ Actualizar'}</button>
+            </div>
           </div>
 
           {workspace.movements.length ? (
