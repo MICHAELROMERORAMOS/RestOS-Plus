@@ -38,12 +38,17 @@ export default function AppShell({
     }
   }, [sidebarCollapsed])
 
+  function handleSidebarNavigate(view) {
+    onNavigate(view)
+    setSidebarCollapsed(true)
+  }
+
   return (
     <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
       <Sidebar
         items={navItems}
         activeView={activeView}
-        onNavigate={onNavigate}
+        onNavigate={handleSidebarNavigate}
         userContext={userContext}
         onLogout={onLogout}
         collapsed={sidebarCollapsed}
