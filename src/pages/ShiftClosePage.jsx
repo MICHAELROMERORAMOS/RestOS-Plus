@@ -84,7 +84,7 @@ export default function ShiftClosePage() {
     }
 
     const confirmed = window.confirm(
-      `¿Cerrar el turno #${shift.shiftNumber}?\n\nVentas del turno: ${formatMoney(shift.salesTotal)}\nPagos: ${shift.paymentCount}\nFacturas: ${shift.invoiceCount}\n\nSe abrirá inmediatamente un nuevo turno con contadores en cero. Las ventas históricas NO se eliminan.`,
+      `¿Cerrar el turno #${shift.shiftNumber}?\n\nCobros: ${formatMoney(shift.salesTotal)}\nReembolsos: ${formatMoney(shift.refundTotal)}\nNeto del turno: ${formatMoney(shift.netSalesTotal)}\nPagos: ${shift.paymentCount}\nFacturas: ${shift.invoiceCount}\n\nSe abrirá inmediatamente un nuevo turno con contadores en cero. Las ventas históricas NO se eliminan.`,
     )
     if (!confirmed) return
 
@@ -160,9 +160,9 @@ export default function ShiftClosePage() {
               <small>Abierto {formatDateTime(shift.openedAt)}</small>
             </div>
             <div className="card stat">
-              <span className="label">Ventas del turno</span>
-              <strong>{formatMoney(shift.salesTotal)}</strong>
-              <small>{shift.paymentCount} pagos registrados</small>
+              <span className="label">Ventas netas del turno</span>
+              <strong>{formatMoney(shift.netSalesTotal)}</strong>
+              <small>{formatMoney(shift.salesTotal)} cobrados · {formatMoney(shift.refundTotal)} reembolsados</small>
             </div>
             <div className="card stat">
               <span className="label">Facturas</span>
@@ -185,11 +185,15 @@ export default function ShiftClosePage() {
                 </div>
               </div>
               <div className="list">
-                <div className="row"><span>Efectivo</span><b>{formatMoney(shift.cashTotal)}</b></div>
-                <div className="row"><span>Tarjeta</span><b>{formatMoney(shift.cardTotal)}</b></div>
-                <div className="row"><span>Transferencia</span><b>{formatMoney(shift.transferTotal)}</b></div>
-                <div className="row"><span>Otros</span><b>{formatMoney(shift.otherTotal)}</b></div>
-                <div className="row shift-total-row"><b>Total</b><strong>{formatMoney(shift.salesTotal)}</strong></div>
+                <div className="row"><span>Efectivo cobrado</span><b>{formatMoney(shift.cashTotal)}</b></div>
+                <div className="row"><span>Efectivo devuelto</span><b>- {formatMoney(shift.cashRefundTotal)}</b></div>
+                <div className="row"><span>Tarjeta cobrada</span><b>{formatMoney(shift.cardTotal)}</b></div>
+                <div className="row"><span>Tarjeta devuelta</span><b>- {formatMoney(shift.cardRefundTotal)}</b></div>
+                <div className="row"><span>Transferencia cobrada</span><b>{formatMoney(shift.transferTotal)}</b></div>
+                <div className="row"><span>Transferencia devuelta</span><b>- {formatMoney(shift.transferRefundTotal)}</b></div>
+                <div className="row"><span>Otros cobros</span><b>{formatMoney(shift.otherTotal)}</b></div>
+                <div className="row"><span>Otros reembolsos</span><b>- {formatMoney(shift.otherRefundTotal)}</b></div>
+                <div className="row shift-total-row"><b>Neto del turno</b><strong>{formatMoney(shift.netSalesTotal)}</strong></div>
               </div>
             </div>
 
@@ -270,7 +274,7 @@ export default function ShiftClosePage() {
                     </div>
                     <div>
                       <small>Ventas</small>
-                      <strong>{formatMoney(item.salesTotal)}</strong>
+                      <strong>{formatMoney(item.netSalesTotal)}</strong>
                     </div>
                   </div>
                 ))}
