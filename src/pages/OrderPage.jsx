@@ -81,6 +81,7 @@ export default function OrderPage({ onNavigate }) {
   const [accountVoidBusy, setAccountVoidBusy] = useState(false)
   const tableAccountLifecycleRef = useRef(null)
   const quickAccountLifecycleRef = useRef(null)
+  const deliveryAccountLifecycleRef = useRef(null)
 
   const categoryOptions = useMemo(
     () => Array.from(new Set(
@@ -282,6 +283,11 @@ export default function OrderPage({ onNavigate }) {
     && orderTotal(currentOrder) > 0.005
     && orderBalance(currentOrder) <= 0.005
 
+  const currentDeliveryFullyPaid = orderMode === 'delivery'
+    && currentOrder
+    && orderTotal(currentOrder) > 0.005
+    && orderBalance(currentOrder) <= 0.005
+
   const quickIdentifier = pager.trim()
     ? `Pager ${pager.trim()}`
     : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
@@ -384,6 +390,44 @@ export default function OrderPage({ onNavigate }) {
     currentOrder,
     currentOrderId,
     currentQuickFullyPaid,
+    currentOrderFullyDelivered,
+    draft.length,
+    onNavigate,
+  ])
+
+  useEffect(() => {
+    if (orderMode !== 'delivery') {
+      deliveryAccountLifecycleRef.current = null
+      return
+    }
+
+    if (currentOrder) {
+      deliveryAccountLifecycleRef.current = {
+        orderId: currentOrder.id,
+        fullyPaid: currentDeliveryFullyPaid,
+        fullyDelivered: currentOrderFullyDelivered,
+      }
+
+      if (currentDeliveryFullyPaid && currentOrderFullyDelivered && draft.length === 0) {
+        deliveryAccountLifecycleRef.current = null
+        onNavigate('deliveries')
+      }
+      return
+    }
+
+    const previousAccount = deliveryAccountLifecycleRef.current
+    const completedAfterLastUpdate = previousAccount?.orderId === currentOrderId
+      && (previousAccount.fullyPaid || previousAccount.fullyDelivered)
+
+    if (completedAfterLastUpdate && draft.length === 0) {
+      deliveryAccountLifecycleRef.current = null
+      onNavigate('deliveries')
+    }
+  }, [
+    orderMode,
+    currentOrder,
+    currentOrderId,
+    currentDeliveryFullyPaid,
     currentOrderFullyDelivered,
     draft.length,
     onNavigate,
