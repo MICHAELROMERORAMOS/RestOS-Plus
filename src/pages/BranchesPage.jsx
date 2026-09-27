@@ -5,6 +5,7 @@ import {
   loadCompanyBranches,
   rotateCompanyJoinCode,
   saveCompanyBranch,
+  setBranchInvoicePrefix,
   setCompanyBranchActive,
 } from '../services/branchService.js'
 
@@ -17,6 +18,8 @@ const emptyBranch = {
   city: '',
   country: '',
   phone: '',
+  invoicePrefix: '',
+  invoicePrefixLocked: false,
 }
 
 function branchError(error) {
@@ -26,6 +29,9 @@ function branchError(error) {
   if (message.includes('Branch has active orders')) return 'No puedes desactivar esta sucursal mientras tenga pedidos activos.'
   if (message.includes('Branch has active table sessions')) return 'No puedes desactivar esta sucursal mientras haya una mesa en toma de pedido.'
   if (message.includes('Not allowed to manage branches')) return 'Tu usuario no tiene permiso para administrar sucursales.'
+  if (message.includes('Invoice prefix is already in use')) return 'Ese prefijo de facturación ya está usado por otra sucursal de la empresa.'
+  if (message.includes('Invoice prefix is locked after the first invoice')) return 'El prefijo de facturación queda bloqueado después de emitir la primera factura.'
+  if (message.includes('Invoice prefix is required')) return 'Escribe un prefijo de facturación válido.'
   return message || 'No se pudo completar la operación.'
 }
 
@@ -84,6 +90,8 @@ export default function BranchesPage() {
       city: branch.city || '',
       country: branch.country || '',
       phone: branch.phone || '',
+      invoicePrefix: branch.invoicePrefix || '',
+      invoicePrefixLocked: Boolean(branch.invoicePrefixLocked),
     })
   }
 
@@ -94,7 +102,7 @@ export default function BranchesPage() {
 
     setSaving(true)
     try {
-      await saveCompanyBranch({
+      const savedBranch = await saveCompanyBranch({
         restaurantId,
         branchId: editing.id,
         name: editing.name.trim(),
@@ -105,6 +113,16 @@ export default function BranchesPage() {
         country: editing.country.trim(),
         phone: editing.phone.trim(),
       })
+
+      const requestedPrefix = String(editing.invoicePrefix || '').trim()
+      if (requestedPrefix && !editing.invoicePrefixLocked) {
+        await setBranchInvoicePrefix({
+          restaurantId,
+          locationId: savedBranch.id,
+          prefix: requestedPrefix,
+        })
+      }
+
       setEditing(null)
       await Promise.all([refresh(), restaurant.refreshRemoteData()])
     } catch (err) {
@@ -261,6 +279,14 @@ export default function BranchesPage() {
                     <div><span>Teléfono</span><b>{branch.phone || '—'}</b></div>
                     <div><span>Usuarios con acceso</span><b>{Number(branch.assignedUsers || 0)}</b></div>
                     <div><span>Pedidos activos</span><b>{Number(branch.openOrders || 0)}</b></div>
+                    <div>
+                      <span>Prefijo facturas</span>
+                      <b>{branch.invoicePrefix || '—'}</b>
+                    </div>
+                    <div>
+                      <span>Próxima factura</span>
+                      <b>{branch.nextInvoice || '—'}</b>
+                    </div>
                   </div>
 
                   <div className="branch-actions">
@@ -314,6 +340,23 @@ export default function BranchesPage() {
               <label><span>Ciudad</span><input value={editing.city} onChange={(e) => setEditing({ ...editing, city: e.target.value })} /></label>
               <label><span>País</span><input value={editing.country} onChange={(e) => setEditing({ ...editing, country: e.target.value })} /></label>
               <label><span>Teléfono</span><input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></label>
+              <label>
+                <span>Prefijo de facturación</span>
+                <input
+                  value={editing.invoicePrefix}
+                  disabled={editing.invoicePrefixLocked}
+                  onChange={(e) => setEditing({
+                    ...editing,
+                    invoicePrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12),
+                  })}
+                  placeholder={editing.code ? editing.code.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 12) : 'Ej. CENTRO'}
+                />
+                <small>
+                  {editing.invoicePrefixLocked
+                    ? 'Bloqueado porque esta sucursal ya emitió facturas.'
+                    : 'Solo letras y números. El consecutivo es independiente para esta sucursal.'}
+                </small>
+              </label>
             </div>
 
             <button className="btn primary full" disabled={saving}>
