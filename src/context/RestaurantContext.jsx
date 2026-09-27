@@ -256,10 +256,6 @@ function orderIdFromRealtimePayload(payload) {
 export function RestaurantProvider({ children }) {
   const auth = useAuth()
   const [state, setState] = useState(loadInitialState)
-  const initialLocalStructure = useRef({
-    zones: state.zones || [],
-    tables: state.tables || [],
-  })
   const operationalRefreshTimer = useRef(null)
   const inventoryRefreshTimer = useRef(null)
   const pendingOperationalOrderIds = useRef(new Set())
