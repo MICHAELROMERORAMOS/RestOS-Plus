@@ -168,7 +168,7 @@ export default function InventoryPage() {
     (item) => Number(item.minStock || 0) > 0 && Number(item.stock || 0) <= Number(item.minStock || 0),
   ).length
   const inventoryValue = activeItems.reduce((sum, item) => sum + Number(item.stockValue || 0), 0)
-  const recipeProductCount = recipesByProduct.size
+  const recipeProductCount = products.filter((product) => product.inventoryMode === 'recipe').length
 
   function recipeCost(productId) {
     return (recipesByProduct.get(productId) || []).reduce((sum, line) => {
@@ -208,6 +208,10 @@ export default function InventoryPage() {
   }
 
   function openRecipe(product) {
+    if (product.inventoryMode === 'direct') {
+      window.alert('Este producto descuenta directamente su propio stock. Edítalo desde Productos.')
+      return
+    }
     const currentLines = recipesByProduct.get(product.id) || []
     setRecipeProductId(product.id)
     setRecipeLines(currentLines.length ? currentLines.map((line) => ({
@@ -412,6 +416,7 @@ export default function InventoryPage() {
           <div className="recipe-product-grid">
             {products.filter((product) => product.active).map((product) => {
               const lines = recipesByProduct.get(product.id) || []
+              const directInventory = product.inventoryMode === 'direct'
               const cost = recipeCost(product.id)
               const margin = Number(product.price || 0) - cost
               const costPct = Number(product.price || 0) > 0 ? (cost / Number(product.price)) * 100 : 0
@@ -419,7 +424,13 @@ export default function InventoryPage() {
                 <article className={`recipe-product-card ${lines.length ? 'configured' : ''}`} key={product.id}>
                   <div className="recipe-product-heading">
                     <div><h4>{product.name}</h4><small>{product.category} · Venta {formatMoney(product.price)}</small></div>
-                    <span className={`badge ${lines.length ? 'ok-badge' : ''}`}>{lines.length ? `${lines.length} insumo${lines.length === 1 ? '' : 's'}` : 'Sin receta'}</span>
+                    <span className={`badge ${lines.length ? 'ok-badge' : ''}`}>
+                      {directInventory
+                        ? 'Inventario directo'
+                        : lines.length
+                          ? `${lines.length} insumo${lines.length === 1 ? '' : 's'}`
+                          : 'Sin receta'}
+                    </span>
                   </div>
                   <div className="recipe-cost-summary">
                     <div><span>Costo estimado</span><b>{formatMoney(cost)}</b></div>
@@ -432,7 +443,11 @@ export default function InventoryPage() {
                       {lines.length > 3 && <span>＋ {lines.length - 3} más</span>}
                     </div>
                   )}
-                  {canManage && <button className="btn full" disabled={!activeItems.length} onClick={() => openRecipe(product)}>{lines.length ? 'Editar receta' : 'Crear receta'}</button>}
+                  {canManage && (
+                    directInventory
+                      ? <button className="btn full" disabled>Gestionado desde Productos</button>
+                      : <button className="btn full" disabled={!activeItems.length} onClick={() => openRecipe(product)}>{lines.length ? 'Editar receta' : 'Crear receta'}</button>
+                  )}
                 </article>
               )
             })}
