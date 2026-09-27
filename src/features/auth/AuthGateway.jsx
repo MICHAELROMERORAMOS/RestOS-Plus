@@ -4,7 +4,6 @@ import { friendlyAuthError } from '../../lib/authErrors.js'
 import {
   requestPasswordRecovery,
   resendSignupOtp,
-  signInWithGoogle,
   signOut,
   signUpWithPassword,
   submitCompanyAccessRequest,
@@ -296,13 +295,6 @@ export default function AuthGateway({ children }) {
           <button className="linkbtn" onClick={() => setScreen('forgot')}>¿Olvidaste tu contraseña?</button>
           <button className="linkbtn" onClick={() => setScreen('register')}>Crear cuenta</button>
         </div>
-        <div className="divider">o</div>
-        <button className="google-btn" disabled={busy || !auth.isSupabaseConfigured} onClick={() => perform(async () => {
-          const { error: googleError } = await signInWithGoogle()
-          if (googleError) throw googleError
-        })}><span className="google-g">G</span> Continuar con Google</button>
-        <div className="devbox"><b>Desarrollo:</b> mientras Supabase Auth no esté configurado, entra con acceso total para seguir construyendo y probando todas las ventanas.</div>
-        <button className="auth-btn secondary" onClick={auth.enterDesignMode}>Entrar en modo diseño</button>
       </div>
     ),
     register: (
