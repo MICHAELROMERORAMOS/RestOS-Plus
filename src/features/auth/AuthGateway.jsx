@@ -378,6 +378,14 @@ export default function AuthGateway({ children }) {
           perform(async () => {
             const { data, error: signupError } = await signUpWithPassword(payload)
             if (signupError) throw signupError
+
+            const identities = data?.user?.identities
+            if (Array.isArray(identities) && identities.length === 0) {
+              throw new Error(
+                'Este correo ya tiene una cuenta registrada. No se envió un nuevo código de verificación. Vuelve al ingreso e inicia sesión, o usa “¿Olvidaste tu contraseña?”.',
+              )
+            }
+
             const { password, password2, ...safeRegistration } = payload
             setRegistration(safeRegistration)
             setSignupCode('')
@@ -454,7 +462,7 @@ export default function AuthGateway({ children }) {
     verifySignup: (
       <div className="auth-view active">
         <h1>Verifica tu correo</h1>
-        <p className="sub">Enviamos un código de 6 dígitos a <b>{registration?.email}</b>.</p>
+        <p className="sub">Enviamos un código de 6 dígitos a <b>{registration?.email}</b>. Si el correo ya estaba registrado anteriormente, vuelve al ingreso en lugar de esperar un código nuevo.</p>
         <OtpBoxes value={signupCode} onChange={setSignupCode} />
         <div className="timer">{signupTimer.display}</div>
         <div className="auth-error">{error}</div>
