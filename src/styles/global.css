@@ -4777,3 +4777,74 @@ html, body {
   transform:none!important;
   box-shadow:0 2px 10px #a735351c!important;
 }
+
+
+/* Persistent order destination context */
+.order-context-header{
+  flex:0 0 auto;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  padding:11px 13px 10px;
+  border-bottom:1px solid #cfe0d7;
+  background:#eef7f2;
+}
+
+.order-context-icon{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  background:#dcefe4;
+  font-size:18px;
+}
+
+.order-context-copy{
+  min-width:0;
+  display:grid;
+  gap:1px;
+}
+
+.order-context-type{
+  color:#2f6b4d;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.09em;
+}
+
+.order-context-copy>strong{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#153c2c;
+  font-size:15px;
+  line-height:1.15;
+}
+
+.order-context-copy>small{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#66786e;
+  font-size:9px;
+  font-weight:750;
+}
+
+@media(max-width:650px){
+  .order-context-header{
+    padding:10px 12px 9px;
+  }
+
+  .order-context-icon{
+    width:32px;
+    height:32px;
+  }
+
+  .order-context-copy>strong{
+    font-size:14px;
+  }
+}
