@@ -12,16 +12,9 @@ function SettingsSection({
   defaultOpen = false,
   badge = null,
 }) {
-  const [open, setOpen] = useState(defaultOpen)
-
   return (
-    <section className={`settings-section ${open ? 'open' : ''}`}>
-      <button
-        type="button"
-        className="settings-section-toggle"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-      >
+    <details className="settings-section" open={defaultOpen || undefined}>
+      <summary className="settings-section-toggle">
         <span className="settings-section-icon" aria-hidden="true">{icon}</span>
         <span className="settings-section-copy">
           <b>{title}</b>
@@ -29,14 +22,12 @@ function SettingsSection({
         </span>
         {badge && <span className="badge settings-section-badge">{badge}</span>}
         <span className="settings-section-chevron" aria-hidden="true">⌄</span>
-      </button>
+      </summary>
 
-      {open && (
-        <div className="settings-section-content">
-          {children}
-        </div>
-      )}
-    </section>
+      <div className="settings-section-content">
+        {children}
+      </div>
+    </details>
   )
 }
 
