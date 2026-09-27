@@ -192,12 +192,12 @@ export default function SettingsPage() {
 
             <label className="toggle-row operational-setting-row">
               <span>
-                <b>Permitir pager / identificación manual</b>
+                <b>Permitir número / identificación manual</b>
                 <small>
                   {operationSaving
                     ? 'Guardando en Supabase…'
                     : settings.allowPager !== false
-                      ? 'Activo: en Servicio rápido se escribe el número del pager o el nombre del cliente.'
+                      ? 'Activo: en Servicio rápido se escribe un número o el nombre del cliente.'
                       : 'Desactivado: RestOS+ asigna automáticamente Turno 1, 2, 3… y reinicia el consecutivo después de cada cierre de turno.'}
                 </small>
               </span>
@@ -348,7 +348,7 @@ export default function SettingsPage() {
       >
         <div className="grid two section-gap">
         <div className="card"><h3>Servicio de mesa</h3><p className="muted">Pedido abierto mientras la mesa permanezca ocupada. Cada envío crea una comanda/ronda. Los productos enviados quedan bloqueados y las nuevas adiciones se envían aparte.</p></div>
-        <div className="card"><h3>Servicio rápido / Prepago</h3><p className="muted">Se cobra antes de preparar. Puede usar número consecutivo, pager, turno o nombre de cliente según la configuración.</p></div>
+        <div className="card"><h3>Servicio rápido / Prepago</h3><p className="muted">Se cobra antes de preparar. Puede usar un número manual, turno automático o nombre del cliente según la configuración.</p></div>
       </div>
       </SettingsSection>
 
