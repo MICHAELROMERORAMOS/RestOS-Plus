@@ -1557,7 +1557,7 @@ export function RestaurantProvider({ children }) {
         setOrderModeState('quick')
         setCurrentTableId(null)
         setCurrentOrderId(orderNumber)
-        setPager('')
+        setPager(String(created?.pager_number || ''))
         setQuickCustomerName('')
         setCurrentDelivery(null)
         draftContextServiceKeyRef.current = `quick:${orderNumber}`
@@ -1714,6 +1714,13 @@ export function RestaurantProvider({ children }) {
   ])
 
   const updateQuickOrderIdentity = useCallback(async ({ pager: nextPager = '', customerName: nextCustomerName = '' } = {}) => {
+    if (state.settings.allowPager === false) {
+      return {
+        ok: false,
+        message: 'Este restaurante usa turnos automáticos. El identificador no se edita manualmente.',
+      }
+    }
+
     const normalizedPager = cleanName(nextPager)
     const normalizedCustomer = cleanName(nextCustomerName)
 
@@ -1761,6 +1768,7 @@ export function RestaurantProvider({ children }) {
     updateState,
     refreshOperationalOrdersByIds,
     activeLocation,
+    state.settings.allowPager,
   ])
 
   const releaseEmptyQuickOrder = useCallback(async (orderId) => {
@@ -1957,10 +1965,20 @@ export function RestaurantProvider({ children }) {
     if (orderMode === 'delivery' && (!currentDelivery?.customerName || !currentDelivery?.address || !currentDelivery?.phone || !currentDelivery?.neighborhood || !currentDelivery?.city)) {
       return { ok: false, message: 'Faltan datos obligatorios del domicilio.' }
     }
-    if (orderMode === 'quick' && !pager.trim() && !quickCustomerName.trim()) {
+    if (
+      orderMode === 'quick'
+      && state.settings.allowPager !== false
+      && !pager.trim()
+      && !quickCustomerName.trim()
+    ) {
       return { ok: false, message: 'Digita el número del pager o el nombre del cliente antes de enviar.' }
     }
-    if (orderMode === 'quick' && pager.trim() && quickCustomerName.trim()) {
+    if (
+      orderMode === 'quick'
+      && state.settings.allowPager !== false
+      && pager.trim()
+      && quickCustomerName.trim()
+    ) {
       return { ok: false, message: 'Usa número de pager o nombre del cliente, no ambos.' }
     }
     if (!auth.isDesignMode) {
@@ -2078,7 +2096,7 @@ export function RestaurantProvider({ children }) {
     return { ok: true, orderId: createdOrderId }
   }, [
     draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
-    auth.isDesignMode, restaurantId, activeLocation, state.orders, currentDelivery, pager, quickCustomerName,
+    auth.isDesignMode, restaurantId, activeLocation, state.orders, state.settings.allowPager, currentDelivery, pager, quickCustomerName,
     openOrderForTable, refreshOperationalOrdersByIds, refreshOperationalSummary,
     refreshInventoryAvailability, clearStoredTableDraft,
   ])
