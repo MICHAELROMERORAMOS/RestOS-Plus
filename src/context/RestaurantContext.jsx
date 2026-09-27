@@ -836,7 +836,19 @@ export function RestaurantProvider({ children }) {
       return result
     }
 
-    if (currentOrderId || currentTableId || draft.length > 0) {
+    const hasActiveCurrentOrder = Boolean(
+      currentOrderId
+      && state.orders.some((order) => String(order.id) === String(currentOrderId)),
+    )
+    const hasCurrentTableSession = Boolean(
+      currentTableId
+      && tableOrderSessions.some((session) => (
+        String(session.tableId) === String(currentTableId)
+        && session.claimedByMe
+      )),
+    )
+
+    if (draft.length > 0 || hasActiveCurrentOrder || hasCurrentTableSession) {
       const result = {
         ok: false,
         message: 'Termina o abandona la toma de pedido actual antes de cambiar de sucursal.',
@@ -845,7 +857,12 @@ export function RestaurantProvider({ children }) {
       return result
     }
 
+    draftContextTableIdRef.current = null
+    draftContextServiceKeyRef.current = null
+    setCurrentTableId(null)
+    setCurrentOrderId(null)
     setCurrentDelivery(null)
+    setDraft([])
     setPager('')
     setQuickCustomerName('')
     setOrderModeState('table')
@@ -858,6 +875,8 @@ export function RestaurantProvider({ children }) {
     currentOrderId,
     currentTableId,
     draft.length,
+    state.orders,
+    tableOrderSessions,
     refreshRemoteData,
   ])
 
