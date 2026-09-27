@@ -982,7 +982,7 @@ export default function OrderPage({ onNavigate }) {
               <div className="order-context-copy">
                 <span className="order-context-type">{orderContext.type}</span>
                 <strong>{orderContext.primary}</strong>
-                <small>{orderContext.secondary}</small>
+                {orderContext.secondary && <small>{orderContext.secondary}</small>}
               </div>
             </div>
 
