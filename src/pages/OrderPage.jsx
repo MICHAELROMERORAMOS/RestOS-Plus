@@ -1376,10 +1376,7 @@ export default function OrderPage({ onNavigate }) {
               />
             </div>
 
-            <div className="payment-checkout-footer">
-              <button className="btn payment-split-button" type="button" disabled={chargeBusy} onClick={openSplitModal}>
-                ✂ Dividir cuenta
-              </button>
+            <div className="payment-checkout-footer order-payment-confirm-footer">
               <div className="payment-confirm-summary">
                 <small>{paymentMethodLabel(chargeMethod)}</small>
                 <strong>{formatMoney(Number(String(chargeAmount || 0).replace(',', '.')) || 0)}</strong>
