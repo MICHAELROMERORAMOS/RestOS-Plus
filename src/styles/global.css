@@ -749,6 +749,38 @@ html, body {
   color: var(--ink);
 }
 
+.quick-identity-setup-modal {
+  z-index: 110;
+}
+
+.quick-identity-setup-card {
+  width: min(620px, 100%);
+}
+
+.quick-identity-setup-card .quick-identity-title h3 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.quick-identity-setup-card .quick-identity-title p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.quick-identity-grid-modal {
+  margin-top: 18px;
+}
+
+.quick-identity-setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.quick-identity-setup-actions .btn {
+  min-width: 210px;
+}
+
 .table-release-btn {
   margin-top: 7px;
   border: 1px solid #d6a4a4;
