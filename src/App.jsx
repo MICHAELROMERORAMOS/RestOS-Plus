@@ -19,6 +19,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import ReservationsPage from './pages/ReservationsPage.jsx'
 import StaffPage from './pages/StaffPage.jsx'
 import BranchesPage from './pages/BranchesPage.jsx'
+import PlatformCompaniesPage from './pages/PlatformCompaniesPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
@@ -28,8 +29,12 @@ function MainApplication() {
   const auth = useAuth()
   const restaurant = useRestaurant()
   const accessibleItems = useMemo(
-    () => NAV_ITEMS.filter((item) => auth.can(item.permission)),
-    [auth.permissions, auth.isDesignMode],
+    () => NAV_ITEMS.filter((item) => (
+      item.platformAdmin
+        ? Boolean(auth.userContext?.platformAdmin)
+        : auth.can(item.permission)
+    )),
+    [auth.permissions, auth.isDesignMode, auth.userContext?.platformAdmin],
   )
   const visibleItems = useMemo(
     () => accessibleItems.filter((item) => !item.hidden),
@@ -46,8 +51,12 @@ function MainApplication() {
   function navigate(view) {
     const meta = NAV_ITEMS.find((item) => item.id === view)
     if (!meta) return
-    if (!auth.can(meta.permission)) {
-      window.alert('Tu rol no tiene permiso para abrir este módulo.')
+    const allowed = meta.platformAdmin
+      ? Boolean(auth.userContext?.platformAdmin)
+      : auth.can(meta.permission)
+
+    if (!allowed) {
+      window.alert('Tu usuario no tiene permiso para abrir este módulo.')
       return
     }
     setActiveView(view)
@@ -121,6 +130,7 @@ function MainApplication() {
     reservations: <ReservationsPage />,
     staff: <StaffPage />,
     branches: <BranchesPage />,
+    'platform-companies': <PlatformCompaniesPage />,
     reports: <ReportsPage />,
     'shift-close': <ShiftClosePage />,
     tv: <TvPage />,
