@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { listPaidInvoices } from '../services/invoiceRegisterService.js'
+import { paymentMethodLabel } from '../components/payments/PaymentMethodPicker.jsx'
 
 function serviceMode(row) {
   if (row.serviceMode) return row.serviceMode
@@ -182,13 +183,18 @@ export default function InvoiceRegisterPage() {
         ) : rows.length ? (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Factura</th><th>Servicio / origen</th><th>Fecha</th><th>Productos</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th /></tr></thead>
+              <thead><tr><th>Factura</th><th>Servicio / origen</th><th>Fecha</th><th>Pago</th><th>Productos</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th /></tr></thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td><b>{row.invoiceNumber}</b><small>Orden #{row.orderNumber}</small></td>
                     <td><OriginSummary invoice={row} compact /></td>
                     <td>{new Date(row.issuedAt).toLocaleString('es-CO')}</td>
+                    <td>
+                      {(row.payments || []).length
+                        ? Array.from(new Set((row.payments || []).map((payment) => paymentMethodLabel(payment.method)))).join(' + ')
+                        : '—'}
+                    </td>
                     <td>{(row.items || []).reduce((total, item) => total + Number(item.quantity || 0), 0)}</td>
                     <td>{formatMoney(row.subtotal)}</td>
                     <td>{formatMoney(row.taxTotal)}</td>
@@ -210,6 +216,16 @@ export default function InvoiceRegisterPage() {
             <OriginSummary invoice={selected} />
             <BillingCustomerSummary invoice={selected} />
             <div className="list invoice-detail-lines">{(selected.items || []).map((item, index) => <div className="row" key={index}><span>{item.quantity} × {item.name}<small>IVA {item.taxRate || 0}% · {formatMoney(item.unitPrice)} c/u</small></span><b>{formatMoney(item.amount)}</b></div>)}</div>
+            {(selected.payments || []).length > 0 && (
+              <div className="list invoice-detail-payments">
+                {(selected.payments || []).map((payment) => (
+                  <div className="row" key={payment.id}>
+                    <span>{paymentMethodLabel(payment.method)}<small>{new Date(payment.paidAt).toLocaleString('es-CO')}</small></span>
+                    <b>{formatMoney(payment.amount)}</b>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="totals"><div>Subtotal <b>{formatMoney(selected.subtotal)}</b></div><div>IVA <b>{formatMoney(selected.taxTotal)}</b></div><div>Total <b>{formatMoney(selected.total)}</b></div><div>Valor pagado <b>{formatMoney(selected.paidTotal || selected.total)}</b></div></div>
           </div>
         </div>
