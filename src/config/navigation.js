@@ -15,6 +15,7 @@ export const NAV_ITEMS = [
   { id: 'customers', icon: '👥', label: 'Clientes', permission: 'customers.view' },
   { id: 'reservations', icon: '📅', label: 'Reservas', permission: 'reservations.view' },
   { id: 'staff', icon: '🔐', label: 'Personal', permission: 'staff.view' },
+  { id: 'branches', icon: '🏢', label: 'Empresa y sucursales', permission: 'branches.view' },
   { id: 'reports', icon: '📊', label: 'Reportes', permission: 'reports.view' },
   { id: 'tv', icon: '📺', label: 'Pantalla TV', permission: 'display.view' },
   { id: 'settings', icon: '⚙', label: 'Configuración', permission: 'settings.view' },
