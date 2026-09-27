@@ -67,6 +67,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
   } = useRestaurant()
   const [creating, setCreating] = useState(false)
   const [releasingOrderId, setReleasingOrderId] = useState(null)
+  const manualQuickIdentity = state.settings.allowPager !== false
 
   const activeOrders = useMemo(
     () => state.orders
@@ -108,9 +109,9 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
       return
     }
 
-    const identifier = order.pager
-      ? `Pager ${order.pager}`
-      : order.customerName || `Pedido #${order.id}`
+    const identifier = manualQuickIdentity
+      ? (order.pager ? `Pager ${order.pager}` : order.customerName || `Pedido #${order.id}`)
+      : `Turno ${order.pager || order.id}`
 
     if (!window.confirm(`¿Deseas liberar ${identifier}? Todavía no tiene productos enviados.`)) return
 
@@ -130,13 +131,17 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
       <div className="hero tables-hero">
         <div>
           <h2>Servicio rápido</h2>
-          <p>Cada pedido funciona como una cuenta independiente identificada por pager o nombre del cliente.</p>
+          <p>
+            {manualQuickIdentity
+              ? 'Cada pedido funciona como una cuenta independiente identificada por pager o nombre del cliente.'
+              : 'Cada pedido recibe un número de turno automático que se reinicia después del cierre de turno.'}
+          </p>
         </div>
         <button className="btn primary quick-service-entry" onClick={createOrder} disabled={creating}>
           <span className="quick-service-icon">⚡</span>
           <span>
             <b>{creating ? 'Creando…' : 'Nuevo pedido rápido'}</b>
-            <small>Pager o nombre del cliente</small>
+            <small>{manualQuickIdentity ? 'Pager o nombre del cliente' : 'Turno automático'}</small>
           </span>
         </button>
       </div>
@@ -157,9 +162,9 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
               const hasSentItems = (order.rounds || []).some((round) => (
                 (round.items || []).some((item) => !item.voided)
               ))
-              const identifier = order.pager
-                ? `Pager ${order.pager}`
-                : order.customerName || `Pedido #${order.id}`
+              const identifier = manualQuickIdentity
+                ? (order.pager ? `Pager ${order.pager}` : order.customerName || `Pedido #${order.id}`)
+                : `Turno ${order.pager || order.id}`
               const openedAt = formatTime(order.created)
               const responsible = shortName(order.openedByName)
               const canRelease = !hasSentItems && (order.openedByMe || auth.can('tables.manage'))
