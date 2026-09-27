@@ -66,6 +66,7 @@ export default function OrderPage({ onNavigate }) {
   const [chargeInvoiceCustomer, setChargeInvoiceCustomer] = useState(() => invoiceCustomerFromOrders([]))
   const [chargeBusy, setChargeBusy] = useState(false)
   const [quickIdentitySaving, setQuickIdentitySaving] = useState(false)
+  const [showQuickIdentitySetup, setShowQuickIdentitySetup] = useState(false)
   const [myVoidRequests, setMyVoidRequests] = useState([])
   const [showUnpaidVoidRequest, setShowUnpaidVoidRequest] = useState(false)
   const [unpaidVoidSelected, setUnpaidVoidSelected] = useState({})
@@ -79,6 +80,7 @@ export default function OrderPage({ onNavigate }) {
   const [accountVoidExpiresAt, setAccountVoidExpiresAt] = useState(null)
   const [accountVoidBusy, setAccountVoidBusy] = useState(false)
   const tableAccountLifecycleRef = useRef(null)
+  const quickAccountLifecycleRef = useRef(null)
 
   const categoryOptions = useMemo(
     () => Array.from(new Set(
@@ -266,6 +268,20 @@ export default function OrderPage({ onNavigate }) {
     && paymentAccountTotal > 0.005
     && paymentAccountBalance <= 0.005
 
+  const currentOrderItems = useMemo(() => (
+    (currentOrder?.rounds || []).flatMap((round) => (
+      (round.items || []).filter((item) => !item.voided)
+    ))
+  ), [currentOrder])
+
+  const currentOrderFullyDelivered = currentOrderItems.length > 0
+    && currentOrderItems.every((item) => item.prepStatus === 'delivered')
+
+  const currentQuickFullyPaid = orderMode === 'quick'
+    && currentOrder
+    && orderTotal(currentOrder) > 0.005
+    && orderBalance(currentOrder) <= 0.005
+
   const quickIdentifier = pager.trim()
     ? `Pager ${pager.trim()}`
     : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
@@ -275,6 +291,25 @@ export default function OrderPage({ onNavigate }) {
     : orderMode === 'delivery'
       ? `Domicilio #${currentOrder?.id || '—'} · ${deliveryInfo?.customerName || 'Cliente'}`
       : quickIdentifier
+
+  useEffect(() => {
+    if (orderMode !== 'quick' || !currentOrder) {
+      setShowQuickIdentitySetup(false)
+      return
+    }
+
+    const alreadyIdentified = Boolean(
+      String(currentOrder.pager || '').trim()
+      || String(currentOrder.customerName || '').trim(),
+    )
+
+    setShowQuickIdentitySetup(!alreadyIdentified)
+  }, [
+    orderMode,
+    currentOrder?.id,
+    currentOrder?.pager,
+    currentOrder?.customerName,
+  ])
 
   useEffect(() => {
     if (orderMode !== 'table' || !currentTableId) {
@@ -312,6 +347,44 @@ export default function OrderPage({ onNavigate }) {
     tableOrders,
     tableAccountFullyPaid,
     tableAccountFullyDelivered,
+    draft.length,
+    onNavigate,
+  ])
+
+  useEffect(() => {
+    if (orderMode !== 'quick') {
+      quickAccountLifecycleRef.current = null
+      return
+    }
+
+    if (currentOrder) {
+      quickAccountLifecycleRef.current = {
+        orderId: currentOrder.id,
+        fullyPaid: currentQuickFullyPaid,
+        fullyDelivered: currentOrderFullyDelivered,
+      }
+
+      if (currentQuickFullyPaid && currentOrderFullyDelivered && draft.length === 0) {
+        quickAccountLifecycleRef.current = null
+        onNavigate('quick-service')
+      }
+      return
+    }
+
+    const previousAccount = quickAccountLifecycleRef.current
+    const completedAfterLastUpdate = previousAccount?.orderId === currentOrderId
+      && (previousAccount.fullyPaid || previousAccount.fullyDelivered)
+
+    if (completedAfterLastUpdate && draft.length === 0) {
+      quickAccountLifecycleRef.current = null
+      onNavigate('quick-service')
+    }
+  }, [
+    orderMode,
+    currentOrder,
+    currentOrderId,
+    currentQuickFullyPaid,
+    currentOrderFullyDelivered,
     draft.length,
     onNavigate,
   ])
@@ -379,22 +452,38 @@ export default function OrderPage({ onNavigate }) {
     return allocations
   }
 
-  async function saveQuickIdentity() {
-    if (orderMode !== 'quick' || !currentOrder) return
-    if (pager.trim() && quickCustomerName.trim()) {
+  async function saveQuickIdentity({ required = false, closeSetup = false } = {}) {
+    if (orderMode !== 'quick' || !currentOrder) return { ok: false }
+
+    const normalizedPager = pager.trim()
+    const normalizedCustomer = quickCustomerName.trim()
+
+    if (normalizedPager && normalizedCustomer) {
       window.alert('Usa número de pager o nombre del cliente, no ambos.')
-      return
+      return { ok: false }
+    }
+
+    if (!normalizedPager && !normalizedCustomer) {
+      if (required) {
+        window.alert('Digita el número del pager o el nombre del cliente para continuar.')
+      }
+      return { ok: !required }
     }
 
     setQuickIdentitySaving(true)
     try {
       const result = await updateQuickOrderIdentity({
-        pager,
-        customerName: quickCustomerName,
+        pager: normalizedPager,
+        customerName: normalizedCustomer,
       })
+
       if (!result?.ok) {
         window.alert(result?.message || 'No se pudo guardar la identificación del pedido.')
+        return result
       }
+
+      if (closeSetup) setShowQuickIdentitySetup(false)
+      return { ok: true }
     } finally {
       setQuickIdentitySaving(false)
     }
@@ -694,6 +783,52 @@ export default function OrderPage({ onNavigate }) {
 
   return (
     <section className="view active">
+      {showQuickIdentitySetup && orderMode === 'quick' && currentOrder && (
+        <div className="modal open quick-identity-setup-modal">
+          <div className="modal-card quick-identity-setup-card">
+            <div className="quick-identity-title">
+              <h3>Identificación del pedido</h3>
+              <p>Usa uno de los dos campos. Este dato reemplaza el número de mesa.</p>
+            </div>
+
+            <div className="quick-identity-grid quick-identity-grid-modal">
+              <label>
+                <span>Número del pager</span>
+                <input
+                  autoFocus
+                  value={pager}
+                  disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
+                  onChange={(event) => setPager(event.target.value)}
+                  placeholder="Ej. 16"
+                />
+              </label>
+
+              <div className="quick-identity-or">o</div>
+
+              <label>
+                <span>Nombre del cliente</span>
+                <input
+                  value={quickCustomerName}
+                  disabled={Boolean(pager.trim()) || quickIdentitySaving}
+                  onChange={(event) => setQuickCustomerName(event.target.value)}
+                  placeholder="Ej. Mariana"
+                />
+              </label>
+            </div>
+
+            <div className="quick-identity-setup-actions">
+              <button
+                className="btn primary"
+                disabled={quickIdentitySaving || (!pager.trim() && !quickCustomerName.trim())}
+                onClick={() => saveQuickIdentity({ required: true, closeSetup: true })}
+              >
+                {quickIdentitySaving ? 'Guardando…' : 'Continuar con el pedido'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="hero">
         <div>
           <h2>{
@@ -826,7 +961,7 @@ export default function OrderPage({ onNavigate }) {
                     value={pager}
                     disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
                     onChange={(event) => setPager(event.target.value)}
-                    onBlur={saveQuickIdentity}
+                    onBlur={() => saveQuickIdentity()}
                     placeholder="Ej. 16"
                   />
                 </label>
