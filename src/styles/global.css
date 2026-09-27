@@ -4102,3 +4102,11 @@ html, body {
   .split-payment-success{margin:0 16px 13px}
   .split-checkout-grid{padding:0 16px 16px}
 }
+
+.cashier-refund-notice{margin:18px 24px 16px}
+.cashier-refund-details{margin-top:0}
+.cashier-refund-footer{grid-template-columns:minmax(110px,.45fr) minmax(240px,1fr)}
+@media(max-width:650px){
+  .cashier-refund-notice{margin:14px 16px 13px}
+  .cashier-refund-footer{grid-template-columns:1fr}
+}
