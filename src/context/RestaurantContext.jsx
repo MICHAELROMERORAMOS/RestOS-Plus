@@ -273,6 +273,9 @@ export function RestaurantProvider({ children }) {
   const [remoteError, setRemoteError] = useState('')
   const [operationalSummary, setOperationalSummary] = useState({
     salesToday: 0,
+    shiftSales: 0,
+    shiftNumber: null,
+    shiftOpenedAt: null,
     completedOrdersToday: 0,
     tableReleases: [],
   })
@@ -487,7 +490,7 @@ export function RestaurantProvider({ children }) {
         ...previous,
         orders: operationalOrders,
         tables: syncOperationalTableStatuses(tablesWithReleaseTimes, operationalOrders),
-        sales: summary ? Number(summary.salesToday || 0) : previous.sales,
+        sales: summary ? Number(summary.shiftSales ?? summary.salesToday ?? 0) : previous.sales,
       }
 
       if (auth.isDesignMode) {
@@ -558,7 +561,7 @@ export function RestaurantProvider({ children }) {
 
       return {
         ...previous,
-        sales: Number(summary.salesToday || 0),
+        sales: Number(summary.shiftSales ?? summary.salesToday ?? 0),
         tables: syncOperationalTableStatuses(tables, previous.orders),
       }
     })
