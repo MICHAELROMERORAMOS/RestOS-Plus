@@ -12,7 +12,21 @@ function loadSidebarPreference() {
   }
 }
 
-export default function AppShell({ children, navItems, activeView, onNavigate, userContext, onLogout, canKitchen, canOrder, onNewOrder }) {
+export default function AppShell({
+  children,
+  navItems,
+  activeView,
+  onNavigate,
+  userContext,
+  onLogout,
+  canKitchen,
+  canOrder,
+  onNewOrder,
+  companyName,
+  locations = [],
+  activeLocation,
+  onLocationChange,
+}) {
   const current = navItems.find((item) => item.id === activeView)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarPreference)
 
@@ -43,6 +57,10 @@ export default function AppShell({ children, navItems, activeView, onNavigate, u
           canOrder={canOrder}
           onKitchen={() => onNavigate('kitchen')}
           onNewOrder={onNewOrder}
+          companyName={companyName}
+          locations={locations}
+          activeLocation={activeLocation}
+          onLocationChange={onLocationChange}
         />
         <div className="content-scroll">
           <div className="content">{children}</div>
