@@ -4848,3 +4848,66 @@ html, body {
     font-size:14px;
   }
 }
+
+
+/* Compact delivery customer details */
+.order-context-header{
+  grid-template-columns:auto minmax(0,1fr) auto;
+}
+
+.order-context-view{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border:1px solid #bdd4c8;
+  border-radius:10px;
+  background:#fff;
+  cursor:pointer;
+  font-size:17px;
+  box-shadow:0 1px 4px #133b2d0d;
+}
+
+.order-context-view:hover{
+  background:#e5f2eb;
+  border-color:#8fb9a4;
+}
+
+.delivery-details-card{
+  width:min(440px,100%);
+}
+
+.delivery-details-card .section-title{
+  align-items:flex-start;
+}
+
+.delivery-details-card .section-title h3{
+  margin:3px 0 0;
+}
+
+.delivery-details-list{
+  display:grid;
+  gap:10px;
+  margin-top:14px;
+}
+
+.delivery-details-list>div{
+  display:grid;
+  gap:3px;
+  padding:12px 13px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#f8fbf9;
+}
+
+.delivery-details-list span{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:850;
+}
+
+.delivery-details-list b{
+  color:var(--ink);
+  font-size:13px;
+  overflow-wrap:anywhere;
+}
