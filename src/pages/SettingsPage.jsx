@@ -4,6 +4,42 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { CURRENCY_OPTIONS } from '../lib/currency.js'
 import { loadCompanyProfile, saveCompanyProfile } from '../services/invoiceRegisterService.js'
 
+function SettingsSection({
+  title,
+  description,
+  icon,
+  children,
+  defaultOpen = false,
+  badge = null,
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <section className={`settings-section ${open ? 'open' : ''}`}>
+      <button
+        type="button"
+        className="settings-section-toggle"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        <span className="settings-section-icon" aria-hidden="true">{icon}</span>
+        <span className="settings-section-copy">
+          <b>{title}</b>
+          {description && <small>{description}</small>}
+        </span>
+        {badge && <span className="badge settings-section-badge">{badge}</span>}
+        <span className="settings-section-chevron" aria-hidden="true">⌄</span>
+      </button>
+
+      {open && (
+        <div className="settings-section-content">
+          {children}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export default function SettingsPage() {
   const {
     state, updateSettings,
@@ -105,7 +141,13 @@ export default function SettingsPage() {
     <section className="view active">
       <div className="hero"><div><h2>Configuración</h2><p>Restaurante, operación, salones/áreas, mesas, pagos e integraciones.</p></div></div>
 
-      <div className="grid two">
+      <SettingsSection
+        title="Operación e integraciones"
+        description="Ajustes generales del restaurante, moneda, modo de servicio y conexiones."
+        icon="⚙️"
+        defaultOpen
+      >
+        <div className="grid two">
         <div className="card">
           <h3>Operación</h3>
           <div className="settings-form">
@@ -169,14 +211,33 @@ export default function SettingsPage() {
           <div className="notice warn">Que el cliente Supabase esté configurado no significa que Auth esté listo: todavía debes activar plantillas OTP, URLs y Google desde el panel de Supabase.</div>
         </div>
       </div>
+      </SettingsSection>
 
-      <div className="card section-gap"><div className="section-title"><div><h3>Datos de empresa — Colombia</h3><p className="muted">Se utilizarán en la vista previa y en el registro interno de facturas.</p></div><span className="badge">Configuración fiscal interna</span></div><div className="grid two settings-form"><label><span>Razón social</span><input value={company.legal_name} onChange={e=>setCompany({...company,legal_name:e.target.value})}/></label><label><span>Nombre comercial</span><input value={company.trade_name} onChange={e=>setCompany({...company,trade_name:e.target.value})}/></label><label><span>NIT</span><input value={company.nit} onChange={e=>setCompany({...company,nit:e.target.value})}/></label><label><span>Dígito de verificación</span><input value={company.verification_digit} onChange={e=>setCompany({...company,verification_digit:e.target.value})}/></label><label><span>Régimen</span><input value={company.tax_regime} onChange={e=>setCompany({...company,tax_regime:e.target.value})}/></label><label><span>Responsabilidades tributarias</span><input value={company.tax_responsibilities} onChange={e=>setCompany({...company,tax_responsibilities:e.target.value})}/></label><label><span>Dirección</span><input value={company.address} onChange={e=>setCompany({...company,address:e.target.value})}/></label><label><span>Ciudad</span><input value={company.city} onChange={e=>setCompany({...company,city:e.target.value})}/></label><label><span>Departamento</span><input value={company.department} onChange={e=>setCompany({...company,department:e.target.value})}/></label><label><span>Teléfono</span><input value={company.phone} onChange={e=>setCompany({...company,phone:e.target.value})}/></label><label><span>Correo</span><input type="email" value={company.email} onChange={e=>setCompany({...company,email:e.target.value})}/></label><label><span>Prefijo interno</span><input value={company.invoice_prefix} onChange={e=>setCompany({...company,invoice_prefix:e.target.value})}/></label><label><span>Resolución / autorización</span><input value={company.resolution_number} onChange={e=>setCompany({...company,resolution_number:e.target.value})}/></label><label><span>Fecha de resolución</span><input type="date" value={company.resolution_date||''} onChange={e=>setCompany({...company,resolution_date:e.target.value})}/></label><label><span>Consecutivo inicial</span><input type="number" value={company.resolution_range_start||''} onChange={e=>setCompany({...company,resolution_range_start:e.target.value})}/></label><label><span>Consecutivo final</span><input type="number" value={company.resolution_range_end||''} onChange={e=>setCompany({...company,resolution_range_end:e.target.value})}/></label><label className="span-two"><span>Texto del pie de factura</span><textarea value={company.footer_text} onChange={e=>setCompany({...company,footer_text:e.target.value})}/></label></div><button className="btn primary" disabled={!canManageSettings||companySaving} onClick={saveCompany}>{companySaving?'Guardando…':'Guardar datos de empresa'}</button></div>
+      <SettingsSection
+        title="Empresa y facturación"
+        description="Datos fiscales, identificación del negocio y consecutivos internos de factura."
+        icon="🧾"
+      >
+        <div className="card section-gap"><div className="section-title"><div><h3>Datos de empresa — Colombia</h3><p className="muted">Se utilizarán en la vista previa y en el registro interno de facturas.</p></div><span className="badge">Configuración fiscal interna</span></div><div className="grid two settings-form"><label><span>Razón social</span><input value={company.legal_name} onChange={e=>setCompany({...company,legal_name:e.target.value})}/></label><label><span>Nombre comercial</span><input value={company.trade_name} onChange={e=>setCompany({...company,trade_name:e.target.value})}/></label><label><span>NIT</span><input value={company.nit} onChange={e=>setCompany({...company,nit:e.target.value})}/></label><label><span>Dígito de verificación</span><input value={company.verification_digit} onChange={e=>setCompany({...company,verification_digit:e.target.value})}/></label><label><span>Régimen</span><input value={company.tax_regime} onChange={e=>setCompany({...company,tax_regime:e.target.value})}/></label><label><span>Responsabilidades tributarias</span><input value={company.tax_responsibilities} onChange={e=>setCompany({...company,tax_responsibilities:e.target.value})}/></label><label><span>Dirección</span><input value={company.address} onChange={e=>setCompany({...company,address:e.target.value})}/></label><label><span>Ciudad</span><input value={company.city} onChange={e=>setCompany({...company,city:e.target.value})}/></label><label><span>Departamento</span><input value={company.department} onChange={e=>setCompany({...company,department:e.target.value})}/></label><label><span>Teléfono</span><input value={company.phone} onChange={e=>setCompany({...company,phone:e.target.value})}/></label><label><span>Correo</span><input type="email" value={company.email} onChange={e=>setCompany({...company,email:e.target.value})}/></label><label><span>Prefijo interno</span><input value={company.invoice_prefix} onChange={e=>setCompany({...company,invoice_prefix:e.target.value})}/></label><label><span>Resolución / autorización</span><input value={company.resolution_number} onChange={e=>setCompany({...company,resolution_number:e.target.value})}/></label><label><span>Fecha de resolución</span><input type="date" value={company.resolution_date||''} onChange={e=>setCompany({...company,resolution_date:e.target.value})}/></label><label><span>Consecutivo inicial</span><input type="number" value={company.resolution_range_start||''} onChange={e=>setCompany({...company,resolution_range_start:e.target.value})}/></label><label><span>Consecutivo final</span><input type="number" value={company.resolution_range_end||''} onChange={e=>setCompany({...company,resolution_range_end:e.target.value})}/></label><label className="span-two"><span>Texto del pie de factura</span><textarea value={company.footer_text} onChange={e=>setCompany({...company,footer_text:e.target.value})}/></label></div><button className="btn primary" disabled={!canManageSettings||companySaving} onClick={saveCompany}>{companySaving?'Guardando…':'Guardar datos de empresa'}</button></div>
+      </SettingsSection>
 
-      {!canManageTables && (
+      <SettingsSection
+        title="Salones, áreas y mesas"
+        description="Crea y administra la distribución física del restaurante."
+        icon="▦"
+        badge={`${activeTables.length} mesas`}
+      >
+        {!canManageTables && (
         <div className="notice section-gap">Tu rol puede consultar mesas, pero no crear ni modificar zonas o mesas.</div>
       )}
+      </SettingsSection>
 
-      <div className="grid two section-gap">
+      <SettingsSection
+        title="Tipos de servicio"
+        description="Referencia rápida del comportamiento de mesa y servicio rápido."
+        icon="🍽️"
+      >
+        <div className="grid two section-gap">
         <div className="card">
           <div className="section-title"><div><h3>Salones / áreas</h3><p className="muted">Ej.: Terraza, Salón 1, Salón 2. El nombre del área no se puede repetir.</p></div><span className="badge">{activeZones.length} activas</span></div>
           <form className="settings-form" onSubmit={submitZone}>
@@ -236,6 +297,7 @@ export default function SettingsPage() {
         <div className="card"><h3>Servicio de mesa</h3><p className="muted">Pedido abierto mientras la mesa permanezca ocupada. Cada envío crea una comanda/ronda. Los productos enviados quedan bloqueados y las nuevas adiciones se envían aparte.</p></div>
         <div className="card"><h3>Servicio rápido / Prepago</h3><p className="muted">Se cobra antes de preparar. Puede usar número consecutivo, pager, turno o nombre de cliente según la configuración.</p></div>
       </div>
+      </SettingsSection>
 
       {editingZone && (
         <div className="modal open">
