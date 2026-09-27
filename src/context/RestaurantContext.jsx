@@ -45,6 +45,7 @@ const RestaurantContext = createContext(null)
 const STORAGE_KEY = 'restos-plus-demo-state-v3'
 const OLD_STORAGE_KEYS = ['restos-plus-demo-state-v2', 'restos-demo']
 const TABLE_DRAFT_STORAGE_PREFIX = 'restos-plus-table-drafts-v1'
+const ACTIVE_LOCATION_STORAGE_PREFIX = 'restos-plus-active-location-v1'
 const TABLE_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 function loadStoredTableDrafts(storageKey) {
@@ -268,6 +269,7 @@ export function RestaurantProvider({ children }) {
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
   const [menuStations, setMenuStations] = useState([])
+  const [locations, setLocations] = useState([])
   const [activeLocation, setActiveLocation] = useState(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState('')
@@ -309,6 +311,12 @@ export function RestaurantProvider({ children }) {
   }, [])
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
+  const activeLocationStorageKey = useMemo(() => {
+    const userId = auth.userContext?.id || (auth.isDesignMode ? 'design-user' : null)
+    if (!userId || !restaurantId) return null
+    return `${ACTIVE_LOCATION_STORAGE_PREFIX}:${restaurantId}:${userId}`
+  }, [auth.userContext?.id, auth.isDesignMode, restaurantId])
+
   const draftStorageKey = useMemo(() => {
     const userId = auth.userContext?.id || (auth.isDesignMode ? 'design-user' : null)
     const scopedRestaurant = restaurantId || (auth.isDesignMode ? 'design-restaurant' : null)
@@ -735,7 +743,7 @@ export function RestaurantProvider({ children }) {
     state.settings.blockInsufficientInventory,
   ])
 
-  const refreshRemoteData = useCallback(async () => {
+  const refreshRemoteData = useCallback(async (locationIdOverride = null) => {
     if (auth.isDesignMode) {
       setProducts(DEMO_PRODUCTS)
       setRemoteError('')
@@ -748,8 +756,17 @@ export function RestaurantProvider({ children }) {
     setRemoteError('')
 
     try {
+      let preferredLocationId = locationIdOverride
+      if (!preferredLocationId && activeLocationStorageKey) {
+        try {
+          preferredLocationId = localStorage.getItem(activeLocationStorageKey)
+        } catch {
+          preferredLocationId = null
+        }
+      }
+
       const [initialStructure, remoteSettings] = await Promise.all([
-        loadRestaurantStructure(restaurantId),
+        loadRestaurantStructure(restaurantId, preferredLocationId),
         loadRestaurantSettings(restaurantId),
       ])
       let structure = initialStructure
@@ -760,16 +777,27 @@ export function RestaurantProvider({ children }) {
 
       if (
         structure.location
+        && (structure.locations || []).length === 1
         && structure.zones.length === 0
         && structure.tables.length === 0
         && localZones.length > 0
         && auth.can('tables.manage')
       ) {
         await importLocalStructure(structure.location.id, localZones, localTables)
-        structure = await loadRestaurantStructure(restaurantId)
+        structure = await loadRestaurantStructure(restaurantId, structure.location.id)
       }
 
+      setLocations(structure.locations || [])
       setActiveLocation(structure.location)
+
+      if (structure.location?.id && activeLocationStorageKey) {
+        try {
+          localStorage.setItem(activeLocationStorageKey, structure.location.id)
+        } catch {
+          // Branch preference is non-critical.
+        }
+      }
+
       applyRemoteStructure(structure)
 
       if (structure.location) {
@@ -796,7 +824,7 @@ export function RestaurantProvider({ children }) {
         applyOperationalOrders([])
       }
 
-      return { ok: true }
+      return { ok: true, location: structure.location, locations: structure.locations || [] }
     } catch (error) {
       const message = error?.message || 'No se pudieron cargar los datos operativos desde Supabase.'
       setRemoteError(message)
@@ -810,9 +838,47 @@ export function RestaurantProvider({ children }) {
     auth.permissions,
     canLoadInventoryAvailability,
     restaurantId,
+    activeLocationStorageKey,
     applyRemoteStructure,
     applyRemoteSettings,
     applyOperationalOrders,
+  ])
+
+  const switchLocation = useCallback(async (locationId) => {
+    if (!locationId || String(locationId) === String(activeLocation?.id || '')) {
+      return { ok: true, location: activeLocation }
+    }
+
+    const target = locations.find((location) => String(location.id) === String(locationId))
+    if (!target) {
+      const result = { ok: false, message: 'No tienes acceso a esa sucursal o ya no está activa.' }
+      window.alert(result.message)
+      return result
+    }
+
+    if (currentOrderId || currentTableId || draft.length > 0) {
+      const result = {
+        ok: false,
+        message: 'Termina o abandona la toma de pedido actual antes de cambiar de sucursal.',
+      }
+      window.alert(result.message)
+      return result
+    }
+
+    setCurrentDelivery(null)
+    setPager('')
+    setQuickCustomerName('')
+    setOrderModeState('table')
+    const result = await refreshRemoteData(target.id)
+    if (!result.ok) window.alert(result.message || 'No se pudo cambiar de sucursal.')
+    return result
+  }, [
+    activeLocation,
+    locations,
+    currentOrderId,
+    currentTableId,
+    draft.length,
+    refreshRemoteData,
   ])
 
   useEffect(() => {
@@ -2678,7 +2744,9 @@ export function RestaurantProvider({ children }) {
     products,
     menuCategories,
     menuStations,
+    locations,
     activeLocation,
+    switchLocation,
     remoteLoading,
     remoteError,
     operationalSummary,
@@ -2753,7 +2821,7 @@ export function RestaurantProvider({ children }) {
     orderPaidTotal,
     orderBalance,
   }), [
-    state, products, menuCategories, menuStations, activeLocation, remoteLoading, remoteError,
+    state, products, menuCategories, menuStations, locations, activeLocation, switchLocation, remoteLoading, remoteError,
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
