@@ -116,7 +116,7 @@ export default function InventoryPage() {
   }, [load])
 
   useEffect(() => {
-    if (!locationId) return undefined
+    if (auth.isDesignMode || !locationId) return undefined
 
     let refreshTimer = null
     const unsubscribe = subscribeInventoryMovements(locationId, () => {
@@ -130,7 +130,7 @@ export default function InventoryPage() {
       if (refreshTimer) window.clearTimeout(refreshTimer)
       unsubscribe?.()
     }
-  }, [locationId, load])
+  }, [auth.isDesignMode, locationId, load])
 
   useEffect(() => {
     if (tab === 'movements') load()
