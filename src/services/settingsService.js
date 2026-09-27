@@ -12,7 +12,7 @@ export async function loadRestaurantSettings(restaurantId) {
 
   const { data, error } = await client
     .from('restaurant_settings')
-    .select('restaurant_id,currency_code,default_service_mode,default_payment_timing,pager_enabled,tax_inclusive,service_charge_pct,allow_split_bill,allow_merge_tables,allow_table_transfer,block_insufficient_inventory,extra,updated_at')
+    .select('restaurant_id,currency_code,default_service_mode,default_payment_timing,pager_enabled,separate_kitchen_bar,tax_inclusive,service_charge_pct,allow_split_bill,allow_merge_tables,allow_table_transfer,block_insufficient_inventory,extra,updated_at')
     .eq('restaurant_id', restaurantId)
     .maybeSingle()
 
@@ -54,6 +54,28 @@ export async function saveInventoryStockControl(restaurantId, enabled) {
       onConflict: 'restaurant_id',
     })
     .select('restaurant_id,block_insufficient_inventory,updated_at')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+
+export async function saveOperationalBehaviorSettings(restaurantId, {
+  pagerEnabled,
+  separateKitchenBar,
+}) {
+  const client = requireSupabase()
+  const { data, error } = await client
+    .from('restaurant_settings')
+    .upsert({
+      restaurant_id: restaurantId,
+      pager_enabled: Boolean(pagerEnabled),
+      separate_kitchen_bar: Boolean(separateKitchenBar),
+    }, {
+      onConflict: 'restaurant_id',
+    })
+    .select('restaurant_id,pager_enabled,separate_kitchen_bar,updated_at')
     .single()
 
   if (error) throw error
