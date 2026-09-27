@@ -54,3 +54,13 @@ export async function setCompanyBranchActive({ restaurantId, branchId, active })
   if (error) throw error
   return Boolean(data)
 }
+
+
+export async function rotateCompanyJoinCode(restaurantId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('rotate_company_join_code', {
+    p_restaurant_id: restaurantId,
+  })
+  if (error) throw error
+  return String(data || '')
+}
