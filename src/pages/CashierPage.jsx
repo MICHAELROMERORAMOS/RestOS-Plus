@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
+import PaymentMethodPicker, { paymentMethodLabel } from '../components/payments/PaymentMethodPicker.jsx'
 import InvoiceCustomerFields, {
   invoiceCustomerFromOrders,
   validateInvoiceCustomer,
@@ -240,14 +241,6 @@ export default function CashierPage() {
     const customerResult = validateInvoiceCustomer(chargeInvoiceCustomer)
     if (!customerResult.ok) return window.alert(customerResult.message)
 
-    const invoiceText = customerResult.customer.requested
-      ? `${customerResult.customer.fullName} · ${customerResult.customer.documentType} ${customerResult.customer.documentNumber}`
-      : 'Consumidor final'
-    const confirmed = window.confirm(
-      `¿Confirmar cobro de ${formatMoney(amount)} para ${chargeGroup.tableText}?\n\n${chargeLabel}\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}\nFactura: ${invoiceText}`,
-    )
-    if (!confirmed) return
-
     setChargeBusy(true)
     const result = await recordPayments(allocations, chargeMethod, customerResult.customer)
     setChargeBusy(false)
@@ -280,19 +273,6 @@ export default function CashierPage() {
     if (!refundableOrders.length) {
       return window.alert('No se encontró una orden sincronizada con reembolso pendiente.')
     }
-
-    const confirmed = window.confirm(
-      `¿Confirmar devolución de ${formatMoney(refundGroup.refundDue)} para ${refundGroup.tableText}?\n\nMétodo: ${
-        refundMethod === 'cash'
-          ? 'Efectivo'
-          : refundMethod === 'card'
-            ? 'Tarjeta'
-            : refundMethod === 'transfer'
-              ? 'Transferencia'
-              : 'Otro'
-      }\n\nEsta operación quedará registrada en el cierre de turno.`,
-    )
-    if (!confirmed) return
 
     setRefundBusy(true)
     try {
@@ -434,116 +414,143 @@ export default function CashierPage() {
       </div>
 
       {refundGroup && (
-        <div className="modal open" onClick={closeRefund}>
-          <div className="modal-card cashier-payment-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="section-title">
+        <div className="modal open payment-checkout-modal" onClick={closeRefund}>
+          <div className="modal-card cashier-payment-modal payment-checkout-card" onClick={(event) => event.stopPropagation()}>
+            <div className="payment-checkout-header">
               <div>
-                <h3>↩ Procesar reembolso</h3>
-                <p className="muted">
-                  {refundGroup.tableText} · Pendiente {formatMoney(refundGroup.refundDue)}
-                </p>
+                <span className="payment-checkout-kicker">REEMBOLSO</span>
+                <h3>{refundGroup.tableText}</h3>
+                <p>Pendiente por devolver {formatMoney(refundGroup.refundDue)}</p>
               </div>
-              <button className="btn" disabled={refundBusy} onClick={closeRefund}>×</button>
+              <button className="payment-close" disabled={refundBusy} onClick={closeRefund}>×</button>
             </div>
 
-            <div className="notice warn">
+            <div className="notice warn cashier-refund-notice">
               Registra esta operación únicamente después de devolver realmente el dinero al cliente.
               Al completarla, el reembolso dejará de bloquear el cierre de turno.
             </div>
 
-            <div className="settings-form cashier-payment-fields">
-              <label>
-                <span>Importe a devolver</span>
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div><span>IMPORTE</span><b>Valor a devolver</b></div>
+              </div>
+              <div className="payment-amount-field">
+                <span>{state.settings.currency || ''}</span>
                 <input value={money(refundGroup.refundDue)} readOnly />
-              </label>
-
-              <label>
-                <span>Método de devolución</span>
-                <select
-                  value={refundMethod}
-                  disabled={refundBusy}
-                  onChange={(event) => setRefundMethod(event.target.value)}
-                >
-                  <option value="cash">Efectivo</option>
-                  <option value="card">Tarjeta</option>
-                  <option value="transfer">Transferencia</option>
-                  <option value="other">Otro</option>
-                </select>
-              </label>
-
-              <label>
-                <span>Referencia (opcional)</span>
-                <input
-                  value={refundReference}
-                  disabled={refundBusy}
-                  onChange={(event) => setRefundReference(event.target.value)}
-                  placeholder="Ej. comprobante o referencia bancaria"
-                />
-              </label>
-
-              <label>
-                <span>Nota (opcional)</span>
-                <input
-                  value={refundNote}
-                  disabled={refundBusy}
-                  onChange={(event) => setRefundNote(event.target.value)}
-                  placeholder="Ej. devolución al cliente por factura anulada"
-                />
-              </label>
+              </div>
             </div>
 
-            <button className="btn primary full" disabled={refundBusy} onClick={confirmRefund}>
-              {refundBusy ? 'Registrando reembolso…' : `Confirmar devolución de ${formatMoney(refundGroup.refundDue)}`}
-            </button>
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div><span>MÉTODO</span><b>{paymentMethodLabel(refundMethod)}</b></div>
+              </div>
+              <PaymentMethodPicker value={refundMethod} onChange={setRefundMethod} disabled={refundBusy} />
+            </div>
+
+            <div className="payment-checkout-section">
+              <div className="grid two settings-form cashier-refund-details">
+                <label>
+                  <span>Referencia (opcional)</span>
+                  <input
+                    value={refundReference}
+                    disabled={refundBusy}
+                    onChange={(event) => setRefundReference(event.target.value)}
+                    placeholder="Ej. comprobante o referencia bancaria"
+                  />
+                </label>
+                <label>
+                  <span>Nota (opcional)</span>
+                  <input
+                    value={refundNote}
+                    disabled={refundBusy}
+                    onChange={(event) => setRefundNote(event.target.value)}
+                    placeholder="Ej. devolución por factura anulada"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="payment-checkout-footer cashier-refund-footer">
+              <div className="payment-confirm-summary">
+                <small>{paymentMethodLabel(refundMethod)}</small>
+                <strong>{formatMoney(refundGroup.refundDue)}</strong>
+              </div>
+              <button className="btn primary payment-confirm-button" disabled={refundBusy} onClick={confirmRefund}>
+                {refundBusy ? 'Registrando reembolso…' : 'Confirmar reembolso'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {chargeGroup && (
-        <div className="modal open" onClick={closeCharge}>
-          <div className="modal-card cashier-payment-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="section-title">
+        <div className="modal open payment-checkout-modal" onClick={closeCharge}>
+          <div className="modal-card cashier-payment-modal payment-checkout-card" onClick={(event) => event.stopPropagation()}>
+            <div className="payment-checkout-header">
               <div>
-                <h3>💳 Cobrar · {chargeGroup.tableText}</h3>
-                <p className="muted">Saldo pendiente {formatMoney(chargeGroup.balance)}</p>
+                <span className="payment-checkout-kicker">COBRO EN CAJA</span>
+                <h3>{chargeGroup.tableText}</h3>
+                <p>{chargeLabel || `Saldo pendiente ${formatMoney(chargeGroup.balance)}`}</p>
               </div>
-              <button className="btn" disabled={chargeBusy} onClick={closeCharge}>×</button>
+              <button className="payment-close" disabled={chargeBusy} onClick={closeCharge}>×</button>
             </div>
 
-            <div className="settings-form cashier-payment-fields">
-              <label>
-                <span>Importe a cobrar</span>
+            <div className="order-payment-totals payment-checkout-totals">
+              <div><span>Total cuenta</span><strong>{formatMoney(chargeGroup.total)}</strong></div>
+              <div><span>Ya pagado</span><strong>{formatMoney(chargeGroup.paid)}</strong></div>
+              <div className="balance"><span>Saldo pendiente</span><strong>{formatMoney(chargeGroup.balance)}</strong></div>
+            </div>
+
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div><span>PASO 1</span><b>Valor a cobrar</b></div>
+                <div className="order-payment-shortcuts">
+                  <button className="mini" type="button" disabled={chargeBusy} onClick={() => setChargeAmount(money(chargeGroup.balance / 2))}>½ saldo</button>
+                  <button className="mini" type="button" disabled={chargeBusy} onClick={() => setChargeAmount(money(chargeGroup.balance))}>Saldo completo</button>
+                </div>
+              </div>
+              <div className="payment-amount-field">
+                <span>{state.settings.currency || ''}</span>
                 <input
                   inputMode="decimal"
                   value={chargeAmount}
                   disabled={chargeBusy}
                   onChange={(event) => setChargeAmount(event.target.value)}
                 />
-              </label>
-
-              <label>
-                <span>Método de pago</span>
-                <select value={chargeMethod} disabled={chargeBusy} onChange={(event) => setChargeMethod(event.target.value)}>
-                  <option value="card">Tarjeta</option>
-                  <option value="cash">Efectivo</option>
-                </select>
-              </label>
+              </div>
             </div>
 
-            <div className="order-payment-shortcuts">
-              <button className="btn" disabled={chargeBusy} onClick={() => setChargeAmount(money(chargeGroup.balance / 2))}>½ saldo</button>
-              <button className="btn" disabled={chargeBusy} onClick={() => setChargeAmount(money(chargeGroup.balance))}>Saldo completo</button>
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div><span>PASO 2</span><b>Método de pago</b></div>
+              </div>
+              <PaymentMethodPicker value={chargeMethod} onChange={setChargeMethod} disabled={chargeBusy} />
             </div>
 
-            <InvoiceCustomerFields
-              value={chargeInvoiceCustomer}
-              onChange={setChargeInvoiceCustomer}
-              disabled={chargeBusy}
-            />
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div><span>PASO 3</span><b>Datos de facturación</b></div>
+                <small>Opcional · consumidor final si no se activa</small>
+              </div>
+              <InvoiceCustomerFields
+                value={chargeInvoiceCustomer}
+                onChange={setChargeInvoiceCustomer}
+                disabled={chargeBusy}
+              />
+            </div>
 
-            <button className="btn primary full" disabled={chargeBusy} onClick={confirmPayment}>
-              {chargeBusy ? 'Registrando cobro…' : 'Confirmar cobro'}
-            </button>
+            <div className="payment-checkout-footer">
+              <button className="btn payment-split-button" type="button" disabled={chargeBusy} onClick={() => { closeCharge(); setSplitGroupKey(chargeGroup.key) }}>
+                ✂ Dividir cuenta
+              </button>
+              <div className="payment-confirm-summary">
+                <small>{paymentMethodLabel(chargeMethod)}</small>
+                <strong>{formatMoney(Number(String(chargeAmount || 0).replace(',', '.')) || 0)}</strong>
+              </div>
+              <button className="btn primary payment-confirm-button" disabled={chargeBusy} onClick={confirmPayment}>
+                {chargeBusy ? 'Registrando cobro…' : 'Confirmar y generar factura'}
+              </button>
+            </div>
           </div>
         </div>
       )}
