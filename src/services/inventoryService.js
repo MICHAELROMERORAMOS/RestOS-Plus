@@ -126,3 +126,25 @@ export async function saveProductRecipe({ restaurantId, locationId, productId, l
   if (error) throw error
   return data
 }
+
+
+export function subscribeInventoryMovements(locationId, onChange) {
+  const client = requireSupabase()
+  const channel = client
+    .channel(`inventory-movements:${locationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'inventory_movements',
+        filter: `location_id=eq.${locationId}`,
+      },
+      (payload) => onChange?.(payload),
+    )
+    .subscribe()
+
+  return () => {
+    client.removeChannel(channel)
+  }
+}
