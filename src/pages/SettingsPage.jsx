@@ -228,15 +228,9 @@ export default function SettingsPage() {
         badge={`${activeTables.length} mesas`}
       >
         {!canManageTables && (
-        <div className="notice section-gap">Tu rol puede consultar mesas, pero no crear ni modificar zonas o mesas.</div>
-      )}
-      </SettingsSection>
+          <div className="notice section-gap">Tu rol puede consultar mesas, pero no crear ni modificar zonas o mesas.</div>
+        )}
 
-      <SettingsSection
-        title="Tipos de servicio"
-        description="Referencia rápida del comportamiento de mesa y servicio rápido."
-        icon="🍽️"
-      >
         <div className="grid two section-gap">
         <div className="card">
           <div className="section-title"><div><h3>Salones / áreas</h3><p className="muted">Ej.: Terraza, Salón 1, Salón 2. El nombre del área no se puede repetir.</p></div><span className="badge">{activeZones.length} activas</span></div>
@@ -292,8 +286,14 @@ export default function SettingsPage() {
           )
         }) : <div className="empty-inline">No hay mesas configuradas.</div>}
       </div>
+      </SettingsSection>
 
-      <div className="grid two section-gap">
+      <SettingsSection
+        title="Tipos de servicio"
+        description="Referencia rápida del comportamiento de mesa y servicio rápido."
+        icon="🍽️"
+      >
+        <div className="grid two section-gap">
         <div className="card"><h3>Servicio de mesa</h3><p className="muted">Pedido abierto mientras la mesa permanezca ocupada. Cada envío crea una comanda/ronda. Los productos enviados quedan bloqueados y las nuevas adiciones se envían aparte.</p></div>
         <div className="card"><h3>Servicio rápido / Prepago</h3><p className="muted">Se cobra antes de preparar. Puede usar número consecutivo, pager, turno o nombre de cliente según la configuración.</p></div>
       </div>
