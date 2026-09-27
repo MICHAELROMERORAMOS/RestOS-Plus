@@ -7,6 +7,8 @@ import {
   signInWithGoogle,
   signOut,
   signUpWithPassword,
+  submitCompanyAccessRequest,
+  submitCompanyRegistration,
   updatePassword,
   verifyRecoveryOtp,
   verifySignupOtp,
@@ -86,6 +88,7 @@ export default function AuthGateway({ children }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [registration, setRegistration] = useState(null)
+  const [registrationMode, setRegistrationMode] = useState('company')
   const [recoveryEmail, setRecoveryEmail] = useState('')
   const [signupCode, setSignupCode] = useState('')
   const [recoveryCode, setRecoveryCode] = useState('')
@@ -126,6 +129,147 @@ export default function AuthGateway({ children }) {
     }
   }
 
+  if (auth.mode === 'onboarding') {
+    const onboardingStatus = auth.userContext?.onboarding?.status || 'onboarding_required'
+
+    return (
+      <AuthFrame>
+        <div className="auth-view active auth-onboarding-view">
+          <h1>Completa tu acceso</h1>
+          <p className="sub">
+            {onboardingStatus === 'company_rejected'
+              ? 'Corrige los datos y vuelve a enviar la solicitud de empresa.'
+              : onboardingStatus === 'employee_rejected'
+                ? 'Puedes solicitar acceso nuevamente con el código correcto de tu empresa.'
+                : 'Elige cómo vas a usar RestOS+.'}
+          </p>
+
+          <div className="auth-account-type">
+            <button
+              type="button"
+              className={registrationMode === 'company' ? 'active' : ''}
+              onClick={() => setRegistrationMode('company')}
+            >
+              <b>🏢 Crear una empresa</b>
+              <small>Seré el Owner de una empresa nueva.</small>
+            </button>
+            <button
+              type="button"
+              className={registrationMode === 'join' ? 'active' : ''}
+              onClick={() => setRegistrationMode('join')}
+            >
+              <b>🔑 Unirme a una empresa</b>
+              <small>Ya tengo el código entregado por mi empresa.</small>
+            </button>
+          </div>
+
+          {registrationMode === 'company' ? (
+            <form onSubmit={(event) => {
+              event.preventDefault()
+              const form = new FormData(event.currentTarget)
+              const companyName = String(form.get('companyName') || '').trim()
+              const country = String(form.get('country') || '').trim()
+              if (!companyName) return setError('Escribe el nombre comercial de la empresa.')
+              if (!country) return setError('Escribe el país de la empresa.')
+
+              perform(async () => {
+                const result = await submitCompanyRegistration({
+                  companyName,
+                  legalName: String(form.get('legalName') || '').trim(),
+                  taxId: String(form.get('taxId') || '').trim(),
+                  verificationDigit: String(form.get('verificationDigit') || '').trim(),
+                  taxRegime: String(form.get('taxRegime') || '').trim(),
+                  taxResponsibilities: String(form.get('taxResponsibilities') || '').trim(),
+                  address: String(form.get('address') || '').trim(),
+                  city: String(form.get('city') || '').trim(),
+                  region: String(form.get('region') || '').trim(),
+                  country,
+                  companyPhone: String(form.get('companyPhone') || '').trim(),
+                  companyEmail: String(form.get('companyEmail') || auth.userContext?.email || '').trim().toLowerCase(),
+                  currencyCode: String(form.get('currencyCode') || 'COP').trim().toUpperCase(),
+                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+                  primaryBranchName: String(form.get('primaryBranchName') || 'Principal').trim(),
+                })
+
+                await signOut()
+                auth.setPendingState({
+                  title: 'Solicitud de empresa enviada',
+                  message: `“${result?.company_name || companyName}” quedó pendiente de aprobación por RestOS+. Cuando se apruebe, entrarás como Owner.`,
+                  icon: '🏢',
+                })
+                auth.setMode('pending')
+              })
+            }}>
+              <div className="field"><label>Nombre comercial *</label><input name="companyName" defaultValue={auth.userContext?.onboarding?.company_name || ''} /></div>
+              <div className="field"><label>Razón social</label><input name="legalName" /></div>
+              <div className="auth-grid-two">
+                <div className="field"><label>NIT / Identificación fiscal</label><input name="taxId" /></div>
+                <div className="field"><label>Dígito de verificación</label><input name="verificationDigit" /></div>
+              </div>
+              <div className="auth-grid-two">
+                <div className="field"><label>Régimen fiscal</label><input name="taxRegime" /></div>
+                <div className="field"><label>Responsabilidades fiscales</label><input name="taxResponsibilities" /></div>
+              </div>
+              <div className="field"><label>Dirección</label><input name="address" /></div>
+              <div className="auth-grid-two">
+                <div className="field"><label>Ciudad</label><input name="city" /></div>
+                <div className="field"><label>Departamento / Estado</label><input name="region" /></div>
+              </div>
+              <div className="auth-grid-two">
+                <div className="field"><label>País *</label><input name="country" /></div>
+                <div className="field">
+                  <label>Moneda</label>
+                  <select name="currencyCode" defaultValue="COP">
+                    <option value="COP">COP — Peso colombiano</option>
+                    <option value="EUR">EUR — Euro</option>
+                    <option value="USD">USD — Dólar estadounidense</option>
+                    <option value="GBP">GBP — Libra esterlina</option>
+                  </select>
+                </div>
+              </div>
+              <div className="auth-grid-two">
+                <div className="field"><label>Teléfono empresa</label><input name="companyPhone" type="tel" /></div>
+                <div className="field"><label>Correo empresa</label><input name="companyEmail" type="email" defaultValue={auth.userContext?.email || ''} /></div>
+              </div>
+              <div className="field"><label>Nombre de la primera sucursal</label><input name="primaryBranchName" defaultValue="Principal" /></div>
+              <div className="auth-error">{error}</div>
+              <button className="auth-btn" disabled={busy}>{busy ? 'Enviando solicitud…' : 'Solicitar creación de empresa'}</button>
+            </form>
+          ) : (
+            <form onSubmit={(event) => {
+              event.preventDefault()
+              const joinCode = String(new FormData(event.currentTarget).get('joinCode') || '').trim().toUpperCase()
+              if (!joinCode) return setError('Escribe el código de empresa.')
+
+              perform(async () => {
+                const result = await submitCompanyAccessRequest(joinCode)
+                await signOut()
+                auth.setPendingState({
+                  title: 'Solicitud de acceso enviada',
+                  message: `La solicitud fue enviada a “${result?.company_name || 'la empresa'}”. Su Owner debe asignarte rol y sucursal.`,
+                  icon: '⏳',
+                })
+                auth.setMode('pending')
+              })
+            }}>
+              <div className="notice">
+                Solicita al Owner de tu empresa el <b>código de empresa</b>. El código no concede acceso por sí solo: únicamente envía tu solicitud.
+              </div>
+              <div className="field">
+                <label>Código de empresa *</label>
+                <input name="joinCode" autoCapitalize="characters" placeholder="Ej. A1B2C3D4" />
+              </div>
+              <div className="auth-error">{error}</div>
+              <button className="auth-btn" disabled={busy}>{busy ? 'Enviando solicitud…' : 'Solicitar acceso'}</button>
+            </form>
+          )}
+
+          <button className="auth-btn secondary" disabled={busy} onClick={auth.logout}>Cerrar sesión</button>
+        </div>
+      </AuthFrame>
+    )
+  }
+
   const screens = {
     login: (
       <div className="auth-view active">
@@ -164,7 +308,27 @@ export default function AuthGateway({ children }) {
     register: (
       <div className="auth-view active">
         <h1>Crear cuenta</h1>
-        <p className="sub">El registro identifica a la persona, pero no concede acceso hasta que un administrador la apruebe y asigne un rol.</p>
+        <p className="sub">Primero crea tu usuario. Después de verificar el correo, RestOS+ enviará la solicitud a la empresa correspondiente.</p>
+
+        <div className="auth-account-type">
+          <button
+            type="button"
+            className={registrationMode === 'company' ? 'active' : ''}
+            onClick={() => setRegistrationMode('company')}
+          >
+            <b>🏢 Crear una empresa</b>
+            <small>Registraré una empresa nueva y seré su Owner.</small>
+          </button>
+          <button
+            type="button"
+            className={registrationMode === 'join' ? 'active' : ''}
+            onClick={() => setRegistrationMode('join')}
+          >
+            <b>🔑 Unirme a una empresa</b>
+            <small>Ya tengo un código de empresa.</small>
+          </button>
+        </div>
+
         <form onSubmit={(event) => {
           event.preventDefault()
           const form = new FormData(event.currentTarget)
@@ -175,31 +339,114 @@ export default function AuthGateway({ children }) {
             username: String(form.get('username') || '').trim(),
             password: String(form.get('password') || ''),
             password2: String(form.get('password2') || ''),
+            onboardingMode: registrationMode,
+            companyName: String(form.get('companyName') || '').trim(),
+            legalName: String(form.get('legalName') || '').trim(),
+            taxId: String(form.get('taxId') || '').trim(),
+            verificationDigit: String(form.get('verificationDigit') || '').trim(),
+            taxRegime: String(form.get('taxRegime') || '').trim(),
+            taxResponsibilities: String(form.get('taxResponsibilities') || '').trim(),
+            address: String(form.get('address') || '').trim(),
+            city: String(form.get('city') || '').trim(),
+            region: String(form.get('region') || '').trim(),
+            country: String(form.get('country') || '').trim(),
+            companyPhone: String(form.get('companyPhone') || '').trim(),
+            companyEmail: String(form.get('companyEmail') || '').trim().toLowerCase(),
+            currencyCode: String(form.get('currencyCode') || 'COP').trim().toUpperCase(),
+            primaryBranchName: String(form.get('primaryBranchName') || 'Principal').trim(),
+            joinCode: String(form.get('joinCode') || '').trim().toUpperCase(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
           }
-          if (Object.values(payload).some((value) => !value)) return setError('Completa todos los campos.')
+
+          if (!payload.fullName || !payload.email || !payload.phone || !payload.username || !payload.password || !payload.password2) {
+            return setError('Completa todos los datos personales.')
+          }
           if (!validEmail(payload.email)) return setError('Introduce un correo válido.')
           if (payload.username.length < 3) return setError('El nombre de usuario debe tener al menos 3 caracteres.')
           if (payload.password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres.')
           if (payload.password !== payload.password2) return setError('Las contraseñas no coinciden.')
+
+          if (registrationMode === 'company') {
+            if (!payload.companyName) return setError('Escribe el nombre comercial de la empresa.')
+            if (!payload.country) return setError('Escribe el país de la empresa.')
+            if (!payload.companyEmail) payload.companyEmail = payload.email
+            if (!validEmail(payload.companyEmail)) return setError('Introduce un correo válido para la empresa.')
+          } else if (!payload.joinCode) {
+            return setError('Escribe el código de la empresa a la que quieres ingresar.')
+          }
+
           perform(async () => {
             const { data, error: signupError } = await signUpWithPassword(payload)
             if (signupError) throw signupError
-            setRegistration({ email: payload.email })
+            const { password, password2, ...safeRegistration } = payload
+            setRegistration(safeRegistration)
             setSignupCode('')
             if (data.session) await signOut()
             setScreen('verifySignup')
           })
         }}>
-          <div className="field"><label>Nombre completo</label><input name="fullName" autoComplete="name" /></div>
-          <div className="field"><label>Correo electrónico</label><input name="email" type="email" autoComplete="email" /></div>
-          <div className="field"><label>Celular</label><input name="phone" type="tel" autoComplete="tel" placeholder="+356 ..." /></div>
-          <div className="field"><label>Nombre de usuario</label><input name="username" autoComplete="username" /></div>
-          <div className="auth-grid-two">
-            <div className="field"><label>Contraseña</label><input name="password" type="password" autoComplete="new-password" /></div>
-            <div className="field"><label>Confirmar</label><input name="password2" type="password" autoComplete="new-password" /></div>
+          <div className="auth-form-section">
+            <h3>1. Tus datos</h3>
+            <div className="field"><label>Nombre completo *</label><input name="fullName" autoComplete="name" /></div>
+            <div className="field"><label>Correo electrónico *</label><input name="email" type="email" autoComplete="email" /></div>
+            <div className="auth-grid-two">
+              <div className="field"><label>Celular *</label><input name="phone" type="tel" autoComplete="tel" placeholder="+57 ..." /></div>
+              <div className="field"><label>Nombre de usuario *</label><input name="username" autoComplete="username" /></div>
+            </div>
+            <div className="auth-grid-two">
+              <div className="field"><label>Contraseña *</label><input name="password" type="password" autoComplete="new-password" /></div>
+              <div className="field"><label>Confirmar *</label><input name="password2" type="password" autoComplete="new-password" /></div>
+            </div>
           </div>
+
+          {registrationMode === 'company' ? (
+            <div className="auth-form-section">
+              <h3>2. Datos de la empresa</h3>
+              <div className="field"><label>Nombre comercial *</label><input name="companyName" placeholder="Ej. Restaurante La Esquina" /></div>
+              <div className="field"><label>Razón social</label><input name="legalName" /></div>
+              <div className="auth-grid-two">
+                <div className="field"><label>NIT / Identificación fiscal</label><input name="taxId" /></div>
+                <div className="field"><label>Dígito de verificación</label><input name="verificationDigit" /></div>
+              </div>
+              <div className="auth-grid-two">
+                <div className="field"><label>Régimen fiscal</label><input name="taxRegime" /></div>
+                <div className="field"><label>Responsabilidades fiscales</label><input name="taxResponsibilities" /></div>
+              </div>
+              <div className="field"><label>Dirección</label><input name="address" /></div>
+              <div className="auth-grid-two">
+                <div className="field"><label>Ciudad</label><input name="city" /></div>
+                <div className="field"><label>Departamento / Estado</label><input name="region" /></div>
+              </div>
+              <div className="auth-grid-two">
+                <div className="field"><label>País *</label><input name="country" /></div>
+                <div className="field">
+                  <label>Moneda</label>
+                  <select name="currencyCode" defaultValue="COP">
+                    <option value="COP">COP — Peso colombiano</option>
+                    <option value="EUR">EUR — Euro</option>
+                    <option value="USD">USD — Dólar estadounidense</option>
+                    <option value="GBP">GBP — Libra esterlina</option>
+                  </select>
+                </div>
+              </div>
+              <div className="auth-grid-two">
+                <div className="field"><label>Teléfono empresa</label><input name="companyPhone" type="tel" /></div>
+                <div className="field"><label>Correo empresa</label><input name="companyEmail" type="email" placeholder="Puede ser el mismo correo personal" /></div>
+              </div>
+              <div className="field"><label>Primera sucursal</label><input name="primaryBranchName" defaultValue="Principal" /></div>
+            </div>
+          ) : (
+            <div className="auth-form-section">
+              <h3>2. Empresa</h3>
+              <div className="notice">
+                Pide al Owner el código de empresa. Después de verificar tu correo, tu solicitud aparecerá en <b>Personal → Solicitudes pendientes</b>.
+              </div>
+              <div className="field"><label>Código de empresa *</label><input name="joinCode" autoCapitalize="characters" placeholder="Ej. A1B2C3D4" /></div>
+            </div>
+          )}
+
           <div className="auth-error">{error}</div>
-          <button className="auth-btn" disabled={busy || !auth.isSupabaseConfigured}>{busy ? 'Creando cuenta…' : 'Crear cuenta y enviar código'}</button>
+          <button className="auth-btn" disabled={busy || !auth.isSupabaseConfigured}>{busy ? 'Creando cuenta…' : 'Crear cuenta y verificar correo'}</button>
         </form>
         <button className="auth-btn secondary" onClick={() => setScreen('login')}>Volver al ingreso</button>
       </div>
@@ -217,12 +464,42 @@ export default function AuthGateway({ children }) {
           perform(async () => {
             const { error: verifyError } = await verifySignupOtp(registration.email, signupCode)
             if (verifyError) throw verifyError
-            await signOut()
-            auth.setPendingState({
-              title: 'Correo verificado',
-              message: 'Tu identidad por correo quedó verificada. La cuenta permanece pendiente hasta que un administrador la apruebe y asigne un rol.',
-              icon: '✓',
-            })
+
+            if (registration?.onboardingMode === 'company') {
+              const result = await submitCompanyRegistration({
+                companyName: registration.companyName,
+                legalName: registration.legalName,
+                taxId: registration.taxId,
+                verificationDigit: registration.verificationDigit,
+                taxRegime: registration.taxRegime,
+                taxResponsibilities: registration.taxResponsibilities,
+                address: registration.address,
+                city: registration.city,
+                region: registration.region,
+                country: registration.country,
+                companyPhone: registration.companyPhone,
+                companyEmail: registration.companyEmail || registration.email,
+                currencyCode: registration.currencyCode,
+                timezone: registration.timezone,
+                primaryBranchName: registration.primaryBranchName,
+              })
+
+              await signOut()
+              auth.setPendingState({
+                title: 'Solicitud de empresa enviada',
+                message: `“${result?.company_name || registration.companyName}” quedó pendiente de aprobación por RestOS+. Al aprobarla se crearán automáticamente la empresa, la sucursal principal y tu acceso de Owner.`,
+                icon: '🏢',
+              })
+            } else {
+              const result = await submitCompanyAccessRequest(registration.joinCode)
+              await signOut()
+              auth.setPendingState({
+                title: 'Solicitud de acceso enviada',
+                message: `Tu solicitud fue enviada a “${result?.company_name || 'la empresa'}”. Su Owner debe asignarte un rol y una sucursal.`,
+                icon: '⏳',
+              })
+            }
+
             auth.setMode('pending')
           })
         }}>{busy ? 'Verificando…' : 'Verificar correo'}</button>
