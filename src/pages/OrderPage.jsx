@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
+import PaymentMethodPicker, { paymentMethodLabel } from '../components/payments/PaymentMethodPicker.jsx'
 import InvoiceCustomerFields, {
   invoiceCustomerFromOrders,
   validateInvoiceCustomer,
@@ -777,14 +778,6 @@ export default function OrderPage({ onNavigate }) {
     const customerResult = validateInvoiceCustomer(chargeInvoiceCustomer)
     if (!customerResult.ok) return window.alert(customerResult.message)
 
-    const invoiceText = customerResult.customer.requested
-      ? `${customerResult.customer.fullName} · ${customerResult.customer.documentType} ${customerResult.customer.documentNumber}`
-      : 'Consumidor final'
-    const confirmed = window.confirm(
-      `¿Confirmar cobro de ${formatMoney(amount)} para ${paymentAccountLabel}?\n\nMétodo: ${chargeMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}\nFactura: ${invoiceText}`,
-    )
-    if (!confirmed) return
-
     setChargeBusy(true)
     const result = await recordPayments(allocations, chargeMethod, customerResult.customer)
     setChargeBusy(false)
@@ -1305,62 +1298,91 @@ export default function OrderPage({ onNavigate }) {
       )}
 
       {showCharge && (
-        <div className="modal open" onClick={() => !chargeBusy && setShowCharge(false)}>
-          <div className="modal-card order-payment-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="section-title">
+        <div className="modal open payment-checkout-modal" onClick={() => !chargeBusy && setShowCharge(false)}>
+          <div className="modal-card order-payment-modal payment-checkout-card" onClick={(event) => event.stopPropagation()}>
+            <div className="payment-checkout-header">
               <div>
-                <h3>💳 Cobrar · {paymentAccountLabel}</h3>
-                <p className="muted">{orderMode === 'table' ? 'Cuenta consolidada de la mesa' : 'Pedido activo'}</p>
+                <span className="payment-checkout-kicker">COBRO</span>
+                <h3>{paymentAccountLabel}</h3>
+                <p>{orderMode === 'table' ? 'Cuenta consolidada de la mesa' : 'Pedido activo'}</p>
               </div>
-              <button className="btn" disabled={chargeBusy} onClick={() => setShowCharge(false)}>×</button>
+              <button className="payment-close" disabled={chargeBusy} onClick={() => setShowCharge(false)}>×</button>
             </div>
 
-            <div className="order-payment-totals">
-              <div><span>Total</span><strong>{formatMoney(paymentAccountTotal)}</strong></div>
-              <div><span>Pagado</span><strong>{formatMoney(paymentAccountPaid)}</strong></div>
-              <div className="balance"><span>Saldo</span><strong>{formatMoney(paymentAccountBalance)}</strong></div>
+            <div className="order-payment-totals payment-checkout-totals">
+              <div><span>Total cuenta</span><strong>{formatMoney(paymentAccountTotal)}</strong></div>
+              <div><span>Ya pagado</span><strong>{formatMoney(paymentAccountPaid)}</strong></div>
+              <div className="balance"><span>Saldo pendiente</span><strong>{formatMoney(paymentAccountBalance)}</strong></div>
             </div>
 
             {draft.length > 0 && (
               <div className="notice warn">
-                Hay productos sin enviar por {formatMoney(draftTotal)}. No están incluidos en este cobro hasta que los envíes a preparación.
+                Hay productos sin enviar por {formatMoney(draftTotal)}. No forman parte del cobro hasta enviarlos a preparación.
               </div>
             )}
 
-            <div className="settings-form">
-              <label>
-                <span>Importe a cobrar</span>
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div>
+                  <span>PASO 1</span>
+                  <b>Valor a cobrar</b>
+                </div>
+                <div className="order-payment-shortcuts">
+                  <button className="mini" type="button" onClick={() => setChargeAmount((paymentAccountBalance / 2).toFixed(2))}>½ saldo</button>
+                  <button className="mini" type="button" onClick={() => setChargeAmount(paymentAccountBalance.toFixed(2))}>Saldo completo</button>
+                </div>
+              </div>
+              <div className="payment-amount-field">
+                <span>{state.settings.currency || ''}</span>
                 <input
                   inputMode="decimal"
                   value={chargeAmount}
                   onChange={(event) => setChargeAmount(event.target.value)}
                 />
-              </label>
-
-              <label>
-                <span>Método de pago</span>
-                <select value={chargeMethod} onChange={(event) => setChargeMethod(event.target.value)}>
-                  <option value="card">Tarjeta</option>
-                  <option value="cash">Efectivo</option>
-                </select>
-              </label>
+              </div>
             </div>
 
-            <InvoiceCustomerFields
-              value={chargeInvoiceCustomer}
-              onChange={setChargeInvoiceCustomer}
-              disabled={chargeBusy}
-            />
-
-            <div className="order-payment-shortcuts">
-              <button className="btn" onClick={() => setChargeAmount((paymentAccountBalance / 2).toFixed(2))}>½ saldo</button>
-              <button className="btn" onClick={() => setChargeAmount(paymentAccountBalance.toFixed(2))}>Saldo completo</button>
-              <button className="btn" onClick={openSplitModal}>✂ Dividir cuenta</button>
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div>
+                  <span>PASO 2</span>
+                  <b>Método de pago</b>
+                </div>
+              </div>
+              <PaymentMethodPicker
+                value={chargeMethod}
+                onChange={setChargeMethod}
+                disabled={chargeBusy}
+              />
             </div>
 
-            <button className="btn primary full" disabled={chargeBusy} onClick={confirmCharge}>
-              {chargeBusy ? 'Registrando cobro…' : 'Confirmar cobro'}
-            </button>
+            <div className="payment-checkout-section">
+              <div className="payment-checkout-section-head">
+                <div>
+                  <span>PASO 3</span>
+                  <b>Datos de facturación</b>
+                </div>
+                <small>Opcional · consumidor final si no se activa</small>
+              </div>
+              <InvoiceCustomerFields
+                value={chargeInvoiceCustomer}
+                onChange={setChargeInvoiceCustomer}
+                disabled={chargeBusy}
+              />
+            </div>
+
+            <div className="payment-checkout-footer">
+              <button className="btn payment-split-button" type="button" disabled={chargeBusy} onClick={openSplitModal}>
+                ✂ Dividir cuenta
+              </button>
+              <div className="payment-confirm-summary">
+                <small>{paymentMethodLabel(chargeMethod)}</small>
+                <strong>{formatMoney(Number(String(chargeAmount || 0).replace(',', '.')) || 0)}</strong>
+              </div>
+              <button className="btn primary payment-confirm-button" disabled={chargeBusy} onClick={confirmCharge}>
+                {chargeBusy ? 'Registrando cobro…' : 'Confirmar y generar factura'}
+              </button>
+            </div>
           </div>
         </div>
       )}
