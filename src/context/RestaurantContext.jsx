@@ -5,7 +5,6 @@ import { useAuth } from './AuthContext.jsx'
 import {
   createTable as createRemoteTable,
   createZone as createRemoteZone,
-  importLocalStructure,
   loadRestaurantStructure,
   updateTable as updateRemoteTable,
   updateZone as updateRemoteZone,
@@ -771,21 +770,6 @@ export function RestaurantProvider({ children }) {
       ])
       let structure = initialStructure
       applyRemoteSettings(remoteSettings)
-
-      const localZones = initialLocalStructure.current.zones.filter((zone) => zone.active !== false)
-      const localTables = initialLocalStructure.current.tables.filter((table) => table.active !== false)
-
-      if (
-        structure.location
-        && (structure.locations || []).length === 1
-        && structure.zones.length === 0
-        && structure.tables.length === 0
-        && localZones.length > 0
-        && auth.can('tables.manage')
-      ) {
-        await importLocalStructure(structure.location.id, localZones, localTables)
-        structure = await loadRestaurantStructure(restaurantId, structure.location.id)
-      }
 
       setLocations(structure.locations || [])
       setActiveLocation(structure.location)
