@@ -4334,3 +4334,12 @@ html, body {
     min-height:50px;
   }
 }
+
+.order-payment-confirm-footer{
+  grid-template-columns:minmax(120px,.55fr) minmax(240px,1fr);
+}
+@media(max-width:650px){
+  .order-payment-confirm-footer{
+    grid-template-columns:1fr;
+  }
+}
