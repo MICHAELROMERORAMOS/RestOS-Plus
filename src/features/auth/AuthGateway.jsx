@@ -298,7 +298,7 @@ export default function AuthGateway({ children }) {
       </div>
     ),
     register: (
-      <div className="auth-view active">
+      <div className="auth-view active auth-register-view">
         <h1>Crear cuenta</h1>
         <p className="sub">Primero crea tu usuario. Después de verificar el correo, RestOS+ enviará la solicitud a la empresa correspondiente.</p>
 
