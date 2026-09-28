@@ -749,6 +749,7 @@ export function RestaurantProvider({ children }) {
   const refreshRemoteData = useCallback(async (locationIdOverride = null) => {
     if (auth.isDesignMode) {
       setProducts(DEMO_PRODUCTS)
+      setAllergenCatalog([])
       setRemoteError('')
       return { ok: true }
     }
@@ -800,6 +801,7 @@ export function RestaurantProvider({ children }) {
         setProducts(catalog.products)
         setMenuCategories(catalog.categories)
         setMenuStations(catalog.stations)
+        setAllergenCatalog(catalog.allergenCatalog || [])
         setInventoryAvailability(availability)
         setTableOrderSessions(tableSessions)
         applyOperationalOrders(operational.orders, operational.summary)
@@ -807,6 +809,7 @@ export function RestaurantProvider({ children }) {
         setProducts([])
         setMenuCategories([])
         setMenuStations([])
+        setAllergenCatalog([])
         setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
         setTableOrderSessions([])
         applyOperationalOrders([])
