@@ -5369,3 +5369,465 @@ html, body {
     grid-template-columns:1fr;
   }
 }
+
+
+/* Order allergy safety flow */
+.order-allergy-button{
+  white-space:nowrap;
+  border-color:#d9b3b3;
+  color:#8f3030;
+  background:#fffafa;
+}
+
+.order-allergy-button:hover{
+  border-color:#c77f7f;
+  background:#fff3f3;
+}
+
+.order-allergy-button.active{
+  border-color:#b54242;
+  color:#fff;
+  background:#b54242;
+  box-shadow:0 5px 15px #9f2f2f2b;
+}
+
+.order-active-allergy-banner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:10px 0 4px;
+  padding:10px 12px;
+  border:1px solid #d88c8c;
+  border-radius:13px;
+  background:#fff1f1;
+  color:#812626;
+}
+
+.order-active-allergy-banner>div{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.order-active-allergy-banner strong{
+  font-size:11px;
+  letter-spacing:.035em;
+}
+
+.order-active-allergy-banner span{
+  font-size:12px;
+  font-weight:850;
+}
+
+.order-active-allergy-banner button{
+  flex:0 0 auto;
+  border:0;
+  border-radius:9px;
+  padding:7px 10px;
+  color:#812626;
+  background:#fff;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.order-allergy-modal{
+  padding:18px;
+}
+
+.order-allergy-modal-card{
+  width:min(940px,100%);
+  max-height:calc(100dvh - 36px);
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+.order-allergy-modal-head{
+  flex:0 0 auto;
+  margin-bottom:12px;
+}
+
+.order-allergy-modal-head h3{
+  margin:4px 0 3px;
+}
+
+.order-allergy-modal-head p{
+  max-width:720px;
+  margin:0;
+}
+
+.order-allergy-modal-scroll{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:4px;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+
+.order-allergy-modal-footer{
+  flex:0 0 auto;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:9px;
+  align-items:center;
+  padding-top:13px;
+  margin-top:13px;
+  border-top:1px solid var(--line);
+}
+
+.order-allergy-modal-footer>div{
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+
+.order-allergy-modal-footer>div span{
+  font-size:12px;
+  font-weight:900;
+}
+
+.order-allergy-modal-footer>div small{
+  color:var(--muted);
+  font-size:10px;
+}
+
+.order-allergy-selector{
+  display:grid;
+  gap:13px;
+}
+
+.order-allergy-selector-intro{
+  padding:12px 13px;
+  border:1px solid #ead0d0;
+  border-radius:13px;
+  background:#fff8f8;
+}
+
+.order-allergy-selector-intro strong{
+  color:#812626;
+  font-size:13px;
+}
+
+.order-allergy-selector-intro p{
+  margin:4px 0 0;
+  color:#6e5757;
+  font-size:11px;
+  line-height:1.45;
+}
+
+.order-allergy-options{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+}
+
+.order-allergy-option{
+  min-width:0;
+  padding:11px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#fff;
+  transition:border-color 140ms ease,background 140ms ease,box-shadow 140ms ease;
+}
+
+.order-allergy-option.selected{
+  border-color:#cf8585;
+  background:#fff6f6;
+  box-shadow:inset 3px 0 0 #b54242;
+}
+
+.order-allergy-main-check{
+  display:grid;
+  grid-template-columns:auto 34px minmax(0,1fr);
+  align-items:center;
+  gap:9px;
+  cursor:pointer;
+}
+
+.order-allergy-main-check input{
+  width:18px;
+  height:18px;
+  margin:0;
+  accent-color:#b54242;
+}
+
+.order-allergy-option-icon{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  background:#f1f3f2;
+  font-size:18px;
+}
+
+.order-allergy-main-check>span:last-child{
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+
+.order-allergy-main-check b{
+  font-size:12px;
+}
+
+.order-allergy-main-check small{
+  color:var(--muted);
+  font-size:9px;
+}
+
+.order-allergy-subtypes{
+  display:grid;
+  gap:7px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px dashed #e4cccc;
+}
+
+.order-allergy-subtypes>span{
+  color:#735858;
+  font-size:9px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+.order-allergy-subtypes>div{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.order-allergy-subtypes label{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:30px;
+  padding:5px 8px;
+  border:1px solid #e1d0d0;
+  border-radius:999px;
+  background:#fff;
+  cursor:pointer;
+}
+
+.order-allergy-subtypes label.selected{
+  border-color:#c77f7f;
+  color:#812626;
+  background:#fbe7e7;
+}
+
+.order-allergy-subtypes input{
+  width:14px;
+  height:14px;
+  margin:0;
+  accent-color:#b54242;
+}
+
+.order-allergy-subtypes label span{
+  font-size:9px;
+  font-weight:850;
+}
+
+.order-allergy-safety-note{
+  padding:11px 12px;
+  border-radius:11px;
+  background:#eef3f0;
+  color:#53665d;
+  font-size:10px;
+  line-height:1.5;
+}
+
+@keyframes allergy-product-attention{
+  0%,100%{box-shadow:0 0 0 0 #bd333300}
+  50%{box-shadow:0 0 0 4px #bd33332e}
+}
+
+.order-menu-product.allergy-conflict-contains{
+  border:2px solid #c33d3d;
+  background:#fff5f5;
+  animation:allergy-product-attention .7s ease-in-out 3;
+}
+
+.order-menu-product.allergy-conflict-may{
+  border:2px solid #c9902e;
+  background:#fffbf1;
+}
+
+.order-menu-product.allergy-aware{
+  border-color:#ddbcbc;
+}
+
+.product-allergy-conflict,
+.product-allergy-aware-label{
+  width:100%;
+  padding:6px 8px;
+  border-radius:9px;
+  font-size:9px;
+  font-weight:950;
+  line-height:1.25;
+  text-align:left;
+}
+
+.product-allergy-conflict.contains{
+  color:#8d2424;
+  background:#f8dede;
+}
+
+.product-allergy-conflict.may-contain{
+  color:#7e5700;
+  background:#fff0c9;
+}
+
+.product-allergy-aware-label{
+  color:#7b4d4d;
+  background:#f7eded;
+}
+
+.draft-allergy-warning,
+.sent-allergy-warning{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  margin-top:5px;
+  padding:5px 7px;
+  border-radius:8px;
+  font-size:9px!important;
+  font-weight:950!important;
+  line-height:1.3;
+}
+
+.draft-allergy-warning.contains,
+.sent-allergy-warning.contains{
+  color:#8c2323!important;
+  background:#f8dddd;
+}
+
+.draft-allergy-warning.may_contain,
+.sent-allergy-warning.may_contain{
+  color:#7d5700!important;
+  background:#fff0c8;
+}
+
+.draft-allergy-warning.declared,
+.sent-allergy-warning.declared{
+  color:#744a4a!important;
+  background:#f5ebeb;
+}
+
+/* Kitchen / Bar allergy emphasis */
+@keyframes kds-allergy-attention{
+  0%,100%{box-shadow:0 0 0 0 #c43d3d00,var(--shadow)}
+  50%{box-shadow:0 0 0 5px #c43d3d30,var(--shadow)}
+}
+
+.kds-ticket.has-allergy{
+  border:2px solid #c43d3d;
+  animation:kds-allergy-attention .75s ease-in-out 3;
+}
+
+.kds-allergy-banner{
+  display:grid;
+  gap:5px;
+  margin:10px 0 12px;
+  padding:11px 12px;
+  border:1px solid #d77979;
+  border-radius:11px;
+  color:#7f2020;
+  background:#fff0f0;
+}
+
+.kds-allergy-banner>div{
+  display:flex;
+  gap:7px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.kds-allergy-banner strong{
+  font-size:11px;
+  letter-spacing:.04em;
+}
+
+.kds-allergy-banner span{
+  font-size:12px;
+  font-weight:950;
+}
+
+.kds-allergy-banner small{
+  color:#7d4545;
+  font-size:9px;
+  font-weight:850;
+}
+
+.kds-line-allergy{
+  display:block;
+  margin-top:5px;
+  padding:6px 7px;
+  border-radius:8px;
+  font-size:9px!important;
+  font-weight:950!important;
+  line-height:1.3;
+}
+
+.kds-line-allergy.contains{
+  color:#8b1f1f!important;
+  background:#f7d6d6;
+}
+
+.kds-line-allergy.may_contain{
+  color:#735000!important;
+  background:#ffedbd;
+}
+
+.kds-line-allergy.declared{
+  color:#773c3c!important;
+  background:#f4e5e5;
+}
+
+@media(max-width:700px){
+  .order-allergy-options{
+    grid-template-columns:1fr;
+  }
+
+  .order-allergy-modal{
+    padding:9px;
+  }
+
+  .order-allergy-modal-card{
+    width:100%;
+    max-height:calc(100dvh - 18px);
+    padding:17px;
+  }
+
+  .order-allergy-modal-footer{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .order-allergy-modal-footer>div{
+    grid-column:1 / -1;
+  }
+
+  .order-tools.order-tools-compact .order-allergy-button{
+    min-width:max-content;
+  }
+}
+
+@media(max-width:480px){
+  .order-active-allergy-banner{
+    align-items:flex-start;
+  }
+
+  .order-allergy-modal-footer{
+    grid-template-columns:1fr;
+  }
+
+  .order-allergy-modal-footer>div{
+    grid-column:auto;
+  }
+}

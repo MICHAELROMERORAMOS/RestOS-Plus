@@ -5,6 +5,9 @@ import DeliveryCourierSelector, {
   EMPTY_DELIVERY_COURIER,
   validateDeliveryCourierForm,
 } from '../components/delivery/DeliveryCourierSelector.jsx'
+import OrderAllergySelector, {
+  normalizeOrderAllergySelection,
+} from '../components/orders/OrderAllergySelector.jsx'
 import InvoiceCustomerFields, {
   invoiceCustomerFromOrders,
   validateInvoiceCustomer,
@@ -47,6 +50,37 @@ const availabilityIcon = {
   unavailable: '⚫',
 }
 
+function sentItemAllergyNotice(item) {
+  const context = item?.allergyContext || {}
+  const declared = Array.isArray(context.declared) ? context.declared : []
+  const conflicts = Array.isArray(context.conflicts) ? context.conflicts : []
+
+  if (!declared.length) return null
+
+  const direct = conflicts.filter((conflict) => conflict.productLevel === 'contains')
+  const possible = conflicts.filter((conflict) => conflict.productLevel === 'may_contain')
+  const names = (items) => items.map((item) => item.nameEs || 'Alérgeno').join(' · ')
+
+  if (direct.length) {
+    return {
+      level: 'contains',
+      text: `🚨 CONFLICTO: CONTIENE ${names(direct)}`,
+    }
+  }
+
+  if (possible.length) {
+    return {
+      level: 'may_contain',
+      text: `⚠ PUEDE CONTENER ${names(possible)}`,
+    }
+  }
+
+  return {
+    level: 'declared',
+    text: `⚠ Pedido con alergia declarada: ${names(declared)}`,
+  }
+}
+
 export default function OrderPage({ onNavigate }) {
   const restaurant = useRestaurant()
   const auth = useAuth()
@@ -56,6 +90,7 @@ export default function OrderPage({ onNavigate }) {
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const {
     products, formatMoney, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft,
+    allergenCatalog, orderAllergies, saveCurrentOrderAllergies,
     pager, setPager, quickCustomerName, setQuickCustomerName, setOrderMode,
     updateQuickOrderIdentity, addProduct, changeDraftQuantity, removeDraft, updateDraftNote, sendDraft,
     voidPaidTableAccount, voidRequestsVersion,
@@ -67,6 +102,9 @@ export default function OrderPage({ onNavigate }) {
   const [search, setSearch] = useState('')
   const [noteLine, setNoteLine] = useState(null)
   const [noteText, setNoteText] = useState('')
+  const [showAllergyModal, setShowAllergyModal] = useState(false)
+  const [allergyDraft, setAllergyDraft] = useState([])
+  const [allergySaving, setAllergySaving] = useState(false)
   const [tableAction, setTableAction] = useState(null)
   const [targetZoneId, setTargetZoneId] = useState('')
   const [targetTableId, setTargetTableId] = useState('')
@@ -115,6 +153,19 @@ export default function OrderPage({ onNavigate }) {
     && (category === 'all' || product.category === category)
     && product.name.toLowerCase().includes(search.toLowerCase())
   )), [products, category, search])
+
+  const selectedAllergyDetails = useMemo(() => (
+    normalizeOrderAllergySelection(orderAllergies).map((selection) => {
+      const allergen = (allergenCatalog || []).find((candidate) => (
+        String(candidate.id) === String(selection.allergenId)
+      ))
+      return allergen ? { ...allergen, subtypeIds: selection.subtypeIds } : null
+    }).filter(Boolean)
+  ), [orderAllergies, allergenCatalog])
+
+  const declaredAllergyLabel = selectedAllergyDetails
+    .map((allergen) => allergen.nameEs)
+    .join(' · ')
 
   const inventoryOrderState = useMemo(() => {
     const availabilityByProduct = inventoryAvailability?.byProduct || {}
@@ -193,12 +244,112 @@ export default function OrderPage({ onNavigate }) {
     }
   }
 
+  function allergyStatusForProduct(productOrId) {
+    const product = typeof productOrId === 'object'
+      ? productOrId
+      : products.find((candidate) => String(candidate.id) === String(productOrId))
+
+    if (!product || !orderAllergies.length) {
+      return { level: 'none', conflicts: [] }
+    }
+
+    const selectedIds = new Set(orderAllergies.map((item) => String(item.allergenId)))
+    const conflicts = (product.allergens || [])
+      .filter((item) => selectedIds.has(String(item.allergenId)))
+      .map((item) => {
+        const catalogItem = (allergenCatalog || []).find((candidate) => (
+          String(candidate.id) === String(item.allergenId)
+        ))
+        return {
+          ...item,
+          nameEs: catalogItem?.nameEs || item.nameEs || 'Alérgeno',
+          icon: catalogItem?.icon || item.icon || '⚠',
+        }
+      })
+
+    if (conflicts.some((item) => item.level === 'contains')) {
+      return { level: 'contains', conflicts }
+    }
+    if (conflicts.length) {
+      return { level: 'may_contain', conflicts }
+    }
+    return { level: 'declared', conflicts: [] }
+  }
+
+  function conflictNames(status) {
+    return status.conflicts.map((item) => item.nameEs).join(' · ')
+  }
+
+  function confirmProductAllergyConflict(product) {
+    const status = allergyStatusForProduct(product)
+    if (!status.conflicts.length) return true
+
+    const direct = status.conflicts.filter((item) => item.level === 'contains')
+    const possible = status.conflicts.filter((item) => item.level === 'may_contain')
+    const parts = []
+
+    if (direct.length) {
+      parts.push(`Este producto está registrado como CONTIENE: ${direct.map((item) => item.nameEs).join(', ')}.`)
+    }
+    if (possible.length) {
+      parts.push(`Este producto está registrado como PUEDE CONTENER: ${possible.map((item) => item.nameEs).join(', ')}.`)
+    }
+
+    return window.confirm(
+      `🚨 ALERTA DE ALERGIA\n\nEl cliente declaró: ${declaredAllergyLabel || 'alergias registradas'}.\n${parts.join('\n')}\n\n¿Agregar el producto de todas formas?`,
+    )
+  }
+
+  function openAllergySelection() {
+    setAllergyDraft(normalizeOrderAllergySelection(orderAllergies))
+    setShowAllergyModal(true)
+  }
+
+  async function saveAllergySelection() {
+    const next = normalizeOrderAllergySelection(allergyDraft)
+
+    if (orderAllergies.length && !next.length) {
+      const confirmed = window.confirm(
+        'Vas a eliminar todas las alergias declaradas de este pedido. ¿Confirmas que el cliente ya no debe tener esta alerta?',
+      )
+      if (!confirmed) return
+    }
+
+    setAllergySaving(true)
+    try {
+      const result = await saveCurrentOrderAllergies(next)
+      if (!result?.ok) {
+        window.alert(result?.message || 'No se pudieron guardar las alergias del pedido.')
+        return
+      }
+
+      setShowAllergyModal(false)
+
+      if (next.length && draft.length) {
+        const selectedIds = new Set(next.map((item) => String(item.allergenId)))
+        const conflictingDraft = draft.filter((line) => {
+          const product = products.find((candidate) => String(candidate.id) === String(line.productId))
+          return (product?.allergens || []).some((item) => selectedIds.has(String(item.allergenId)))
+        })
+
+        if (conflictingDraft.length) {
+          window.alert(
+            `⚠ Revisa el pedido: ${conflictingDraft.map((line) => line.name).join(', ')} coincide con una alergia declarada.`,
+          )
+        }
+      }
+    } finally {
+      setAllergySaving(false)
+    }
+  }
+
   function addAvailableProduct(product) {
     const availability = inventoryStateFor(product.id)
     if (availability.blocked) {
       window.alert('Este producto no tiene insumos suficientes para preparar otra unidad.')
       return
     }
+    if (!confirmProductAllergyConflict(product)) return
     addProduct(product)
   }
 
@@ -208,6 +359,8 @@ export default function OrderPage({ onNavigate }) {
       window.alert('No quedan insumos suficientes para agregar otra unidad de este producto.')
       return
     }
+    const product = products.find((candidate) => String(candidate.id) === String(line.productId))
+    if (product && !confirmProductAllergyConflict(product)) return
     changeDraftQuantity(line.draftId, 1)
   }
 
@@ -947,6 +1100,24 @@ export default function OrderPage({ onNavigate }) {
   }
 
   async function handleSend() {
+    const conflicts = draft
+      .map((line) => ({
+        line,
+        status: allergyStatusForProduct(line.productId),
+      }))
+      .filter(({ status }) => status.conflicts.length)
+
+    if (conflicts.length) {
+      const summary = conflicts
+        .map(({ line, status }) => `• ${line.name}: ${status.level === 'contains' ? 'CONTIENE' : 'PUEDE CONTENER'} ${conflictNames(status)}`)
+        .join('\n')
+
+      const confirmed = window.confirm(
+        `🚨 CONFIRMACIÓN DE ALERGIA ANTES DE COCINA\n\nEl cliente declaró: ${declaredAllergyLabel}.\n\n${summary}\n\nSi continúas, Cocina recibirá el pedido con una alerta visible. ¿Enviar de todas formas?`,
+      )
+      if (!confirmed) return
+    }
+
     const result = await sendDraft({ prepaid: false })
     if (!result.ok) window.alert(result.message)
   }
@@ -1041,9 +1212,27 @@ export default function OrderPage({ onNavigate }) {
               placeholder="Buscar producto…"
               onChange={(event) => setSearch(event.target.value)}
             />
+            <button
+              type="button"
+              className={`btn order-allergy-button ${orderAllergies.length ? 'active' : ''}`}
+              onClick={openAllergySelection}
+            >
+              🚨 Alergias{orderAllergies.length ? ` (${orderAllergies.length})` : ''}
+            </button>
             {orderMode === 'table' && <button className="btn" disabled={!currentTableId} onClick={() => openTableSelector('transfer')}>⇄ Cambiar mesa</button>}
             {orderMode === 'table' && <button className="btn" disabled={!currentOrder} onClick={() => openTableSelector('join')}>⊕ Unir mesa</button>}
           </div>
+
+          {orderAllergies.length > 0 && (
+            <div className="order-active-allergy-banner">
+              <div>
+                <strong>🚨 ALERGIA DECLARADA</strong>
+                <span>{declaredAllergyLabel}</span>
+              </div>
+              <button type="button" onClick={openAllergySelection}>Editar</button>
+            </div>
+          )}
+
           <div className="order-category-filter order-category-filter-compact" role="group" aria-label="Categorías del menú">
             <button
               type="button"
@@ -1085,9 +1274,11 @@ export default function OrderPage({ onNavigate }) {
                     ? 'Sin receta de inventario'
                     : 'Sin control de inventario'
 
+                const allergyStatus = allergyStatusForProduct(product)
+
                 return (
                   <button
-                    className={`product order-menu-product ${availability.blocked ? 'stock-blocked' : availability.controlled ? 'stock-controlled' : ''}`}
+                    className={`product order-menu-product ${availability.blocked ? 'stock-blocked' : availability.controlled ? 'stock-controlled' : ''} ${allergyStatus.level === 'contains' ? 'allergy-conflict-contains' : allergyStatus.level === 'may_contain' ? 'allergy-conflict-may' : orderAllergies.length ? 'allergy-aware' : ''}`}
                     key={product.id}
                     onClick={() => addAvailableProduct(product)}
                     disabled={availability.blocked}
@@ -1095,6 +1286,19 @@ export default function OrderPage({ onNavigate }) {
                     <strong>{product.name}</strong>
                     <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
                     <span className="product-stock-count">{availabilityText}</span>
+                    {allergyStatus.level === 'contains' && (
+                      <span className="product-allergy-conflict contains">
+                        🚨 CONTIENE {conflictNames(allergyStatus)}
+                      </span>
+                    )}
+                    {allergyStatus.level === 'may_contain' && (
+                      <span className="product-allergy-conflict may-contain">
+                        ⚠ PUEDE CONTENER {conflictNames(allergyStatus)}
+                      </span>
+                    )}
+                    {allergyStatus.level === 'declared' && (
+                      <span className="product-allergy-aware-label">⚠ Pedido con alergia</span>
+                    )}
                     {!inventoryControlEnabled && availability.controlled && availability.remaining < 1 && (
                       <span className="product-stock-warning">Se permite vender aunque el stock llegue a negativo</span>
                     )}
@@ -1143,6 +1347,11 @@ export default function OrderPage({ onNavigate }) {
                       <div>
                         <b>{item.quantity} × {item.name}</b>
                         {item.note && <small>↳ {item.note}</small>}
+                        {sentItemAllergyNotice(item) && (
+                          <small className={`sent-allergy-warning ${sentItemAllergyNotice(item).level}`}>
+                            {sentItemAllergyNotice(item).text}
+                          </small>
+                        )}
                         <span className="station">{item.station === 'bar' ? 'BAR' : 'COCINA'} · {item.prepStatus.toUpperCase()} · bloqueado</span>
                       </div>
                       <div className="sent-price">
@@ -1197,6 +1406,13 @@ export default function OrderPage({ onNavigate }) {
                       <div>
                         <b>{line.name}</b>
                         <small>{line.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}{line.note ? ` · ${line.note}` : ''}</small>
+                        {orderAllergies.length > 0 && (
+                          <small className={`draft-allergy-warning ${allergyStatusForProduct(line.productId).level}`}>
+                            {allergyStatusForProduct(line.productId).conflicts.length
+                              ? `${allergyStatusForProduct(line.productId).level === 'contains' ? '🚨 CONFLICTO: CONTIENE' : '⚠ PUEDE CONTENER'} ${conflictNames(allergyStatusForProduct(line.productId))}`
+                              : `⚠ Pedido con alergia: ${declaredAllergyLabel} · informar a Cocina`}
+                          </small>
+                        )}
                         <div className="line-actions">
                           <button className="mini" onClick={() => { setNoteLine(line); setNoteText(line.note || '') }}>✎ Nota</button>
                           <button className="mini danger" onClick={() => removeDraft(line.draftId)}>× Quitar</button>
@@ -1587,6 +1803,45 @@ export default function OrderPage({ onNavigate }) {
           ) : null}
           onClose={() => setShowSplit(false)}
         />
+      )}
+
+      {showAllergyModal && (
+        <div className="modal open order-allergy-modal" onClick={() => !allergySaving && setShowAllergyModal(false)}>
+          <div className="modal-card order-allergy-modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title order-allergy-modal-head">
+              <div>
+                <span className="order-context-type">SEGURIDAD ALIMENTARIA</span>
+                <h3>🚨 Alergias declaradas por el cliente</h3>
+                <p className="muted">
+                  Estas alertas acompañarán el pedido hasta Cocina/Bar y se compararán con los alérgenos registrados en cada producto.
+                </p>
+              </div>
+              <button className="btn" type="button" disabled={allergySaving} onClick={() => setShowAllergyModal(false)}>×</button>
+            </div>
+
+            <div className="order-allergy-modal-scroll">
+              <OrderAllergySelector
+                catalog={allergenCatalog || []}
+                value={allergyDraft}
+                onChange={setAllergyDraft}
+                disabled={allergySaving}
+              />
+            </div>
+
+            <div className="order-allergy-modal-footer">
+              <div>
+                <span>{allergyDraft.length} seleccionada{allergyDraft.length === 1 ? '' : 's'}</span>
+                <small>Seleccionar ninguna significa que no se ha declarado una alergia en este pedido.</small>
+              </div>
+              <button className="btn" type="button" disabled={allergySaving} onClick={() => setShowAllergyModal(false)}>
+                Cancelar
+              </button>
+              <button className="btn primary" type="button" disabled={allergySaving || !allergenCatalog?.length} onClick={saveAllergySelection}>
+                {allergySaving ? 'Guardando…' : 'Guardar alergias'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {noteLine && (

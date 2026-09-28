@@ -6,6 +6,57 @@ import {
   reviewKitchenVoidRequest,
 } from '../services/voidAuthorizationService.js'
 
+function declaredAllergiesForItems(items) {
+  const byId = new Map()
+
+  ;(items || []).forEach((item) => {
+    const declared = Array.isArray(item?.allergyContext?.declared)
+      ? item.allergyContext.declared
+      : []
+
+    declared.forEach((allergen) => {
+      const key = String(allergen.allergenId || allergen.code || allergen.nameEs)
+      if (!byId.has(key)) byId.set(key, allergen)
+    })
+  })
+
+  return Array.from(byId.values())
+}
+
+function itemAllergyAlert(item) {
+  const declared = Array.isArray(item?.allergyContext?.declared)
+    ? item.allergyContext.declared
+    : []
+  const conflicts = Array.isArray(item?.allergyContext?.conflicts)
+    ? item.allergyContext.conflicts
+    : []
+
+  if (!declared.length) return null
+
+  const direct = conflicts.filter((conflict) => conflict.productLevel === 'contains')
+  const possible = conflicts.filter((conflict) => conflict.productLevel === 'may_contain')
+  const names = (values) => values.map((value) => value.nameEs || 'Alérgeno').join(' · ')
+
+  if (direct.length) {
+    return {
+      level: 'contains',
+      text: `🚨 CONFLICTO: ESTE PRODUCTO CONTIENE ${names(direct)}`,
+    }
+  }
+
+  if (possible.length) {
+    return {
+      level: 'may_contain',
+      text: `⚠ ESTE PRODUCTO PUEDE CONTENER ${names(possible)}`,
+    }
+  }
+
+  return {
+    level: 'declared',
+    text: `⚠ PREPARAR PARA CLIENTE CON ALERGIA A ${names(declared)}`,
+  }
+}
+
 export default function StationPage({ station }) {
   const auth = useAuth()
   const {
@@ -319,7 +370,7 @@ export default function StationPage({ station }) {
       <div className="kds kds-large">
         {jobs.length ? jobs.map(({ order, round, items, status }) => (
           <article
-            className={`card ticket kds-ticket kds-order-${order.mode || 'table'}`}
+            className={`card ticket kds-ticket kds-order-${order.mode || 'table'} ${declaredAllergiesForItems(items).length ? 'has-allergy' : ''}`}
             key={`${order.id}-${round.id}`}
           >
             <div className="section-title kds-ticket-head">
@@ -345,6 +396,20 @@ export default function StationPage({ station }) {
               {status === 'new' ? 'NUEVO' : 'PREPARANDO'}
             </div>
 
+            {declaredAllergiesForItems(items).length > 0 && (
+              <div className="kds-allergy-banner">
+                <div>
+                  <strong>🚨 ALERGIA DECLARADA</strong>
+                  <span>
+                    {declaredAllergiesForItems(items).map((allergen) => (
+                      allergen.nameEs || 'Alérgeno'
+                    )).join(' · ')}
+                  </span>
+                </div>
+                <small>Evitar contaminación cruzada · verificar preparación antes de entregar</small>
+              </div>
+            )}
+
             {order.mode !== 'quick' && order.pager && <div className="badge">Pager / turno {order.pager}</div>}
 
             <div className="station-job-items kds-item-list">
@@ -354,6 +419,11 @@ export default function StationPage({ station }) {
                   <div className="kds-product-copy">
                     <b>{item.name}</b>
                     {item.note && <small>↳ {item.note}</small>}
+                    {itemAllergyAlert(item) && (
+                      <small className={`kds-line-allergy ${itemAllergyAlert(item).level}`}>
+                        {itemAllergyAlert(item).text}
+                      </small>
+                    )}
                   </div>
                 </div>
               ))}

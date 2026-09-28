@@ -34,6 +34,7 @@ import {
   releaseEmptyQuickOrderRemote,
   releaseEmptyDeliveryOrderRemote,
   releaseTableOrderSession as releaseTableOrderSessionRemote,
+  saveOrderAllergiesRemote,
   sendOrderRoundRemote,
   subscribeOperationalChanges,
   touchTableOrderSession as touchTableOrderSessionRemote,
@@ -59,9 +60,10 @@ function loadStoredTableDrafts(storageKey) {
     Object.entries(parsed || {}).forEach(([tableId, entry]) => {
       const updatedAt = Number(entry?.updatedAt || 0)
       const items = Array.isArray(entry?.items) ? entry.items : []
-      if (!items.length) return
+      const allergies = Array.isArray(entry?.allergies) ? entry.allergies : []
+      if (!items.length && !allergies.length) return
       if (!updatedAt || now - updatedAt > TABLE_DRAFT_MAX_AGE_MS) return
-      next[tableId] = { items, updatedAt }
+      next[tableId] = { items, allergies, updatedAt }
     })
 
     localStorage.setItem(storageKey, JSON.stringify(next))
@@ -92,6 +94,69 @@ function sameName(left, right) {
 function makeId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function normalizeOrderAllergies(value, catalog = []) {
+  const allowed = new Map((catalog || []).map((allergen) => [String(allergen.id), allergen]))
+
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => item?.allergenId && (!allowed.size || allowed.has(String(item.allergenId))))
+    .map((item) => {
+      const allergen = allowed.get(String(item.allergenId))
+      const allowedSubtypeIds = new Set((allergen?.subtypes || []).map((subtype) => String(subtype.id)))
+      const subtypeIds = Array.from(new Set(
+        (Array.isArray(item.subtypeIds) ? item.subtypeIds : [])
+          .filter(Boolean)
+          .filter((id) => !allowedSubtypeIds.size || allowedSubtypeIds.has(String(id))),
+      ))
+
+      return { allergenId: item.allergenId, subtypeIds }
+    })
+}
+
+function buildLocalAllergyContext(selection, product, catalog = []) {
+  const declared = normalizeOrderAllergies(selection, catalog).map((item) => {
+    const allergen = (catalog || []).find((candidate) => String(candidate.id) === String(item.allergenId))
+    return {
+      allergenId: item.allergenId,
+      code: allergen?.code || '',
+      nameEs: allergen?.nameEs || 'Alérgeno',
+      nameEn: allergen?.nameEn || '',
+      icon: allergen?.icon || '⚠',
+      subtypes: (allergen?.subtypes || [])
+        .filter((subtype) => item.subtypeIds.some((id) => String(id) === String(subtype.id)))
+        .map((subtype) => ({
+          id: subtype.id,
+          code: subtype.code,
+          nameEs: subtype.nameEs,
+          nameEn: subtype.nameEn,
+        })),
+    }
+  })
+
+  const productAllergens = Array.isArray(product?.allergens) ? product.allergens : []
+  const conflicts = declared.flatMap((allergen) => {
+    const productAllergen = productAllergens.find((candidate) => (
+      String(candidate.allergenId) === String(allergen.allergenId)
+    ))
+    if (!productAllergen) return []
+
+    return [{
+      allergenId: allergen.allergenId,
+      code: allergen.code,
+      nameEs: allergen.nameEs,
+      nameEn: allergen.nameEn,
+      icon: allergen.icon,
+      productLevel: productAllergen.level === 'may_contain' ? 'may_contain' : 'contains',
+    }]
+  })
+
+  return {
+    declared,
+    conflicts,
+    hasConflict: conflicts.length > 0,
+    generatedAt: Date.now(),
+  }
 }
 
 function paymentErrorMessage(error) {
@@ -291,6 +356,7 @@ export function RestaurantProvider({ children }) {
   const [currentTableId, setCurrentTableId] = useState(null)
   const [currentOrderId, setCurrentOrderId] = useState(null)
   const [draft, setDraft] = useState([])
+  const [orderAllergies, setOrderAllergies] = useState([])
   const [pager, setPager] = useState('')
   const [quickCustomerName, setQuickCustomerName] = useState('')
   const [currentDelivery, setCurrentDelivery] = useState(null)
@@ -369,7 +435,7 @@ export function RestaurantProvider({ children }) {
     saveTableDraftMap((previous) => {
       const key = String(currentTableId)
       const existing = previous[key]
-      if (!draft.length) {
+      if (!draft.length && !orderAllergies.length) {
         if (!existing) return previous
         const next = { ...previous }
         delete next[key]
@@ -380,11 +446,12 @@ export function RestaurantProvider({ children }) {
         ...previous,
         [key]: {
           items: draft,
+          allergies: orderAllergies,
           updatedAt: Date.now(),
         },
       }
     })
-  }, [draft, orderMode, currentTableId, saveTableDraftMap])
+  }, [draft, orderAllergies, orderMode, currentTableId, saveTableDraftMap])
 
   useEffect(() => {
     if (!['quick', 'delivery'].includes(orderMode) || !currentOrderId) return
@@ -394,7 +461,7 @@ export function RestaurantProvider({ children }) {
 
     saveTableDraftMap((previous) => {
       const existing = previous[key]
-      if (!draft.length) {
+      if (!draft.length && !orderAllergies.length) {
         if (!existing) return previous
         const next = { ...previous }
         delete next[key]
@@ -405,11 +472,12 @@ export function RestaurantProvider({ children }) {
         ...previous,
         [key]: {
           items: draft,
+          allergies: orderAllergies,
           updatedAt: Date.now(),
         },
       }
     })
-  }, [draft, orderMode, currentOrderId, saveTableDraftMap])
+  }, [draft, orderAllergies, orderMode, currentOrderId, saveTableDraftMap])
 
   useEffect(() => {
     const staleTableIds = Object.entries(tableDrafts)
@@ -431,6 +499,7 @@ export function RestaurantProvider({ children }) {
 
     if (currentTableId && staleSet.has(String(currentTableId))) {
       setDraft([])
+      setOrderAllergies([])
     }
   }, [state.tables, tableDrafts, currentTableId, saveTableDraftMap])
 
@@ -1037,6 +1106,53 @@ export function RestaurantProvider({ children }) {
     [state.orders, currentOrderId],
   )
 
+  const saveCurrentOrderAllergies = useCallback(async (nextSelection) => {
+    const normalized = normalizeOrderAllergies(nextSelection, allergenCatalog)
+    const existingOrder = currentOrder
+      || (orderMode === 'table' && currentTableId ? openOrderForTable(currentTableId) : null)
+
+    if (auth.isDesignMode) {
+      setOrderAllergies(normalized)
+      if (existingOrder) {
+        updateState((previous) => ({
+          ...previous,
+          orders: previous.orders.map((order) => (
+            order.id === existingOrder.id ? { ...order, allergies: normalized } : order
+          )),
+        }))
+      }
+      return { ok: true, allergies: normalized }
+    }
+
+    if (!existingOrder?.serverId) {
+      setOrderAllergies(normalized)
+      return { ok: true, allergies: normalized, pending: true }
+    }
+
+    try {
+      const saved = await saveOrderAllergiesRemote(existingOrder.serverId, normalized)
+      const savedNormalized = normalizeOrderAllergies(saved, allergenCatalog)
+      setOrderAllergies(savedNormalized)
+      await refreshOperationalOrdersByIds([existingOrder.serverId], activeLocation)
+      return { ok: true, allergies: savedNormalized }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || 'No se pudieron guardar las alergias declaradas.',
+      }
+    }
+  }, [
+    allergenCatalog,
+    currentOrder,
+    orderMode,
+    currentTableId,
+    openOrderForTable,
+    auth.isDesignMode,
+    updateState,
+    refreshOperationalOrdersByIds,
+    activeLocation,
+  ])
+
   const tableLabel = useCallback((tableId, source = state) => {
     const table = source.tables.find((item) => item.id === tableId)
     if (!table) return 'Mesa eliminada'
@@ -1276,6 +1392,7 @@ export function RestaurantProvider({ children }) {
   const setOrderMode = useCallback((mode) => {
     setOrderModeState(mode)
     setDraft([])
+    setOrderAllergies([])
     setPager('')
     setQuickCustomerName('')
     setCurrentOrderId(null)
@@ -1377,11 +1494,16 @@ export function RestaurantProvider({ children }) {
     }
 
     const restoredDraft = tableDraftForTable(tableId)
+    const restoredEntry = tableDrafts[String(tableId)] || {}
     draftContextTableIdRef.current = tableId
     setOrderModeState('table')
     setCurrentTableId(tableId)
     setCurrentOrderId(existing?.id || null)
     setDraft(restoredDraft)
+    setOrderAllergies(normalizeOrderAllergies(
+      existing?.allergies?.length ? existing.allergies : restoredEntry.allergies,
+      allergenCatalog,
+    ))
     setPager('')
     setQuickCustomerName('')
     setCurrentDelivery(null)
@@ -1399,6 +1521,8 @@ export function RestaurantProvider({ children }) {
     activeLocation,
     refreshOperationalData,
     refreshTableOrderSessions,
+    tableDrafts,
+    allergenCatalog,
   ])
 
   const touchTableDraftSession = useCallback(async (tableId = currentTableId) => {
@@ -1565,6 +1689,7 @@ export function RestaurantProvider({ children }) {
         setOrderModeState('quick')
         setCurrentTableId(null)
         setCurrentOrderId(orderNumber)
+        setOrderAllergies([])
         setPager(String(created?.pager_number || ''))
         setQuickCustomerName('')
         setCurrentDelivery(null)
@@ -1609,6 +1734,7 @@ export function RestaurantProvider({ children }) {
     setOrderModeState('quick')
     setCurrentTableId(null)
     setCurrentOrderId(createdOrderId)
+    setOrderAllergies([])
     setPager('')
     setQuickCustomerName('')
     setCurrentDelivery(null)
@@ -1662,6 +1788,7 @@ export function RestaurantProvider({ children }) {
         setOrderModeState('delivery')
         setCurrentTableId(null)
         setCurrentOrderId(orderNumber)
+        setOrderAllergies([])
         setPager('')
         setQuickCustomerName('')
         setCurrentDelivery(normalized)
@@ -1708,6 +1835,7 @@ export function RestaurantProvider({ children }) {
     setOrderModeState('delivery')
     setCurrentTableId(null)
     setCurrentOrderId(createdOrderId)
+    setOrderAllergies([])
     setPager('')
     setQuickCustomerName('')
     setCurrentDelivery(normalized)
@@ -1922,8 +2050,12 @@ export function RestaurantProvider({ children }) {
     setCurrentDelivery(null)
     draftContextServiceKeyRef.current = draftKey
     setDraft(tableDrafts[draftKey]?.items || [])
+    setOrderAllergies(normalizeOrderAllergies(
+      order.allergies?.length ? order.allergies : tableDrafts[draftKey]?.allergies,
+      allergenCatalog,
+    ))
     return { ok: true }
-  }, [state.orders, tableDrafts])
+  }, [state.orders, tableDrafts, allergenCatalog])
 
   const openDelivery = useCallback((orderId) => {
     const order = state.orders.find((item) => item.id === orderId && item.mode === 'delivery')
@@ -1938,8 +2070,12 @@ export function RestaurantProvider({ children }) {
     setCurrentDelivery(order.delivery || null)
     draftContextServiceKeyRef.current = draftKey
     setDraft(tableDrafts[draftKey]?.items || [])
+    setOrderAllergies(normalizeOrderAllergies(
+      order.allergies?.length ? order.allergies : tableDrafts[draftKey]?.allergies,
+      allergenCatalog,
+    ))
     return { ok: true }
-  }, [state.orders, tableDrafts])
+  }, [state.orders, tableDrafts, allergenCatalog])
 
   const startNewOrder = useCallback(() => {
     const free = state.tables.find((table) => table.active !== false && getTableTransferStatus(table.id) === 'free')
@@ -1949,6 +2085,7 @@ export function RestaurantProvider({ children }) {
       setCurrentTableId(null)
       setCurrentOrderId(null)
       setDraft([])
+      setOrderAllergies([])
     }
     return free?.id || null
   }, [state.tables, openTable, getTableTransferStatus])
@@ -2009,6 +2146,7 @@ export function RestaurantProvider({ children }) {
       customerName: orderMode === 'quick' ? quickCustomerName.trim() : '',
       delivery: orderMode === 'delivery' ? currentDelivery : null,
       deliveryStatus: orderMode === 'delivery' ? 'pending' : null,
+      allergies: orderAllergies,
       rounds: [],
       status: prepaid ? 'preparing' : 'open',
       created: Date.now(),
@@ -2032,7 +2170,7 @@ export function RestaurantProvider({ children }) {
         )),
       },
     }
-  }, [currentOrderId, currentTableId, orderMode, pager, quickCustomerName, currentDelivery])
+  }, [currentOrderId, currentTableId, orderMode, pager, quickCustomerName, currentDelivery, orderAllergies])
 
   const sendDraft = useCallback(async ({ prepaid = false, paymentMethod = 'cash' } = {}) => {
     if (!draft.length) return { ok: false, message: 'Añade productos nuevos antes de enviar.' }
@@ -2084,6 +2222,7 @@ export function RestaurantProvider({ children }) {
           items: draft,
           prepaid,
           paymentMethod,
+          allergies: orderAllergies,
         })
 
         const orderNumber = Number(result?.order_number)
@@ -2131,6 +2270,11 @@ export function RestaurantProvider({ children }) {
           category: line.category,
           quantity: line.quantity,
           note: line.note,
+          allergyContext: buildLocalAllergyContext(
+            orderAllergies,
+            products.find((product) => String(product.id) === String(line.productId)),
+            allergenCatalog,
+          ),
           prepStatus: 'new',
           voided: false,
         })),
@@ -2138,8 +2282,9 @@ export function RestaurantProvider({ children }) {
       const subtotal = draft.reduce((sum, line) => sum + line.price * line.quantity, 0)
       let updatedOrder = {
         ...order,
+        allergies: orderAllergies,
         rounds: [...(order.rounds || []), newRound],
-      status: prepaid ? 'preparing' : 'open',
+        status: prepaid ? 'preparing' : 'open',
       }
       let salesIncrease = 0
       if (prepaid) {
@@ -2172,6 +2317,7 @@ export function RestaurantProvider({ children }) {
   }, [
     draft, orderMode, currentTableId, currentOrderId, updateState, ensureOrder,
     auth.isDesignMode, restaurantId, activeLocation, state.orders, state.settings.allowPager, currentDelivery, pager, quickCustomerName,
+    orderAllergies, products, allergenCatalog,
     openOrderForTable, refreshOperationalOrdersByIds, refreshOperationalSummary,
     refreshInventoryAvailability, clearStoredTableDraft,
   ])
@@ -2934,6 +3080,8 @@ export function RestaurantProvider({ children }) {
     currentOrder,
     currentDelivery,
     draft,
+    orderAllergies,
+    saveCurrentOrderAllergies,
     pager,
     setPager,
     quickCustomerName,
@@ -2987,6 +3135,7 @@ export function RestaurantProvider({ children }) {
   }), [
     state, products, menuCategories, menuStations, allergenCatalog, locations, activeLocation, switchLocation, remoteLoading, remoteError,
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
+    orderAllergies, saveCurrentOrderAllergies,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
     setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, releaseEmptyDeliveryOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,

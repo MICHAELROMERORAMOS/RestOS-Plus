@@ -82,10 +82,6 @@ function mapTableOrderSessions(payload) {
 
 function applyOrderAttendants(orders, payload) {
   const rows = Array.isArray(payload) ? payload : []
-  const byOrderId = new Map(
-    rows.map((row) => [String(row.order_id), row.opened_by_name || 'Usuario']),
-  )
-
   const rowByOrderId = new Map(rows.map((row) => [String(row.order_id), row]))
 
   return (orders || []).map((order) => {
@@ -94,6 +90,27 @@ function applyOrderAttendants(orders, payload) {
       ...order,
       openedByName: row?.opened_by_name || order.openedByName || 'Usuario',
       openedByMe: Boolean(row?.opened_by_me),
+    }
+  })
+}
+
+function applyOrderAllergyContext(orders, payload) {
+  const contextByOrder = payload && typeof payload === 'object' ? payload : {}
+
+  return (orders || []).map((order) => {
+    const context = contextByOrder[String(order.serverId)] || {}
+    const itemContext = context.items && typeof context.items === 'object' ? context.items : {}
+
+    return {
+      ...order,
+      allergies: Array.isArray(context.allergies) ? context.allergies : [],
+      rounds: (order.rounds || []).map((round) => ({
+        ...round,
+        items: (round.items || []).map((item) => ({
+          ...item,
+          allergyContext: itemContext[String(item.lineId)] || item.allergyContext || {},
+        })),
+      })),
     }
   })
 }
@@ -227,10 +244,21 @@ export async function loadOperationalState(restaurantId, locationId) {
   if (summaryResult.error) throw summaryResult.error
   if (attendantsResult.error) throw attendantsResult.error
 
-  const orders = applyOrderAttendants(
+  let orders = applyOrderAttendants(
     mapOperationalOrders(operationalResult.data || {}),
     attendantsResult.data || [],
   )
+
+  const orderIds = orders.map((order) => order.serverId).filter(Boolean)
+  if (orderIds.length) {
+    const { data: allergyContext, error: allergyError } = await client.rpc('load_order_allergy_context', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+      p_order_ids: orderIds,
+    })
+    if (allergyError) throw allergyError
+    orders = applyOrderAllergyContext(orders, allergyContext || {})
+  }
 
   return {
     orders,
@@ -264,10 +292,26 @@ export async function loadOperationalHistory(
   })
 
   if (error) throw error
+
+  const mappedOrders = mapOperationalOrders(data || {})
+    .filter((order) => !isOperationalOrder(order))
+    .sort((left, right) => (right.closedAt || right.created || 0) - (left.closedAt || left.created || 0))
+
+  let orders = mappedOrders
+  const orderIds = mappedOrders.map((order) => order.serverId).filter(Boolean)
+
+  if (orderIds.length) {
+    const { data: allergyContext, error: allergyError } = await client.rpc('load_order_allergy_context', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+      p_order_ids: orderIds,
+    })
+    if (allergyError) throw allergyError
+    orders = applyOrderAllergyContext(mappedOrders, allergyContext || {})
+  }
+
   return {
-    orders: mapOperationalOrders(data || {})
-      .filter((order) => !isOperationalOrder(order))
-      .sort((left, right) => (right.closedAt || right.created || 0) - (left.closedAt || left.created || 0)),
+    orders,
     hasMore: Boolean(data?.has_more),
     nextBefore: data?.next_before || null,
   }
@@ -278,7 +322,7 @@ export async function loadOperationalOrdersByIds(restaurantId, locationId, order
   const ids = Array.from(new Set((orderIds || []).filter(Boolean)))
   if (!ids.length) return { orders: [] }
 
-  const [ordersResult, attendantsResult] = await Promise.all([
+  const [ordersResult, attendantsResult, allergiesResult] = await Promise.all([
     client.rpc('load_operational_orders_by_ids', {
       p_restaurant_id: restaurantId,
       p_location_id: locationId,
@@ -289,15 +333,24 @@ export async function loadOperationalOrdersByIds(restaurantId, locationId, order
       p_location_id: locationId,
       p_order_ids: ids,
     }),
+    client.rpc('load_order_allergy_context', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+      p_order_ids: ids,
+    }),
   ])
 
   if (ordersResult.error) throw ordersResult.error
   if (attendantsResult.error) throw attendantsResult.error
+  if (allergiesResult.error) throw allergiesResult.error
 
   return {
-    orders: applyOrderAttendants(
-      mapOperationalOrders(ordersResult.data || {}),
-      attendantsResult.data || [],
+    orders: applyOrderAllergyContext(
+      applyOrderAttendants(
+        mapOperationalOrders(ordersResult.data || {}),
+        attendantsResult.data || [],
+      ),
+      allergiesResult.data || {},
     ),
   }
 }
@@ -399,6 +452,22 @@ export async function releaseEmptyDeliveryOrderRemote(orderServerId) {
   return Boolean(data)
 }
 
+export async function saveOrderAllergiesRemote(orderServerId, allergies = []) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('save_order_allergies', {
+    p_order_id: orderServerId,
+    p_allergies: (Array.isArray(allergies) ? allergies : []).map((allergen) => ({
+      allergenId: allergen.allergenId,
+      subtypeIds: Array.from(new Set(
+        (Array.isArray(allergen.subtypeIds) ? allergen.subtypeIds : []).filter(Boolean),
+      )),
+    })),
+  })
+
+  if (error) throw error
+  return Array.isArray(data) ? data : []
+}
+
 export async function createDeliveryOrderRemote({
   restaurantId,
   locationId,
@@ -433,10 +502,11 @@ export async function sendOrderRoundRemote({
   items,
   prepaid = false,
   paymentMethod = 'card',
+  allergies = [],
 }) {
   const client = requireSupabase()
 
-  const { data, error } = await client.rpc('send_order_round', {
+  const { data, error } = await client.rpc('send_order_round_with_allergies', {
     p_order_id: orderServerId || null,
     p_restaurant_id: restaurantId,
     p_location_id: locationId,
@@ -454,6 +524,12 @@ export async function sendOrderRoundRemote({
     })),
     p_prepaid: Boolean(prepaid),
     p_payment_method: paymentMethod === 'cash/card' ? 'card' : paymentMethod,
+    p_allergies: (Array.isArray(allergies) ? allergies : []).map((allergen) => ({
+      allergenId: allergen.allergenId,
+      subtypeIds: Array.from(new Set(
+        (Array.isArray(allergen.subtypeIds) ? allergen.subtypeIds : []).filter(Boolean),
+      )),
+    })),
   })
 
   if (error) throw error
