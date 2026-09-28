@@ -5831,3 +5831,41 @@ html, body {
     grid-column:auto;
   }
 }
+
+
+/* Keep allergy badges from breaking draft cart layout */
+.draft-line{
+  grid-template-columns:minmax(0,1fr) auto;
+}
+
+.draft-line>div:first-child{
+  min-width:0;
+}
+
+.draft-line>div:last-child{
+  min-width:max-content;
+}
+
+.draft-allergy-warning{
+  width:fit-content;
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:normal;
+}
+
+@media(max-width:420px){
+  .draft-line{
+    gap:7px;
+    padding:10px;
+  }
+
+  .draft-line .qty{
+    gap:5px;
+  }
+
+  .draft-line .qty button{
+    width:34px;
+    height:34px;
+  }
+}

@@ -1410,7 +1410,7 @@ export default function OrderPage({ onNavigate }) {
                           <small className={`draft-allergy-warning ${allergyStatusForProduct(line.productId).level}`}>
                             {allergyStatusForProduct(line.productId).conflicts.length
                               ? `${allergyStatusForProduct(line.productId).level === 'contains' ? '🚨 CONFLICTO: CONTIENE' : '⚠ PUEDE CONTENER'} ${conflictNames(allergyStatusForProduct(line.productId))}`
-                              : `⚠ Pedido con alergia: ${declaredAllergyLabel} · informar a Cocina`}
+                              : `⚠ Alergia: ${declaredAllergyLabel}`}
                           </small>
                         )}
                         <div className="line-actions">
