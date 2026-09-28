@@ -78,7 +78,7 @@ export function AuthProvider({ children }) {
   const handleUser = useCallback(async (user) => {
     if (!user) {
       setMode('signedOut')
-      return
+      return { mode: 'signedOut' }
     }
     try {
       const access = await loadUserAccess(user)
@@ -109,7 +109,7 @@ export function AuthProvider({ children }) {
           })
           setPermissions(new Set())
           setMode('onboarding')
-          return
+          return { mode: 'onboarding' }
         }
 
         await remoteSignOut()
@@ -131,7 +131,7 @@ export function AuthProvider({ children }) {
         setUserContext(null)
         setPermissions(new Set())
         setMode('pending')
-        return
+        return { mode: 'pending' }
       }
       setPermissions(new Set(access.permissions))
       setUserContext({
@@ -145,6 +145,7 @@ export function AuthProvider({ children }) {
       sessionStorage.removeItem(DESIGN_SESSION_KEY)
       setPendingState(null)
       setMode('authenticated')
+      return { mode: 'authenticated' }
     } catch (error) {
       await remoteSignOut()
       setPendingState({
@@ -153,13 +154,14 @@ export function AuthProvider({ children }) {
         icon: '!',
       })
       setMode('pending')
+      return { mode: 'pending' }
     }
   }, [])
 
   const login = useCallback(async (email, password) => {
     const { data, error } = await signInWithPassword(email, password)
     if (error) throw error
-    await handleUser(data.user)
+    return handleUser(data.user)
   }, [handleUser])
 
   const logout = useCallback(async () => {

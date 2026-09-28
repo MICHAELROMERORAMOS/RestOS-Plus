@@ -2,6 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { friendlyAuthError } from '../../lib/authErrors.js'
 import {
+  isDesktopAppWindow,
+  isDesktopDevice,
+  maximizeDesktopWindow,
+  navigateDesktopAppWindow,
+  openDesktopAppWindow,
+  requestDesktopFullscreen,
+} from '../../lib/desktopLaunch.js'
+import {
   requestPasswordRecovery,
   resendSignupOtp,
   signOut,
@@ -58,6 +66,54 @@ function OtpBoxes({ value, onChange }) {
   )
 }
 
+function DesktopFullscreenEntry({ children }) {
+  const [needsGesture, setNeedsGesture] = useState(false)
+  const desktopWindow = isDesktopAppWindow() && isDesktopDevice()
+
+  useEffect(() => {
+    if (!desktopWindow) return undefined
+
+    let alive = true
+    maximizeDesktopWindow()
+
+    requestDesktopFullscreen().then((entered) => {
+      if (alive && !entered) setNeedsGesture(true)
+    })
+
+    const handleFullscreen = () => {
+      if (document.fullscreenElement) setNeedsGesture(false)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreen)
+    return () => {
+      alive = false
+      document.removeEventListener('fullscreenchange', handleFullscreen)
+    }
+  }, [desktopWindow])
+
+  async function enterFullscreen() {
+    maximizeDesktopWindow()
+    const entered = await requestDesktopFullscreen()
+    setNeedsGesture(!entered)
+  }
+
+  return (
+    <>
+      {children}
+      {desktopWindow && needsGesture && (
+        <button
+          type="button"
+          className="desktop-fullscreen-prompt"
+          onClick={enterFullscreen}
+          title="Abrir RestOS+ en pantalla completa"
+        >
+          ⛶ Pantalla completa
+        </button>
+      )}
+    </>
+  )
+}
+
 function AuthFrame({ children }) {
   return (
     <div className="auth-shell">
@@ -91,12 +147,46 @@ export default function AuthGateway({ children }) {
   const [recoveryEmail, setRecoveryEmail] = useState('')
   const [signupCode, setSignupCode] = useState('')
   const [recoveryCode, setRecoveryCode] = useState('')
+  const [desktopLaunched, setDesktopLaunched] = useState(false)
+  const desktopWindowRef = useRef(null)
   const signupTimer = useCountdown(screen === 'verifySignup' ? registration?.email : null)
   const recoveryTimer = useCountdown(screen === 'verifyRecovery' ? recoveryEmail : null)
 
   useEffect(() => setError(''), [screen])
 
-  if (auth.isAuthenticated) return children
+  if (auth.isAuthenticated && desktopLaunched && !isDesktopAppWindow()) {
+    return (
+      <AuthFrame>
+        <div className="auth-view active desktop-launch-standby">
+          <div className="desktop-launch-icon">▣</div>
+          <h1>RestOS+ está abierto</h1>
+          <p className="sub">
+            La ventana de operación se abrió por separado y se ajustó al tamaño disponible de la pantalla.
+          </p>
+          <button
+            className="auth-btn"
+            onClick={() => {
+              if (desktopWindowRef.current && !desktopWindowRef.current.closed) {
+                desktopWindowRef.current.focus()
+              }
+            }}
+          >
+            Ir a la ventana de operación
+          </button>
+          <button
+            className="auth-btn secondary"
+            onClick={() => setDesktopLaunched(false)}
+          >
+            Usar RestOS+ en esta ventana
+          </button>
+        </div>
+      </AuthFrame>
+    )
+  }
+
+  if (auth.isAuthenticated) {
+    return <DesktopFullscreenEntry>{children}</DesktopFullscreenEntry>
+  }
 
   if (auth.mode === 'loading') {
     return <div className="app-loader"><div><strong>RestOS+</strong><span>Cargando sesión…</span></div></div>
@@ -277,14 +367,39 @@ export default function AuthGateway({ children }) {
         {!auth.isSupabaseConfigured && (
           <div className="notice warn"><b>Supabase aún no está configurado en este entorno.</b> La aplicación completa puede probarse con Modo diseño. Cuando se cree el archivo <code>.env</code>, el login real quedará activo.</div>
         )}
-        <form onSubmit={(event) => {
+        <form onSubmit={async (event) => {
           event.preventDefault()
           const form = new FormData(event.currentTarget)
           const email = String(form.get('email') || '').trim().toLowerCase()
           const password = String(form.get('password') || '')
           if (!validEmail(email)) return setError('Introduce un correo válido.')
           if (!password) return setError('Escribe tu contraseña.')
-          perform(() => auth.login(email, password))
+
+          setBusy(true)
+          setError('')
+
+          const shouldLaunchDesktop = isDesktopDevice() && !isDesktopAppWindow()
+          const popup = shouldLaunchDesktop ? openDesktopAppWindow() : null
+          if (popup) desktopWindowRef.current = popup
+
+          try {
+            const result = await auth.login(email, password)
+
+            if (result?.mode === 'authenticated' && popup) {
+              const navigated = navigateDesktopAppWindow(popup)
+              if (navigated) {
+                setDesktopLaunched(true)
+                return
+              }
+            }
+
+            if (popup && !popup.closed) popup.close()
+          } catch (err) {
+            if (popup && !popup.closed) popup.close()
+            setError(friendlyAuthError(err))
+          } finally {
+            setBusy(false)
+          }
         }}>
           <div className="field"><label>Correo electrónico</label><input name="email" type="email" autoComplete="email" placeholder="nombre@correo.com" /></div>
           <div className="field"><label>Contraseña</label><input name="password" type="password" autoComplete="current-password" placeholder="••••••••" /></div>
