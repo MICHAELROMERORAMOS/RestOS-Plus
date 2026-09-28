@@ -19,6 +19,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
     { data: products, error: productsError },
     { data: stations, error: stationsError },
     { data: routes, error: routesError },
+    { data: allergenConfig, error: allergenConfigError },
   ] = await Promise.all([
     client
       .from('menu_categories')
@@ -41,12 +42,24 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       .from('product_station_routes')
       .select('product_id,location_id,station_id')
       .eq('location_id', locationId),
+    client.rpc('load_allergen_configuration', {
+      p_restaurant_id: restaurantId,
+    }),
   ])
 
   if (categoriesError) throw categoriesError
   if (productsError) throw productsError
   if (stationsError) throw stationsError
   if (routesError) throw routesError
+  if (allergenConfigError) throw allergenConfigError
+
+  const allergenCatalog = Array.isArray(allergenConfig?.catalog)
+    ? allergenConfig.catalog
+    : []
+  const productAllergens = (
+    allergenConfig?.productAllergens
+    && typeof allergenConfig.productAllergens === 'object'
+  ) ? allergenConfig.productAllergens : {}
 
   const categoryById = new Map((categories || []).map((category) => [category.id, category]))
   const stationById = new Map((stations || []).map((station) => [station.id, station]))
@@ -66,6 +79,21 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       stationType: station.station_type,
       active: station.active,
     })),
+    allergenCatalog: allergenCatalog.map((allergen) => ({
+      id: allergen.id,
+      code: allergen.code,
+      nameEs: allergen.nameEs,
+      nameEn: allergen.nameEn,
+      icon: allergen.icon || '⚠',
+      displayOrder: Number(allergen.displayOrder || 0),
+      subtypes: (allergen.subtypes || []).map((subtype) => ({
+        id: subtype.id,
+        code: subtype.code,
+        nameEs: subtype.nameEs,
+        nameEn: subtype.nameEn,
+        displayOrder: Number(subtype.displayOrder || 0),
+      })),
+    })),
     products: (products || []).map((product) => {
       const category = categoryById.get(product.category_id)
       const route = routeByProduct.get(product.id)
@@ -84,6 +112,22 @@ export async function loadMenuCatalog(restaurantId, locationId) {
         stationName: station?.name || 'Cocina',
         trackInventory: Boolean(product.track_inventory),
         inventoryMode: product.inventory_mode || (product.track_inventory ? 'recipe' : 'none'),
+        allergens: (productAllergens[String(product.id)] || []).map((allergen) => ({
+          allergenId: allergen.allergenId,
+          code: allergen.code,
+          nameEs: allergen.nameEs,
+          nameEn: allergen.nameEn,
+          icon: allergen.icon || '⚠',
+          level: allergen.level === 'may_contain' ? 'may_contain' : 'contains',
+          subtypeIds: (allergen.subtypes || []).map((subtype) => subtype.id),
+          subtypes: (allergen.subtypes || []).map((subtype) => ({
+            id: subtype.id,
+            code: subtype.code,
+            nameEs: subtype.nameEs,
+            nameEn: subtype.nameEn,
+            level: subtype.level === 'may_contain' ? 'may_contain' : 'contains',
+          })),
+        })),
         available: product.active !== false,
         active: product.active !== false,
       }
@@ -134,10 +178,21 @@ export async function saveMenuProduct({
   inventoryMaxStock = null,
   inventoryOpeningStock = 0,
   active = true,
+  allergens = [],
 }) {
   const client = requireSupabase()
 
-  const { data, error } = await client.rpc('save_menu_product_configured', {
+  const normalizedAllergens = (Array.isArray(allergens) ? allergens : [])
+    .filter((allergen) => allergen?.allergenId)
+    .map((allergen) => ({
+      allergenId: allergen.allergenId,
+      level: allergen.level === 'may_contain' ? 'may_contain' : 'contains',
+      subtypeIds: Array.from(new Set(
+        (Array.isArray(allergen.subtypeIds) ? allergen.subtypeIds : []).filter(Boolean),
+      )),
+    }))
+
+  const { data, error } = await client.rpc('save_menu_product_configured_with_allergens', {
     p_product_id: productId,
     p_restaurant_id: restaurantId,
     p_location_id: locationId,
@@ -155,6 +210,7 @@ export async function saveMenuProduct({
     p_inventory_max_stock: inventoryMaxStock === '' || inventoryMaxStock == null ? null : Number(inventoryMaxStock),
     p_inventory_opening_stock: Number(inventoryOpeningStock || 0),
     p_active: Boolean(active),
+    p_allergens: normalizedAllergens,
   })
 
   if (error) throw error

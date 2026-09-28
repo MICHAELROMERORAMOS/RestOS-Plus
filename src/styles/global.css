@@ -1982,7 +1982,7 @@ html, body {
 }
 
 .product-form-card {
-  width: min(760px, 100%);
+  width: min(920px, 100%);
   max-height: calc(100dvh - 40px);
   min-height: 0;
   display: flex;
@@ -5103,6 +5103,269 @@ html, body {
   .delivery-courier-mode,
   .delivery-courier-new-grid,
   .delivered-courier-card{
+    grid-template-columns:1fr;
+  }
+}
+
+
+/* Product allergen configuration */
+.product-allergens-section{
+  display:grid;
+  gap:12px;
+  padding:16px;
+  border:1px solid #d9e4de;
+  border-radius:16px;
+  background:linear-gradient(180deg,#fbfdfc 0%,#f6faf8 100%);
+}
+
+.product-allergens-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+
+.product-allergens-heading h4{
+  margin:2px 0 4px;
+  font-size:17px;
+}
+
+.product-allergens-heading p{
+  max-width:620px;
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.45;
+}
+
+.product-allergens-kicker{
+  color:#557068;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.11em;
+}
+
+.product-allergen-legend{
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:850;
+}
+
+.product-allergen-legend .contains{
+  color:#a52b2b;
+}
+
+.product-allergen-legend .may-contain{
+  color:#946200;
+}
+
+.product-allergen-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.product-allergen-card{
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#fff;
+  transition:border-color 120ms ease,background 120ms ease,box-shadow 120ms ease;
+}
+
+.product-allergen-card.selected.contains{
+  border-color:#dca8a8;
+  background:#fff8f8;
+  box-shadow:inset 3px 0 0 #b84b4b;
+}
+
+.product-allergen-card.selected.may_contain{
+  border-color:#e4cb95;
+  background:#fffbf2;
+  box-shadow:inset 3px 0 0 #c58b24;
+}
+
+.product-allergen-card-top{
+  display:grid;
+  gap:10px;
+}
+
+.product-allergen-toggle{
+  display:grid!important;
+  grid-template-columns:auto 32px minmax(0,1fr);
+  gap:9px!important;
+  align-items:center;
+  cursor:pointer;
+}
+
+.product-allergen-toggle input{
+  width:18px;
+  height:18px;
+  margin:0;
+  accent-color:var(--brand);
+}
+
+.product-allergen-icon{
+  width:32px;
+  height:32px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  background:#eef3f0;
+  font-size:18px;
+}
+
+.product-allergen-name{
+  min-width:0;
+  display:grid;
+  gap:1px;
+}
+
+.product-allergen-name b{
+  font-size:12px;
+  line-height:1.25;
+}
+
+.product-allergen-name small{
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.2;
+}
+
+.product-allergen-level{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+}
+
+.product-allergen-level button{
+  min-height:34px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#fff;
+  color:#53665d;
+  font-size:10px;
+  font-weight:900;
+}
+
+.product-allergen-level button.active.contains{
+  border-color:#c97777;
+  background:#f9e2e2;
+  color:#8d2525;
+}
+
+.product-allergen-level button.active.may-contain{
+  border-color:#d6b15f;
+  background:#fff0cb;
+  color:#805600;
+}
+
+.product-allergen-subtypes{
+  display:grid;
+  gap:7px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px dashed #d9e1dd;
+}
+
+.product-allergen-subtypes>span{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+
+.product-allergen-subtypes>div{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.product-allergen-subtypes label{
+  display:inline-flex!important;
+  grid-template-columns:none!important;
+  align-items:center;
+  gap:5px!important;
+  min-height:30px;
+  padding:5px 8px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  cursor:pointer;
+}
+
+.product-allergen-subtypes label.selected{
+  border-color:#91b7a4;
+  background:#eaf4ee;
+  color:var(--brand);
+}
+
+.product-allergen-subtypes input{
+  width:14px;
+  height:14px;
+  margin:0;
+  accent-color:var(--brand);
+}
+
+.product-allergen-subtypes label span{
+  font-size:9px!important;
+  font-weight:850!important;
+  color:inherit!important;
+}
+
+.product-allergen-note{
+  padding:10px 12px;
+  border-radius:11px;
+  background:#eef3f0;
+  color:#53665d;
+  font-size:10px;
+  line-height:1.45;
+}
+
+.menu-product-allergens{
+  display:grid;
+  gap:4px;
+  margin-top:8px;
+}
+
+.menu-allergen-summary{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  padding:5px 8px;
+  border-radius:9px;
+  font-size:10px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+
+.menu-allergen-summary.contains{
+  color:#8f2d2d;
+  background:#fae7e7;
+}
+
+.menu-allergen-summary.may-contain{
+  color:#7d5900;
+  background:#fff1cf;
+}
+
+@media(max-width:700px){
+  .product-allergen-grid{
+    grid-template-columns:1fr;
+  }
+
+  .product-allergens-heading{
+    display:grid;
+  }
+}
+
+@media(max-width:520px){
+  .product-allergen-level{
     grid-template-columns:1fr;
   }
 }

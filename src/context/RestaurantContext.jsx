@@ -266,6 +266,7 @@ export function RestaurantProvider({ children }) {
   const [products, setProducts] = useState(DEMO_PRODUCTS)
   const [menuCategories, setMenuCategories] = useState([])
   const [menuStations, setMenuStations] = useState([])
+  const [allergenCatalog, setAllergenCatalog] = useState([])
   const [locations, setLocations] = useState([])
   const [activeLocation, setActiveLocation] = useState(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
@@ -701,6 +702,7 @@ export function RestaurantProvider({ children }) {
       setProducts(DEMO_PRODUCTS)
       setMenuCategories([])
       setMenuStations([])
+      setAllergenCatalog([])
       setInventoryAvailability({
         enforcementEnabled: state.settings.blockInsufficientInventory !== false,
         byProduct: {},
@@ -714,6 +716,7 @@ export function RestaurantProvider({ children }) {
       setProducts([])
       setMenuCategories([])
       setMenuStations([])
+      setAllergenCatalog([])
       setInventoryAvailability({ enforcementEnabled: true, byProduct: {}, generatedAt: null })
       return { ok: false, message: 'No hay restaurante o sucursal activa.' }
     }
@@ -728,6 +731,7 @@ export function RestaurantProvider({ children }) {
       setProducts(catalog.products)
       setMenuCategories(catalog.categories)
       setMenuStations(catalog.stations)
+      setAllergenCatalog(catalog.allergenCatalog || [])
       setInventoryAvailability(availability)
       return { ok: true, catalog, availability }
     } catch (error) {
@@ -2898,6 +2902,7 @@ export function RestaurantProvider({ children }) {
     products,
     menuCategories,
     menuStations,
+    allergenCatalog,
     locations,
     activeLocation,
     switchLocation,
@@ -2977,7 +2982,7 @@ export function RestaurantProvider({ children }) {
     orderPaidTotal,
     orderBalance,
   }), [
-    state, products, menuCategories, menuStations, locations, activeLocation, switchLocation, remoteLoading, remoteError,
+    state, products, menuCategories, menuStations, allergenCatalog, locations, activeLocation, switchLocation, remoteLoading, remoteError,
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,

@@ -29,6 +29,7 @@ const emptyProduct = {
   inventoryMaxStock: '',
   inventoryOpeningStock: '',
   currentStock: null,
+  allergens: [],
   active: true,
 }
 
@@ -38,6 +39,7 @@ export default function ProductsPage() {
     products,
     menuCategories,
     menuStations,
+    allergenCatalog,
     activeLocation,
     currencyCode,
     formatMoney,
@@ -112,6 +114,13 @@ export default function ProductsPage() {
       inventoryMaxStock: directConfig?.maxStock == null ? '' : String(directConfig.maxStock),
       inventoryOpeningStock: '',
       currentStock: directConfig?.currentStock ?? null,
+      allergens: (product.allergens || []).map((allergen) => ({
+        allergenId: allergen.allergenId,
+        level: allergen.level === 'may_contain' ? 'may_contain' : 'contains',
+        subtypeIds: Array.isArray(allergen.subtypeIds)
+          ? allergen.subtypeIds
+          : (allergen.subtypes || []).map((subtype) => subtype.id),
+      })),
       active: product.active !== false,
     })
     setShowProduct(true)
@@ -119,6 +128,53 @@ export default function ProductsPage() {
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function allergenSelection(allergenId) {
+    return (form.allergens || []).find((item) => String(item.allergenId) === String(allergenId)) || null
+  }
+
+  function toggleAllergen(allergenId, enabled) {
+    setForm((current) => {
+      const existing = current.allergens || []
+      if (!enabled) {
+        return {
+          ...current,
+          allergens: existing.filter((item) => String(item.allergenId) !== String(allergenId)),
+        }
+      }
+
+      if (existing.some((item) => String(item.allergenId) === String(allergenId))) return current
+      return {
+        ...current,
+        allergens: [...existing, { allergenId, level: 'contains', subtypeIds: [] }],
+      }
+    })
+  }
+
+  function setAllergenLevel(allergenId, level) {
+    setForm((current) => ({
+      ...current,
+      allergens: (current.allergens || []).map((item) => (
+        String(item.allergenId) === String(allergenId)
+          ? { ...item, level: level === 'may_contain' ? 'may_contain' : 'contains' }
+          : item
+      )),
+    }))
+  }
+
+  function toggleAllergenSubtype(allergenId, subtypeId, enabled) {
+    setForm((current) => ({
+      ...current,
+      allergens: (current.allergens || []).map((item) => {
+        if (String(item.allergenId) !== String(allergenId)) return item
+        const subtypeIds = Array.isArray(item.subtypeIds) ? item.subtypeIds : []
+        const next = enabled
+          ? Array.from(new Set([...subtypeIds, subtypeId]))
+          : subtypeIds.filter((id) => String(id) !== String(subtypeId))
+        return { ...item, subtypeIds: next }
+      }),
+    }))
   }
 
   async function addCategory(event) {
@@ -210,6 +266,7 @@ export default function ProductsPage() {
         inventoryMaxStock,
         inventoryOpeningStock: form.id ? 0 : inventoryOpeningStock,
         active: form.active,
+        allergens: form.allergens,
       })
 
       await refreshMenu()
@@ -320,6 +377,28 @@ export default function ProductsPage() {
                   {product.sku && <small>SKU: {product.sku}</small>}
                   {product.inventoryMode === 'direct' && <span className="badge ok-badge">Inventario directo</span>}
                   {product.inventoryMode === 'recipe' && <span className="badge">Por receta</span>}
+                  {(product.allergens || []).length > 0 && (
+                    <div className="menu-product-allergens">
+                      {(product.allergens || []).some((item) => item.level === 'contains') && (
+                        <span className="menu-allergen-summary contains">
+                          <b>Contiene:</b>{' '}
+                          {(product.allergens || [])
+                            .filter((item) => item.level === 'contains')
+                            .map((item) => `${item.icon || '⚠'} ${item.nameEs}`)
+                            .join(' · ')}
+                        </span>
+                      )}
+                      {(product.allergens || []).some((item) => item.level === 'may_contain') && (
+                        <span className="menu-allergen-summary may-contain">
+                          <b>Puede contener:</b>{' '}
+                          {(product.allergens || [])
+                            .filter((item) => item.level === 'may_contain')
+                            .map((item) => `${item.icon || '⚠'} ${item.nameEs}`)
+                            .join(' · ')}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <strong className="menu-product-price">{formatMoney(product.price)}</strong>
@@ -432,6 +511,108 @@ export default function ProductsPage() {
                 <span>SKU / Código</span>
                 <input value={form.sku} onChange={(event) => updateField('sku', event.target.value)} placeholder="Opcional" />
               </label>
+
+              <section className="product-allergens-section wide">
+                <div className="product-allergens-heading">
+                  <div>
+                    <span className="product-allergens-kicker">SEGURIDAD ALIMENTARIA</span>
+                    <h4>Alérgenos del producto</h4>
+                    <p>
+                      Marca los alérgenos conocidos del producto y distingue entre presencia directa y posible contaminación cruzada.
+                    </p>
+                  </div>
+                  <span className="badge">{(form.allergens || []).length} seleccionados</span>
+                </div>
+
+                <div className="product-allergen-legend">
+                  <span className="contains">● Contiene</span>
+                  <span className="may-contain">● Puede contener</span>
+                </div>
+
+                {allergenCatalog?.length ? (
+                  <div className="product-allergen-grid">
+                    {allergenCatalog.map((allergen) => {
+                      const selected = allergenSelection(allergen.id)
+                      const subtypeIds = selected?.subtypeIds || []
+
+                      return (
+                        <article
+                          className={`product-allergen-card ${selected ? `selected ${selected.level}` : ''}`}
+                          key={allergen.id}
+                        >
+                          <div className="product-allergen-card-top">
+                            <label className="product-allergen-toggle">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(selected)}
+                                onChange={(event) => toggleAllergen(allergen.id, event.target.checked)}
+                              />
+                              <span className="product-allergen-icon" aria-hidden="true">{allergen.icon || '⚠'}</span>
+                              <span className="product-allergen-name">
+                                <b>{allergen.nameEs}</b>
+                                <small>{allergen.nameEn}</small>
+                              </span>
+                            </label>
+
+                            {selected && (
+                              <div className="product-allergen-level" role="group" aria-label={`Nivel de riesgo para ${allergen.nameEs}`}>
+                                <button
+                                  type="button"
+                                  className={selected.level === 'contains' ? 'active contains' : ''}
+                                  onClick={() => setAllergenLevel(allergen.id, 'contains')}
+                                >
+                                  Contiene
+                                </button>
+                                <button
+                                  type="button"
+                                  className={selected.level === 'may_contain' ? 'active may-contain' : ''}
+                                  onClick={() => setAllergenLevel(allergen.id, 'may_contain')}
+                                >
+                                  Puede contener
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {selected && (allergen.subtypes || []).length > 0 && (
+                            <div className="product-allergen-subtypes">
+                              <span>Especificar tipo (opcional)</span>
+                              <div>
+                                {(allergen.subtypes || []).map((subtype) => (
+                                  <label
+                                    className={subtypeIds.some((id) => String(id) === String(subtype.id)) ? 'selected' : ''}
+                                    key={subtype.id}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={subtypeIds.some((id) => String(id) === String(subtype.id))}
+                                      onChange={(event) => toggleAllergenSubtype(
+                                        allergen.id,
+                                        subtype.id,
+                                        event.target.checked,
+                                      )}
+                                    />
+                                    <span>{subtype.nameEs}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </article>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="notice warn">
+                    El catálogo de alérgenos no está disponible. Actualiza el menú antes de guardar cambios de seguridad alimentaria.
+                  </div>
+                )}
+
+                <div className="product-allergen-note">
+                  <b>Importante:</b> esta información debe mantenerse de acuerdo con la receta, etiquetas de proveedores y procesos reales de cocina.
+                  “Puede contener” no sustituye los controles de contaminación cruzada.
+                </div>
+              </section>
 
               <div className="product-direct-inventory wide">
                 <label className="toggle-row product-direct-inventory-toggle">
