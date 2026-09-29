@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#102f24" />
     <meta name="description" content="RestOS+ · Restaurant operating system" />
+    <link rel="canonical" href="https://restosplus.com/" />
     <title>RestOS+ · Restaurant System</title>
+    <script>
+      if (window.location.hostname === 'www.restosplus.com') {
+        window.location.replace(
+          'https://restosplus.com' +
+          window.location.pathname +
+          window.location.search +
+          window.location.hash
+        )
+      }
+    </script>
     <style>
       #boot-status{min-height:100vh;display:grid;place-items:center;background:#102f24;color:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:24px;text-align:center}
       #boot-status .boot-card{max-width:680px}
