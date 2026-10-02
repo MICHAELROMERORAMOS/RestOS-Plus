@@ -105,6 +105,14 @@ export default function StaffPage() {
     [roles],
   )
 
+  const assignableRoles = useMemo(
+    () => roles.filter((role) => (
+      role.name !== 'Owner / Super Admin'
+      || auth.userContext?.isPrimaryOwner
+    )),
+    [roles, auth.userContext?.isPrimaryOwner],
+  )
+
   const locationById = useMemo(
     () => new Map(locations.map((location) => [location.id, location])),
     [locations],
@@ -427,7 +435,7 @@ export default function StaffPage() {
                         disabled={!canManage || busy}
                       >
                         <option value="">Selecciona un rol</option>
-                        {roles.map((role) => (
+                        {assignableRoles.map((role) => (
                           <option key={role.id} value={role.id}>{role.name}</option>
                         ))}
                       </select>
@@ -536,7 +544,7 @@ export default function StaffPage() {
                   onChange={(event) => updateMemberField('roleId', event.target.value)}
                   disabled={editingMember.is_restaurant_owner}
                 >
-                  {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                  {assignableRoles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
                 </select>
               </label>
             </div>
