@@ -152,7 +152,7 @@ export async function loadUserAccess(user) {
   }
 
   const [roleResult, restaurantResult, permissionResult, platformAdminResult] = await Promise.all([
-    client.from('roles').select('id,name').eq('id', membership.role_id).single(),
+    client.from('roles').select('id,name,company_scope').eq('id', membership.role_id).single(),
     client.from('restaurants').select('id,name').eq('id', membership.restaurant_id).single(),
     client.from('role_permissions').select('permission_code').eq('role_id', membership.role_id),
     client.rpc('is_platform_admin'),
