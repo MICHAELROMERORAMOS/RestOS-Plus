@@ -5869,3 +5869,31 @@ html, body {
     height:34px;
   }
 }
+
+
+/* Per-item table dispatch in Kitchen / Bar */
+.kds-state.ready{
+  color:#166534;
+  background:#dcfce7;
+  border-color:#86efac;
+}
+
+.kds-item-dispatch{
+  width:max-content;
+  max-width:100%;
+  margin-top:9px;
+  padding:8px 11px;
+  font-size:10px;
+  font-weight:950;
+}
+
+.kds-item-dispatch:disabled{
+  cursor:wait;
+  opacity:.7;
+}
+
+@media(max-width:520px){
+  .kds-item-dispatch{
+    width:100%;
+  }
+}
