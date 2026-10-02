@@ -49,31 +49,22 @@ function MainApplication() {
   const [activeView, setActiveView] = useState(() => viewFromPath(window.location.pathname) || visibleItems[0]?.id || 'dashboard')
 
   useEffect(() => {
-    if (!accessibleItems.some((item) => item.id === activeView)) {
-      const fallbackView = visibleItems[0]?.id || accessibleItems[0]?.id || 'dashboard'
-      setActiveView(fallbackView)
-      window.history.replaceState({ view: fallbackView }, '', pathForView(fallbackView))
-    }
-  }, [accessibleItems, visibleItems, activeView])
-
-  useEffect(() => {
-    function handlePopState() {
+    function syncViewFromUrl() {
       const requestedView = viewFromPath(window.location.pathname)
 
-      if (requestedView && accessibleItems.some((item) => item.id === requestedView)) {
+      if (requestedView) {
         setActiveView(requestedView)
         return
       }
 
-      const fallbackView = visibleItems[0]?.id || accessibleItems[0]?.id || 'dashboard'
-      setActiveView(fallbackView)
-      window.history.replaceState({ view: fallbackView }, '', pathForView(fallbackView))
+      setActiveView('dashboard')
+      window.history.replaceState({ view: 'dashboard' }, '', pathForView('dashboard'))
     }
 
-    handlePopState()
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [accessibleItems, visibleItems])
+    syncViewFromUrl()
+    window.addEventListener('popstate', syncViewFromUrl)
+    return () => window.removeEventListener('popstate', syncViewFromUrl)
+  }, [])
 
   function navigate(view) {
     const allowed = accessibleItems.some((item) => item.id === view)
@@ -165,6 +156,19 @@ function MainApplication() {
     settings: <SettingsPage />,
   }
 
+  const activeViewAllowed = accessibleItems.some((item) => item.id === activeView)
+  const activePage = activeViewAllowed
+    ? (pages[activeView] || pages.dashboard)
+    : (
+      <div className="panel">
+        <h2>Acceso restringido</h2>
+        <p>Tu usuario no tiene permiso para abrir esta sección.</p>
+        <button type="button" className="btn" onClick={() => navigate('dashboard')}>
+          Ir al resumen
+        </button>
+      </div>
+    )
+
   return (
     <AppShell
       navItems={visibleItems}
@@ -181,7 +185,7 @@ function MainApplication() {
       activeLocation={restaurant.activeLocation}
       onLocationChange={restaurant.switchLocation}
     >
-      {pages[activeView] || pages.dashboard}
+      {activePage}
     </AppShell>
   )
 }
