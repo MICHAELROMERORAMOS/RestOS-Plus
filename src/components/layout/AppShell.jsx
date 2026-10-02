@@ -26,6 +26,12 @@ export default function AppShell({
   locations = [],
   activeLocation,
   onLocationChange,
+  workspaceMode = 'branch',
+  canCompanyControl = false,
+  canPlatformAdmin = false,
+  onEnterCentral,
+  onEnterBranch,
+  onEnterPlatform,
 }) {
   const current = navItems.find((item) => item.id === activeView)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarPreference)
@@ -43,6 +49,12 @@ export default function AppShell({
     setSidebarCollapsed(true)
   }
 
+  const contextLabel = workspaceMode === 'platform'
+    ? 'Plataforma RestOS+'
+    : workspaceMode === 'central'
+      ? 'Control central'
+      : (activeLocation?.name || 'Sucursal')
+
   return (
     <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
       <Sidebar
@@ -53,6 +65,7 @@ export default function AppShell({
         onLogout={onLogout}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={() => setSidebarCollapsed((currentValue) => !currentValue)}
+        contextLabel={contextLabel}
       />
 
       <main className="main">
@@ -66,6 +79,12 @@ export default function AppShell({
           locations={locations}
           activeLocation={activeLocation}
           onLocationChange={onLocationChange}
+          workspaceMode={workspaceMode}
+          canCompanyControl={canCompanyControl}
+          canPlatformAdmin={canPlatformAdmin}
+          onEnterCentral={onEnterCentral}
+          onEnterBranch={onEnterBranch}
+          onEnterPlatform={onEnterPlatform}
         />
         <div className="content-scroll">
           <div className="content">{children}</div>
