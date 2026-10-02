@@ -17,6 +17,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
   const [
     { data: categories, error: categoriesError },
     { data: products, error: productsError },
+    { data: productLocations, error: productLocationsError },
     { data: stations, error: stationsError },
     { data: routes, error: routesError },
     { data: allergenConfig, error: allergenConfigError },
@@ -32,6 +33,10 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       .select('id,restaurant_id,category_id,sku,name,description,base_price,tax_rate,track_inventory,inventory_mode,active,created_at')
       .eq('restaurant_id', restaurantId)
       .order('name', { ascending: true }),
+    client
+      .from('product_locations')
+      .select('product_id,location_id,active,price_override')
+      .eq('restaurant_id', restaurantId),
     client
       .from('kitchen_stations')
       .select('id,location_id,name,station_type,display_order,active')
@@ -49,6 +54,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
 
   if (categoriesError) throw categoriesError
   if (productsError) throw productsError
+  if (productLocationsError) throw productLocationsError
   if (stationsError) throw stationsError
   if (routesError) throw routesError
   if (allergenConfigError) throw allergenConfigError
@@ -64,6 +70,16 @@ export async function loadMenuCatalog(restaurantId, locationId) {
   const categoryById = new Map((categories || []).map((category) => [category.id, category]))
   const stationById = new Map((stations || []).map((station) => [station.id, station]))
   const routeByProduct = new Map((routes || []).map((route) => [route.product_id, route]))
+  const locationsByProduct = new Map()
+  ;(productLocations || []).forEach((row) => {
+    const productId = String(row.product_id)
+    const current = locationsByProduct.get(productId) || {}
+    current[String(row.location_id)] = {
+      active: row.active !== false,
+      priceOverride: row.price_override == null ? null : Number(row.price_override),
+    }
+    locationsByProduct.set(productId, current)
+  })
 
   return {
     categories: (categories || []).map((category) => ({
@@ -98,12 +114,22 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       const category = categoryById.get(product.category_id)
       const route = routeByProduct.get(product.id)
       const station = route ? stationById.get(route.station_id) : null
+      const locationAvailability = locationsByProduct.get(String(product.id)) || {}
+      const currentLocation = locationAvailability[String(locationId)] || null
+      const basePrice = Number(product.base_price || 0)
+      const effectivePrice = currentLocation?.priceOverride == null
+        ? basePrice
+        : Number(currentLocation.priceOverride)
 
       return {
         id: product.id,
         name: product.name,
         description: product.description || '',
-        price: Number(product.base_price || 0),
+        price: effectivePrice,
+        basePrice,
+        priceOverride: currentLocation?.priceOverride ?? null,
+        locationAvailability,
+        activeAtLocation: currentLocation?.active === true,
         taxRate: Number(product.tax_rate || 0),
         sku: product.sku || '',
         categoryId: product.category_id || null,
@@ -128,7 +154,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
             level: subtype.level === 'may_contain' ? 'may_contain' : 'contains',
           })),
         })),
-        available: product.active !== false,
+        available: product.active !== false && currentLocation?.active === true,
         active: product.active !== false,
       }
     }),
@@ -179,6 +205,7 @@ export async function saveMenuProduct({
   inventoryOpeningStock = 0,
   active = true,
   allergens = [],
+  locationSettings = [],
 }) {
   const client = requireSupabase()
 
@@ -192,7 +219,17 @@ export async function saveMenuProduct({
       )),
     }))
 
-  const { data, error } = await client.rpc('save_menu_product_configured_with_allergens', {
+  const normalizedLocations = (Array.isArray(locationSettings) ? locationSettings : [])
+    .filter((location) => location?.locationId)
+    .map((location) => ({
+      locationId: location.locationId,
+      active: Boolean(location.active),
+      priceOverride: location.priceOverride === '' || location.priceOverride == null
+        ? null
+        : Number(location.priceOverride),
+    }))
+
+  const { data, error } = await client.rpc('save_menu_product_full_config', {
     p_product_id: productId,
     p_restaurant_id: restaurantId,
     p_location_id: locationId,
@@ -211,6 +248,7 @@ export async function saveMenuProduct({
     p_inventory_opening_stock: Number(inventoryOpeningStock || 0),
     p_active: Boolean(active),
     p_allergens: normalizedAllergens,
+    p_locations: normalizedLocations,
   })
 
   if (error) throw error
