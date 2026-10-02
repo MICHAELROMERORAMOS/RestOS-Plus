@@ -62,6 +62,7 @@ export default function StationPage({ station }) {
   const {
     stationJobs,
     advanceStationRound,
+    markTableItemDelivered,
     tableLabel,
     formatMoney,
     voidRequestsVersion,
@@ -75,6 +76,7 @@ export default function StationPage({ station }) {
   const [voidRequests, setVoidRequests] = useState([])
   const [requestsLoading, setRequestsLoading] = useState(false)
   const [reviewingId, setReviewingId] = useState(null)
+  const [dispatchingLineId, setDispatchingLineId] = useState(null)
   const soundStorageKey = `restos-kds-sound-${station}`
   const [soundEnabled, setSoundEnabled] = useState(() => (
     localStorage.getItem(`restos-kds-sound-${station}`) === 'on'
@@ -392,8 +394,12 @@ export default function StationPage({ station }) {
               <span className="badge">#{order.id} · C{round.id}</span>
             </div>
 
-            <div className={`time kds-state ${status === 'preparing' ? 'preparing' : 'new'}`}>
-              {status === 'new' ? 'NUEVO' : 'PREPARANDO'}
+            <div className={`time kds-state ${status === 'ready' ? 'ready' : status === 'preparing' ? 'preparing' : 'new'}`}>
+              {status === 'new'
+                ? 'NUEVO'
+                : status === 'ready'
+                  ? 'LISTO PARA DESPACHAR'
+                  : 'PREPARANDO'}
             </div>
 
             {declaredAllergiesForItems(items).length > 0 && (
@@ -424,20 +430,45 @@ export default function StationPage({ station }) {
                         {itemAllergyAlert(item).text}
                       </small>
                     )}
+                    {order.mode === 'table' && item.prepStatus === 'ready' && (
+                      <button
+                        type="button"
+                        className="btn primary kds-item-dispatch"
+                        disabled={String(dispatchingLineId) === String(item.lineId)}
+                        onClick={async () => {
+                          if (dispatchingLineId) return
+                          setDispatchingLineId(item.lineId)
+                          try {
+                            const result = await markTableItemDelivered(order.id, item.lineId)
+                            if (result?.ok === false) {
+                              window.alert(result.message || 'No se pudo despachar el producto.')
+                            }
+                          } finally {
+                            setDispatchingLineId(null)
+                          }
+                        }}
+                      >
+                        {String(dispatchingLineId) === String(item.lineId)
+                          ? 'Despachando…'
+                          : '✓ Despachar este producto'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
 
-            <button
-              className={`btn kds-action ${status === 'preparing' ? 'primary' : ''}`}
-              onClick={async () => {
-                const result = await advanceStationRound(order.id, round.id, station)
-                if (result?.ok === false) window.alert(result.message)
-              }}
-            >
-              {status === 'new' ? `${icon} Empezar preparación` : '✓ Marcar productos listos'}
-            </button>
+            {status !== 'ready' && (
+              <button
+                className={`btn kds-action ${status === 'preparing' ? 'primary' : ''}`}
+                onClick={async () => {
+                  const result = await advanceStationRound(order.id, round.id, station)
+                  if (result?.ok === false) window.alert(result.message)
+                }}
+              >
+                {status === 'new' ? `${icon} Empezar preparación` : '✓ Marcar productos listos'}
+              </button>
+            )}
           </article>
         )) : (
           <div className="card placeholder kds-empty">
