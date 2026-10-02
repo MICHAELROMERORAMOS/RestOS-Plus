@@ -76,7 +76,10 @@ export default function StationPage({ station }) {
   const [voidRequests, setVoidRequests] = useState([])
   const [requestsLoading, setRequestsLoading] = useState(false)
   const [reviewingId, setReviewingId] = useState(null)
-  const [dispatchingLineId, setDispatchingLineId] = useState(null)
+  const [dispatchTarget, setDispatchTarget] = useState(null)
+  const [dispatchQuantity, setDispatchQuantity] = useState(1)
+  const [dispatchBusy, setDispatchBusy] = useState(false)
+  const [dispatchError, setDispatchError] = useState('')
   const soundStorageKey = `restos-kds-sound-${station}`
   const [soundEnabled, setSoundEnabled] = useState(() => (
     localStorage.getItem(`restos-kds-sound-${station}`) === 'on'
@@ -110,7 +113,7 @@ export default function StationPage({ station }) {
           readyQty: 0,
         }
 
-        const quantity = Number(item.quantity || 0)
+        const quantity = Number(item.pendingQuantity ?? item.quantity ?? 0)
         current.total += quantity
 
         if (item.prepStatus === 'ready') current.readyQty += quantity
@@ -316,6 +319,66 @@ export default function StationPage({ station }) {
     }
   }
 
+  function openDispatchModal(order, item) {
+    const pendingQuantity = Math.max(
+      0,
+      Number(item.pendingQuantity ?? (Number(item.quantity || 0) - Number(item.servedQuantity || 0))),
+    )
+
+    if (pendingQuantity <= 0) return
+
+    setDispatchTarget({
+      orderId: order.id,
+      orderLabel: order.tableIds?.length
+        ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
+        : `Orden #${order.id}`,
+      item,
+      pendingQuantity,
+    })
+    setDispatchQuantity(pendingQuantity)
+    setDispatchError('')
+  }
+
+  function closeDispatchModal() {
+    if (dispatchBusy) return
+    setDispatchTarget(null)
+    setDispatchQuantity(1)
+    setDispatchError('')
+  }
+
+  async function confirmDispatch() {
+    if (!dispatchTarget || dispatchBusy) return
+
+    const maxQuantity = Number(dispatchTarget.pendingQuantity || 0)
+    const selectedQuantity = Math.min(
+      maxQuantity,
+      Math.max(1, Number(dispatchQuantity || 1)),
+    )
+
+    setDispatchBusy(true)
+    setDispatchError('')
+
+    try {
+      const result = await markTableItemDelivered(
+        dispatchTarget.orderId,
+        dispatchTarget.item.lineId,
+        selectedQuantity,
+      )
+
+      if (result?.ok === false) {
+        setDispatchError(result.message || 'No se pudo registrar la entrega.')
+        return
+      }
+
+      setDispatchTarget(null)
+      setDispatchQuantity(1)
+    } catch (error) {
+      setDispatchError(error?.message || 'No se pudo registrar la entrega.')
+    } finally {
+      setDispatchBusy(false)
+    }
+  }
+
   return (
     <section className={`view active station-view ${isBar ? 'bar-station' : 'kitchen-station'}`}>
       <div className="hero station-hero">
@@ -421,43 +484,46 @@ export default function StationPage({ station }) {
             {order.mode !== 'quick' && order.pager && <div className="badge">Pager / turno {order.pager}</div>}
 
             <div className="station-job-items kds-item-list">
-              {items.map((item) => (
-                <div className="kds-line kds-product-row" key={item.lineId}>
-                  <span className="kds-qty">{item.quantity}×</span>
-                  <div className="kds-product-copy">
-                    <b>{item.name}</b>
-                    {item.note && <small>↳ {item.note}</small>}
-                    {itemAllergyAlert(item) && (
-                      <small className={`kds-line-allergy ${itemAllergyAlert(item).level}`}>
-                        {itemAllergyAlert(item).text}
-                      </small>
-                    )}
-                    {order.mode === 'table' && item.prepStatus === 'ready' && (
+              {items.map((item) => {
+                const pendingQuantity = Number(item.pendingQuantity ?? item.quantity ?? 0)
+                const servedQuantity = Number(item.servedQuantity || 0)
+                const canDispatch = (
+                  order.mode === 'table'
+                  && ['preparing', 'ready'].includes(item.prepStatus)
+                  && pendingQuantity > 0
+                )
+
+                return (
+                  <div className="kds-line kds-product-row" key={item.lineId}>
+                    <span className="kds-qty">{pendingQuantity}×</span>
+
+                    <div className="kds-product-copy">
+                      <b>{item.name}</b>
+                      {item.note && <small>↳ {item.note}</small>}
+                      {servedQuantity > 0 && (
+                        <small className="kds-partial-dispatch">
+                          ✓ {servedQuantity} entregada{servedQuantity === 1 ? '' : 's'} · {pendingQuantity} pendiente{pendingQuantity === 1 ? '' : 's'}
+                        </small>
+                      )}
+                      {itemAllergyAlert(item) && (
+                        <small className={`kds-line-allergy ${itemAllergyAlert(item).level}`}>
+                          {itemAllergyAlert(item).text}
+                        </small>
+                      )}
+                    </div>
+
+                    {canDispatch && (
                       <button
                         type="button"
                         className="btn primary kds-item-dispatch"
-                        disabled={String(dispatchingLineId) === String(item.lineId)}
-                        onClick={async () => {
-                          if (dispatchingLineId) return
-                          setDispatchingLineId(item.lineId)
-                          try {
-                            const result = await markTableItemDelivered(order.id, item.lineId)
-                            if (result?.ok === false) {
-                              window.alert(result.message || 'No se pudo despachar el producto.')
-                            }
-                          } finally {
-                            setDispatchingLineId(null)
-                          }
-                        }}
+                        onClick={() => openDispatchModal(order, item)}
                       >
-                        {String(dispatchingLineId) === String(item.lineId)
-                          ? 'Despachando…'
-                          : '✓ Despachar este producto'}
+                        ✓ Entregar
                       </button>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {status !== 'ready' && (
@@ -482,6 +548,92 @@ export default function StationPage({ station }) {
           </div>
         )}
       </div>
+
+      {dispatchTarget && (
+        <div className="modal open kds-dispatch-modal" onClick={closeDispatchModal}>
+          <div className="modal-card kds-dispatch-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title kds-dispatch-head">
+              <div>
+                <span className="kds-dispatch-kicker">ENTREGA PARCIAL · MESA</span>
+                <h3>¿Cuántas unidades vas a entregar?</h3>
+                <p>{dispatchTarget.orderLabel}</p>
+              </div>
+              <button className="btn kds-dispatch-close" disabled={dispatchBusy} onClick={closeDispatchModal}>×</button>
+            </div>
+
+            <div className="kds-dispatch-product">
+              <div>
+                <span>Producto</span>
+                <b>{dispatchTarget.item.name}</b>
+              </div>
+              <div className="kds-dispatch-pending">
+                <span>Pendientes</span>
+                <strong>{dispatchTarget.pendingQuantity}</strong>
+              </div>
+            </div>
+
+            <div className="kds-dispatch-selector">
+              <button
+                type="button"
+                aria-label="Reducir cantidad"
+                disabled={dispatchBusy || dispatchQuantity <= 1}
+                onClick={() => setDispatchQuantity((current) => Math.max(1, Number(current || 1) - 1))}
+              >
+                −
+              </button>
+
+              <div>
+                <strong>{dispatchQuantity}</strong>
+                <span>unidad{Number(dispatchQuantity) === 1 ? '' : 'es'} a entregar</span>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Aumentar cantidad"
+                disabled={dispatchBusy || dispatchQuantity >= dispatchTarget.pendingQuantity}
+                onClick={() => setDispatchQuantity((current) => Math.min(
+                  dispatchTarget.pendingQuantity,
+                  Number(current || 1) + 1,
+                ))}
+              >
+                +
+              </button>
+            </div>
+
+            {dispatchQuantity < dispatchTarget.pendingQuantity && (
+              <button
+                type="button"
+                className="btn kds-dispatch-all"
+                disabled={dispatchBusy}
+                onClick={() => setDispatchQuantity(dispatchTarget.pendingQuantity)}
+              >
+                Entregar todas las pendientes ({dispatchTarget.pendingQuantity})
+              </button>
+            )}
+
+            <div className={`kds-dispatch-result ${dispatchQuantity >= dispatchTarget.pendingQuantity ? 'complete' : 'partial'}`}>
+              {dispatchQuantity >= dispatchTarget.pendingQuantity
+                ? '✓ Este producto quedará completamente entregado.'
+                : `Quedarán ${dispatchTarget.pendingQuantity - dispatchQuantity} unidad${dispatchTarget.pendingQuantity - dispatchQuantity === 1 ? '' : 'es'} todavía en preparación.`}
+            </div>
+
+            {dispatchError && (
+              <div className="notice warn kds-dispatch-error">{dispatchError}</div>
+            )}
+
+            <div className="kds-dispatch-actions">
+              <button className="btn" disabled={dispatchBusy} onClick={closeDispatchModal}>
+                Cancelar
+              </button>
+              <button className="btn primary" disabled={dispatchBusy} onClick={confirmDispatch}>
+                {dispatchBusy
+                  ? 'Registrando…'
+                  : `✓ Confirmar entrega de ${dispatchQuantity}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showVoidRequests && canReviewVoids && (
         <div className="modal open kitchen-void-modal" onClick={() => setShowVoidRequests(false)}>
