@@ -334,3 +334,126 @@ export async function loadDirectProductMasterConfig(restaurantId, productIds = [
   })
   return byProduct
 }
+
+
+export async function loadCompanyMasterCatalog(restaurantId) {
+  const client = requireSupabase()
+
+  const [
+    { data: categories, error: categoriesError },
+    { data: products, error: productsError },
+    { data: productLocations, error: productLocationsError },
+    { data: allergenConfig, error: allergenConfigError },
+  ] = await Promise.all([
+    client
+      .from('menu_categories')
+      .select('id,restaurant_id,parent_id,name,description,display_order,active')
+      .eq('restaurant_id', restaurantId)
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true }),
+    client
+      .from('products')
+      .select('id,restaurant_id,category_id,sku,name,description,base_price,tax_rate,track_inventory,inventory_mode,direct_inventory_item_id,preparation_station_type,active,created_at')
+      .eq('restaurant_id', restaurantId)
+      .order('name', { ascending: true }),
+    client
+      .from('product_locations')
+      .select('product_id,location_id,active,price_override')
+      .eq('restaurant_id', restaurantId),
+    client.rpc('load_allergen_configuration', {
+      p_restaurant_id: restaurantId,
+    }),
+  ])
+
+  if (categoriesError) throw categoriesError
+  if (productsError) throw productsError
+  if (productLocationsError) throw productLocationsError
+  if (allergenConfigError) throw allergenConfigError
+
+  const allergenCatalog = Array.isArray(allergenConfig?.catalog)
+    ? allergenConfig.catalog
+    : []
+  const productAllergens = (
+    allergenConfig?.productAllergens
+    && typeof allergenConfig.productAllergens === 'object'
+  ) ? allergenConfig.productAllergens : {}
+
+  const categoryById = new Map((categories || []).map((category) => [category.id, category]))
+  const locationsByProduct = new Map()
+  ;(productLocations || []).forEach((row) => {
+    const key = String(row.product_id)
+    const current = locationsByProduct.get(key) || {}
+    current[String(row.location_id)] = {
+      active: row.active !== false,
+      priceOverride: row.price_override == null ? null : Number(row.price_override),
+    }
+    locationsByProduct.set(key, current)
+  })
+
+  return {
+    categories: (categories || []).map((category) => ({
+      id: category.id,
+      name: category.name,
+      description: category.description || '',
+      displayOrder: category.display_order,
+      active: category.active,
+    })),
+    allergenCatalog: allergenCatalog.map((allergen) => ({
+      id: allergen.id,
+      code: allergen.code,
+      nameEs: allergen.nameEs,
+      nameEn: allergen.nameEn,
+      icon: allergen.icon || '⚠',
+      displayOrder: Number(allergen.displayOrder || 0),
+      subtypes: (allergen.subtypes || []).map((subtype) => ({
+        id: subtype.id,
+        code: subtype.code,
+        nameEs: subtype.nameEs,
+        nameEn: subtype.nameEn,
+        displayOrder: Number(subtype.displayOrder || 0),
+      })),
+    })),
+    products: (products || []).map((product) => {
+      const category = categoryById.get(product.category_id)
+      const locationAvailability = locationsByProduct.get(String(product.id)) || {}
+      const basePrice = Number(product.base_price || 0)
+      return {
+        id: product.id,
+        name: product.name,
+        description: product.description || '',
+        price: basePrice,
+        basePrice,
+        priceOverride: null,
+        locationAvailability,
+        activeAtLocation: false,
+        taxRate: Number(product.tax_rate || 0),
+        sku: product.sku || '',
+        categoryId: product.category_id || null,
+        category: category?.name || 'Sin categoría',
+        station: product.preparation_station_type || 'kitchen',
+        stationName: product.preparation_station_type === 'bar' ? 'Bar' : 'Cocina',
+        directInventoryItemId: product.direct_inventory_item_id || null,
+        trackInventory: Boolean(product.track_inventory),
+        inventoryMode: product.inventory_mode || (product.track_inventory ? 'recipe' : 'none'),
+        allergens: (productAllergens[String(product.id)] || []).map((allergen) => ({
+          allergenId: allergen.allergenId,
+          code: allergen.code,
+          nameEs: allergen.nameEs,
+          nameEn: allergen.nameEn,
+          icon: allergen.icon || '⚠',
+          level: allergen.level === 'may_contain' ? 'may_contain' : 'contains',
+          subtypeIds: (allergen.subtypes || []).map((subtype) => subtype.id),
+          subtypes: (allergen.subtypes || []).map((subtype) => ({
+            id: subtype.id,
+            code: subtype.code,
+            nameEs: subtype.nameEs,
+            nameEn: subtype.nameEn,
+            level: subtype.level === 'may_contain' ? 'may_contain' : 'contains',
+          })),
+        })),
+        available: product.active !== false,
+        active: product.active !== false,
+      }
+    }),
+  }
+}
