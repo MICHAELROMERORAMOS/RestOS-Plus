@@ -123,13 +123,14 @@ export default function StaffPage() {
   }, [members, search, statusFilter])
 
   function updateChoice(requestId, patch) {
-    setChoices((previous) => ({
-      ...previous,
-      [requestId]: {
-        ...(previous[requestId] || {}),
-        ...patch,
-      },
-    }))
+    setChoices((previous) => {
+      const current = previous[requestId] || {}
+      const next = { ...current, ...patch }
+      if (patch.roleId && roleById.get(patch.roleId)?.company_scope) {
+        next.locationId = ''
+      }
+      return { ...previous, [requestId]: next }
+    })
   }
 
   function memberLocationText(member) {
@@ -150,8 +151,8 @@ export default function StaffPage() {
       phone: member.phone || '',
       roleId: member.role_id || '',
       status: member.membership_status === 'suspended' ? 'suspended' : 'active',
-      allLocations: Boolean(member.all_locations),
-      locationIds: Array.isArray(member.location_ids) ? member.location_ids : [],
+      allLocations: Boolean(member.role_company_scope || member.all_locations),
+      locationIds: member.role_company_scope ? [] : (Array.isArray(member.location_ids) ? member.location_ids : []),
     })
   }
 
@@ -162,7 +163,14 @@ export default function StaffPage() {
   }
 
   function updateMemberField(field, value) {
-    setMemberForm((previous) => ({ ...previous, [field]: value }))
+    setMemberForm((previous) => {
+      const next = { ...previous, [field]: value }
+      if (field === 'roleId' && roleById.get(value)?.company_scope) {
+        next.allLocations = true
+        next.locationIds = []
+      }
+      return next
+    })
   }
 
   function toggleMemberLocation(locationId) {
@@ -184,7 +192,9 @@ export default function StaffPage() {
       return window.alert('El usuario debe tener entre 3 y 40 caracteres y usar solo letras, números, puntos, guiones o guion bajo.')
     }
     if (!memberForm.roleId) return window.alert('Selecciona un rol.')
-    if (!memberForm.allLocations && !memberForm.locationIds.length) {
+    const selectedRole = roleById.get(memberForm.roleId)
+    const companyScopeRole = Boolean(selectedRole?.company_scope)
+    if (!companyScopeRole && !memberForm.allLocations && !memberForm.locationIds.length) {
       return window.alert('Selecciona al menos una sucursal.')
     }
 
@@ -206,8 +216,8 @@ export default function StaffPage() {
         phone: memberForm.phone.trim(),
         roleId: memberForm.roleId,
         status: memberForm.status,
-        allLocations: memberForm.allLocations,
-        locationIds: memberForm.locationIds,
+        allLocations: companyScopeRole ? true : memberForm.allLocations,
+        locationIds: companyScopeRole ? [] : memberForm.locationIds,
       })
       if (updateError) throw updateError
 
@@ -226,15 +236,20 @@ export default function StaffPage() {
     if (!canManage) return window.alert('Tu rol no permite aprobar usuarios.')
     const choice = choices[request.id] || {}
     if (!choice.roleId) return window.alert('Selecciona el rol que tendrá este usuario.')
-    if (!choice.locationId && locations.length) {
+    const selectedRole = roleById.get(choice.roleId)
+    const companyScopeRole = Boolean(selectedRole?.company_scope)
+    if (!companyScopeRole && !choice.locationId && locations.length) {
       const allBranches = window.confirm('No seleccionaste una sucursal. ¿Dar acceso a TODAS las sucursales?')
       if (!allBranches) return
     }
 
-    const roleName = roleById.get(choice.roleId)?.name || 'rol seleccionado'
-    const branchName = choice.locationId
-      ? locations.find((location) => location.id === choice.locationId)?.name
-      : 'todas las sucursales'
+    const roleName = selectedRole?.name || 'rol seleccionado'
+    const effectiveLocationId = companyScopeRole ? null : (choice.locationId || null)
+    const branchName = companyScopeRole
+      ? 'Control Central y todas las sucursales'
+      : effectiveLocationId
+        ? locations.find((location) => location.id === effectiveLocationId)?.name
+        : 'todas las sucursales'
 
     const name = request.profile?.full_name || request.profile?.email || 'este usuario'
     if (!window.confirm(`¿Aprobar a ${name} como ${roleName} con acceso a ${branchName}?`)) return
@@ -245,7 +260,7 @@ export default function StaffPage() {
       const { error: approvalError } = await approveAccessRequest({
         requestId: request.id,
         roleId: choice.roleId,
-        locationId: choice.locationId || null,
+        locationId: effectiveLocationId,
       })
       if (approvalError) throw approvalError
       await refresh()
@@ -383,6 +398,8 @@ export default function StaffPage() {
               const profile = request.profile || {}
               const choice = choices[request.id] || {}
               const busy = busyId === request.id
+              const selectedRole = roleById.get(choice.roleId)
+              const companyScopeRole = Boolean(selectedRole?.company_scope)
 
               return (
                 <article className="staff-request-card" key={request.id}>
@@ -417,13 +434,13 @@ export default function StaffPage() {
                     </label>
 
                     <label>
-                      <span>Sucursal</span>
+                      <span>{companyScopeRole ? 'Alcance' : 'Sucursal'}</span>
                       <select
-                        value={choice.locationId || ''}
+                        value={companyScopeRole ? '' : (choice.locationId || '')}
                         onChange={(event) => updateChoice(request.id, { locationId: event.target.value })}
-                        disabled={!canManage || busy}
+                        disabled={!canManage || busy || companyScopeRole}
                       >
-                        <option value="">Todas las sucursales</option>
+                        <option value="">{companyScopeRole ? 'Control Central · todas las sucursales' : 'Todas las sucursales'}</option>
                         {locations.map((location) => (
                           <option key={location.id} value={location.id}>{location.name}</option>
                         ))}
@@ -458,7 +475,7 @@ export default function StaffPage() {
 
       <div className="grid two section-gap">
         <div className="card">
-          <div className="section-title"><h3>Roles base de RestOS+</h3><span className="badge">7 perfiles</span></div>
+          <div className="section-title"><h3>Roles base de RestOS+</h3><span className="badge">{ROLE_PRESETS.length} perfiles</span></div>
           <div className="list">
             {ROLE_PRESETS.map((role) => (
               <div className="row" key={role.code}>
@@ -547,16 +564,20 @@ export default function StaffPage() {
             </div>
 
             <div className="staff-edit-section">
+              {roleById.get(memberForm.roleId)?.company_scope && (
+                <div className="notice">Este es un rol corporativo. Por seguridad, siempre tiene alcance de empresa y acceso a todas las sucursales.</div>
+              )}
               <label className="staff-all-locations">
                 <input
                   type="checkbox"
-                  checked={memberForm.allLocations}
+                  checked={roleById.get(memberForm.roleId)?.company_scope ? true : memberForm.allLocations}
+                  disabled={Boolean(roleById.get(memberForm.roleId)?.company_scope)}
                   onChange={(event) => updateMemberField('allLocations', event.target.checked)}
                 />
                 <span><b>Acceso a todas las sucursales</b><small>Incluye automáticamente las sucursales que se creen después.</small></span>
               </label>
 
-              {!memberForm.allLocations && (
+              {!roleById.get(memberForm.roleId)?.company_scope && !memberForm.allLocations && (
                 <div className="staff-location-options">
                   {locations.map((location) => (
                     <label key={location.id}>
