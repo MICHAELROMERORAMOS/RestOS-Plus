@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext.jsx'
 import AuthGateway from './features/auth/AuthGateway.jsx'
 import AppShell from './components/layout/AppShell.jsx'
-import { NAV_ITEMS } from './config/navigation.js'
+import { NAV_ITEMS, pathForView, viewFromPath } from './config/navigation.js'
 import DashboardPage from './pages/DashboardPage.jsx'
 import TablesPage from './pages/TablesPage.jsx'
 import QuickServicePage from './pages/QuickServicePage.jsx'
@@ -46,26 +46,48 @@ function MainApplication() {
     () => accessibleItems.filter((item) => !item.hidden),
     [accessibleItems],
   )
-  const [activeView, setActiveView] = useState(() => visibleItems[0]?.id || 'dashboard')
+  const [activeView, setActiveView] = useState(() => viewFromPath(window.location.pathname) || visibleItems[0]?.id || 'dashboard')
 
   useEffect(() => {
     if (!accessibleItems.some((item) => item.id === activeView)) {
-      setActiveView(visibleItems[0]?.id || 'dashboard')
+      const fallbackView = visibleItems[0]?.id || accessibleItems[0]?.id || 'dashboard'
+      setActiveView(fallbackView)
+      window.history.replaceState({ view: fallbackView }, '', pathForView(fallbackView))
     }
   }, [accessibleItems, visibleItems, activeView])
 
+  useEffect(() => {
+    function handlePopState() {
+      const requestedView = viewFromPath(window.location.pathname)
+
+      if (requestedView && accessibleItems.some((item) => item.id === requestedView)) {
+        setActiveView(requestedView)
+        return
+      }
+
+      const fallbackView = visibleItems[0]?.id || accessibleItems[0]?.id || 'dashboard'
+      setActiveView(fallbackView)
+      window.history.replaceState({ view: fallbackView }, '', pathForView(fallbackView))
+    }
+
+    handlePopState()
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [accessibleItems, visibleItems])
+
   function navigate(view) {
-    const meta = NAV_ITEMS.find((item) => item.id === view)
-    if (!meta) return
-    const allowed = meta.platformAdmin
-      ? Boolean(auth.userContext?.platformAdmin)
-      : auth.can(meta.permission)
+    const allowed = accessibleItems.some((item) => item.id === view)
 
     if (!allowed) {
       window.alert('Tu usuario no tiene permiso para abrir este módulo.')
       return
     }
+
     setActiveView(view)
+    const nextPath = pathForView(view)
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({ view }, '', nextPath)
+    }
   }
 
   async function openTable(tableId, { confirmed = false } = {}) {
@@ -149,7 +171,10 @@ function MainApplication() {
       activeView={activeView}
       onNavigate={navigate}
       userContext={auth.userContext}
-      onLogout={auth.logout}
+      onLogout={async () => {
+        await auth.logout()
+        window.history.replaceState({ view: 'dashboard' }, '', '/')
+      }}
       canKitchen={auth.can('kitchen.view')}
       companyName={auth.userContext?.restaurant || 'Empresa'}
       locations={restaurant.locations}
