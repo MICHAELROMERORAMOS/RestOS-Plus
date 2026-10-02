@@ -63,6 +63,7 @@ export default function StationPage({ station }) {
     stationJobs,
     advanceStationRound,
     markTableItemDelivered,
+    markTableStationRoundDelivered,
     tableLabel,
     formatMoney,
     voidRequestsVersion,
@@ -80,6 +81,9 @@ export default function StationPage({ station }) {
   const [dispatchQuantity, setDispatchQuantity] = useState(1)
   const [dispatchBusy, setDispatchBusy] = useState(false)
   const [dispatchError, setDispatchError] = useState('')
+  const [dispatchAllTarget, setDispatchAllTarget] = useState(null)
+  const [dispatchAllBusy, setDispatchAllBusy] = useState(false)
+  const [dispatchAllError, setDispatchAllError] = useState('')
   const soundStorageKey = `restos-kds-sound-${station}`
   const [soundEnabled, setSoundEnabled] = useState(() => (
     localStorage.getItem(`restos-kds-sound-${station}`) === 'on'
@@ -379,6 +383,63 @@ export default function StationPage({ station }) {
     }
   }
 
+  function openDispatchAllModal(order, round, items) {
+    const pendingItems = (items || []).filter((item) => (
+      ['preparing', 'ready'].includes(item.prepStatus)
+      && Number(item.pendingQuantity ?? item.quantity ?? 0) > 0
+    ))
+
+    if (!pendingItems.length) return
+
+    const pendingUnits = pendingItems.reduce(
+      (sum, item) => sum + Number(item.pendingQuantity ?? item.quantity ?? 0),
+      0,
+    )
+
+    setDispatchAllTarget({
+      orderId: order.id,
+      roundId: round.id,
+      orderLabel: order.tableIds?.length
+        ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
+        : `Orden #${order.id}`,
+      items: pendingItems,
+      pendingUnits,
+    })
+    setDispatchAllError('')
+  }
+
+  function closeDispatchAllModal() {
+    if (dispatchAllBusy) return
+    setDispatchAllTarget(null)
+    setDispatchAllError('')
+  }
+
+  async function confirmDispatchAll() {
+    if (!dispatchAllTarget || dispatchAllBusy) return
+
+    setDispatchAllBusy(true)
+    setDispatchAllError('')
+
+    try {
+      const result = await markTableStationRoundDelivered(
+        dispatchAllTarget.orderId,
+        dispatchAllTarget.roundId,
+        station,
+      )
+
+      if (result?.ok === false) {
+        setDispatchAllError(result.message || 'No se pudo entregar la comanda completa.')
+        return
+      }
+
+      setDispatchAllTarget(null)
+    } catch (error) {
+      setDispatchAllError(error?.message || 'No se pudo entregar la comanda completa.')
+    } finally {
+      setDispatchAllBusy(false)
+    }
+  }
+
   return (
     <section className={`view active station-view ${isBar ? 'bar-station' : 'kitchen-station'}`}>
       <div className="hero station-hero">
@@ -526,7 +587,22 @@ export default function StationPage({ station }) {
               })}
             </div>
 
-            {status !== 'ready' && (
+            {order.mode === 'table' ? (
+              <button
+                className={`btn kds-action ${status === 'new' ? '' : 'primary'}`}
+                onClick={async () => {
+                  if (status === 'new') {
+                    const result = await advanceStationRound(order.id, round.id, station)
+                    if (result?.ok === false) window.alert(result.message)
+                    return
+                  }
+
+                  openDispatchAllModal(order, round, items)
+                }}
+              >
+                {status === 'new' ? `${icon} Empezar preparación` : '✓ Entregar todo'}
+              </button>
+            ) : status !== 'ready' && (
               <button
                 className={`btn kds-action ${status === 'preparing' ? 'primary' : ''}`}
                 onClick={async () => {
@@ -548,6 +624,74 @@ export default function StationPage({ station }) {
           </div>
         )}
       </div>
+
+      {dispatchAllTarget && (
+        <div className="modal open kds-dispatch-modal" onClick={closeDispatchAllModal}>
+          <div className="modal-card kds-dispatch-card" onClick={(event) => event.stopPropagation()}>
+            <div className="section-title kds-dispatch-head">
+              <div>
+                <span className="kds-dispatch-kicker">ENTREGA COMPLETA · MESA</span>
+                <h3>Todo está listo para entregar</h3>
+                <p>{dispatchAllTarget.orderLabel}</p>
+              </div>
+              <button
+                className="btn kds-dispatch-close"
+                disabled={dispatchAllBusy}
+                onClick={closeDispatchAllModal}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="kds-dispatch-all-summary">
+              <strong>
+                {dispatchAllTarget.pendingUnits} unidad{dispatchAllTarget.pendingUnits === 1 ? '' : 'es'} pendiente{dispatchAllTarget.pendingUnits === 1 ? '' : 's'}
+              </strong>
+              <span>
+                Se marcarán como entregados todos los productos pendientes de esta comanda en {stationName}.
+              </span>
+            </div>
+
+            <div className="kds-dispatch-all-list">
+              {dispatchAllTarget.items.map((item) => {
+                const pendingQuantity = Number(item.pendingQuantity ?? item.quantity ?? 0)
+                const servedQuantity = Number(item.servedQuantity || 0)
+
+                return (
+                  <div key={item.lineId}>
+                    <div>
+                      <b>{pendingQuantity}× {item.name}</b>
+                      {servedQuantity > 0 && (
+                        <small>
+                          {servedQuantity} ya entregada{servedQuantity === 1 ? '' : 's'} anteriormente
+                        </small>
+                      )}
+                    </div>
+                    <span>✓</span>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="kds-dispatch-result complete">
+              ✓ Al confirmar, esta comanda saldrá de {stationName} cuando no queden productos pendientes.
+            </div>
+
+            {dispatchAllError && (
+              <div className="notice warn kds-dispatch-error">{dispatchAllError}</div>
+            )}
+
+            <div className="kds-dispatch-actions">
+              <button className="btn" disabled={dispatchAllBusy} onClick={closeDispatchAllModal}>
+                Cancelar
+              </button>
+              <button className="btn primary" disabled={dispatchAllBusy} onClick={confirmDispatchAll}>
+                {dispatchAllBusy ? 'Entregando…' : '✓ Confirmar entrega completa'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dispatchTarget && (
         <div className="modal open kds-dispatch-modal" onClick={closeDispatchModal}>
