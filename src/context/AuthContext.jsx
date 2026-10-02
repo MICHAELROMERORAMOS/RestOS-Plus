@@ -71,6 +71,7 @@ export function AuthProvider({ children }) {
       role: 'Owner / Super Admin',
       restaurant: 'Modo diseño',
       companyScope: true,
+      isPrimaryOwner: true,
     })
     setPendingState(null)
     setMode('design')
@@ -141,6 +142,7 @@ export function AuthProvider({ children }) {
         role: access.role?.name || 'Rol',
         restaurant: access.restaurant?.name || 'Restaurante',
         companyScope: Boolean(access.role?.company_scope),
+        isPrimaryOwner: access.restaurant?.owner_user_id === user.id,
         membership: access.membership,
         platformAdmin: Boolean(access.platformAdmin),
       })
