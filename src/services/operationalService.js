@@ -136,6 +136,7 @@ function mapOperationalOrders(payload) {
         taxRate: asNumber(item.tax_rate),
         station: item.station_type === 'bar' ? 'bar' : 'kitchen',
         quantity: asNumber(item.quantity),
+        servedQuantity: asNumber(item.served_quantity),
         note: item.note || '',
         prepStatus: mapItemStatus(item.status),
         voided: item.status === 'cancelled',
@@ -549,13 +550,21 @@ export async function advanceStationRoundRemote(orderServerId, roundServerId, st
   return data
 }
 
-export async function markOrderItemServedRemote(orderServerId, itemServerId) {
+export async function markOrderItemServedRemote(orderServerId, itemServerId, quantity = null) {
   const client = requireSupabase()
 
-  const { data, error } = await client.rpc('mark_order_item_served', {
+  const rpcName = quantity == null
+    ? 'mark_order_item_served'
+    : 'mark_order_item_served_quantity'
+
+  const params = {
     p_order_id: orderServerId,
     p_item_id: itemServerId,
-  })
+  }
+
+  if (quantity != null) params.p_quantity = Number(quantity)
+
+  const { data, error } = await client.rpc(rpcName, params)
 
   if (error) throw error
   return data
