@@ -3,7 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext.jsx'
 import AuthGateway from './features/auth/AuthGateway.jsx'
 import AppShell from './components/layout/AppShell.jsx'
-import { NAV_ITEMS, pathForView, viewFromPath } from './config/navigation.js'
+import { NAV_ITEMS, pathForView, scopeForView, viewFromPath } from './config/navigation.js'
+import CompanyControlPage from './pages/CompanyControlPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import TablesPage from './pages/TablesPage.jsx'
 import QuickServicePage from './pages/QuickServicePage.jsx'
@@ -28,12 +29,14 @@ import SettingsPage from './pages/SettingsPage.jsx'
 function MainApplication() {
   const auth = useAuth()
   const restaurant = useRestaurant()
+
   const accessibleItems = useMemo(
     () => NAV_ITEMS.filter((item) => {
       if (item.id === 'bar' && restaurant.state.settings.splitStations === false) return false
-      return item.platformAdmin
-        ? Boolean(auth.userContext?.platformAdmin)
-        : auth.can(item.permission)
+      if (item.platformAdmin) return Boolean(auth.userContext?.platformAdmin)
+      if (item.permission && !auth.can(item.permission)) return false
+      if (item.contextPermission && !auth.can(item.contextPermission)) return false
+      return true
     }),
     [
       auth.permissions,
@@ -42,11 +45,17 @@ function MainApplication() {
       restaurant.state.settings.splitStations,
     ],
   )
-  const visibleItems = useMemo(
-    () => accessibleItems.filter((item) => !item.hidden),
-    [accessibleItems],
+
+  const [activeView, setActiveView] = useState(
+    () => viewFromPath(window.location.pathname) || 'dashboard',
   )
-  const [activeView, setActiveView] = useState(() => viewFromPath(window.location.pathname) || visibleItems[0]?.id || 'dashboard')
+
+  const activeScope = scopeForView(activeView)
+
+  const visibleItems = useMemo(
+    () => accessibleItems.filter((item) => !item.hidden && item.scope === activeScope),
+    [accessibleItems, activeScope],
+  )
 
   useEffect(() => {
     function syncViewFromUrl() {
@@ -54,6 +63,10 @@ function MainApplication() {
 
       if (requestedView) {
         setActiveView(requestedView)
+        const canonicalPath = pathForView(requestedView)
+        if (window.location.pathname !== canonicalPath) {
+          window.history.replaceState({ view: requestedView }, '', canonicalPath)
+        }
         return
       }
 
@@ -67,11 +80,11 @@ function MainApplication() {
   }, [])
 
   function navigate(view) {
-    const allowed = accessibleItems.some((item) => item.id === view)
+    const item = accessibleItems.find((candidate) => candidate.id === view)
 
-    if (!allowed) {
+    if (!item) {
       window.alert('Tu usuario no tiene permiso para abrir este módulo.')
-      return
+      return false
     }
 
     setActiveView(view)
@@ -79,6 +92,16 @@ function MainApplication() {
     if (window.location.pathname !== nextPath) {
       window.history.pushState({ view }, '', nextPath)
     }
+    return true
+  }
+
+  async function enterBranch(locationId = null) {
+    if (locationId && String(locationId) !== String(restaurant.activeLocation?.id || '')) {
+      const result = await restaurant.switchLocation(locationId)
+      if (!result?.ok) return result
+    }
+    navigate('dashboard')
+    return { ok: true }
   }
 
   async function openTable(tableId, { confirmed = false } = {}) {
@@ -128,6 +151,7 @@ function MainApplication() {
   }
 
   const pages = {
+    central: <CompanyControlPage onNavigate={navigate} onEnterBranch={enterBranch} />,
     dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={() => navigate('tables')} />,
     tables: <TablesPage onOpenTable={openTable} />,
     'quick-service': (
@@ -179,11 +203,19 @@ function MainApplication() {
         await auth.logout()
         window.history.replaceState({ view: 'dashboard' }, '', '/')
       }}
-      canKitchen={auth.can('kitchen.view')}
+      canKitchen={activeScope === 'branch' && auth.can('kitchen.view')}
+      canOrder={activeScope === 'branch' && auth.can('orders.create')}
+      onNewOrder={() => navigate('tables')}
       companyName={auth.userContext?.restaurant || 'Empresa'}
       locations={restaurant.locations}
       activeLocation={restaurant.activeLocation}
       onLocationChange={restaurant.switchLocation}
+      workspaceMode={activeScope}
+      canCompanyControl={auth.can('company.control.view')}
+      canPlatformAdmin={Boolean(auth.userContext?.platformAdmin)}
+      onEnterCentral={() => navigate('central')}
+      onEnterBranch={enterBranch}
+      onEnterPlatform={() => navigate('platform-companies')}
     >
       {activePage}
     </AppShell>
