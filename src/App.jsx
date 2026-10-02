@@ -16,6 +16,7 @@ import InvoiceVoidPage from './pages/InvoiceVoidPage.jsx'
 import InvoiceRegisterPage from './pages/InvoiceRegisterPage.jsx'
 import InventoryPage from './pages/InventoryPage.jsx'
 import ProductsPage from './pages/ProductsPage.jsx'
+import ProductAvailabilityPage from './pages/ProductAvailabilityPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import ReservationsPage from './pages/ReservationsPage.jsx'
 import StaffPage from './pages/StaffPage.jsx'
@@ -169,6 +170,7 @@ function MainApplication() {
     'invoice-register': <InvoiceRegisterPage />,
     inventory: <InventoryPage />,
     products: <ProductsPage />,
+    availability: <ProductAvailabilityPage />,
     customers: <CustomersPage />,
     reservations: <ReservationsPage />,
     staff: <StaffPage />,
