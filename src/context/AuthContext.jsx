@@ -70,6 +70,7 @@ export function AuthProvider({ children }) {
       name: 'Usuario de desarrollo',
       role: 'Owner / Super Admin',
       restaurant: 'Modo diseño',
+      companyScope: true,
     })
     setPendingState(null)
     setMode('design')
@@ -139,6 +140,7 @@ export function AuthProvider({ children }) {
         name: access.profile.full_name || access.profile.username || user.email,
         role: access.role?.name || 'Rol',
         restaurant: access.restaurant?.name || 'Restaurante',
+        companyScope: Boolean(access.role?.company_scope),
         membership: access.membership,
         platformAdmin: Boolean(access.platformAdmin),
       })
