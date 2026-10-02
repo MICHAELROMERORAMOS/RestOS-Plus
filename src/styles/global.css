@@ -5878,22 +5878,268 @@ html, body {
   border-color:#86efac;
 }
 
+.kds-product-row{
+  grid-template-columns:54px minmax(0,1fr) auto;
+  align-items:center;
+  column-gap:12px;
+}
+
+.kds-product-copy{
+  min-width:0;
+}
+
 .kds-item-dispatch{
+  align-self:center;
+  min-width:96px;
+  min-height:48px;
+  width:auto;
+  margin:0;
+  padding:10px 13px;
+  border-radius:12px;
+  white-space:nowrap;
+  font-size:12px;
+  font-weight:950;
+  touch-action:manipulation;
+}
+
+.kds-partial-dispatch{
   width:max-content;
   max-width:100%;
-  margin-top:9px;
-  padding:8px 11px;
-  font-size:10px;
+  padding:4px 7px;
+  border-radius:8px;
+  color:#1e6645!important;
+  background:#e8f5ed;
+  font-size:10px!important;
+  font-weight:900;
+}
+
+.kds-dispatch-modal{
+  z-index:1200;
+  align-items:center!important;
+  justify-content:center;
+  padding:18px;
+}
+
+.kds-dispatch-card{
+  width:min(500px,100%);
+  margin:0!important;
+  padding:22px;
+  border-radius:20px;
+}
+
+.kds-dispatch-head{
+  align-items:flex-start;
+  gap:14px;
+}
+
+.kds-dispatch-head h3{
+  margin:4px 0;
+  font-size:21px;
+}
+
+.kds-dispatch-head p{
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+}
+
+.kds-dispatch-kicker{
+  color:#2f6b4d;
+  font-size:9px;
   font-weight:950;
+  letter-spacing:.1em;
 }
 
-.kds-item-dispatch:disabled{
-  cursor:wait;
-  opacity:.7;
+.kds-dispatch-close{
+  width:42px;
+  min-width:42px;
+  height:42px;
+  padding:0;
+  font-size:22px;
 }
 
-@media(max-width:520px){
+.kds-dispatch-product{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  margin-top:16px;
+  padding:14px;
+  border:1px solid #d7e2dc;
+  border-radius:14px;
+  background:#f8fbf9;
+}
+
+.kds-dispatch-product>div:first-child{
+  min-width:0;
+  display:grid;
+  gap:3px;
+}
+
+.kds-dispatch-product span{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:850;
+}
+
+.kds-dispatch-product b{
+  overflow-wrap:anywhere;
+  font-size:17px;
+}
+
+.kds-dispatch-pending{
+  display:grid;
+  justify-items:center;
+  gap:1px;
+  min-width:70px;
+  padding:8px 10px;
+  border-radius:11px;
+  background:#e7f3ec;
+}
+
+.kds-dispatch-pending strong{
+  color:#1d6846;
+  font-size:24px;
+  line-height:1;
+}
+
+.kds-dispatch-selector{
+  display:grid;
+  grid-template-columns:64px minmax(0,1fr) 64px;
+  gap:12px;
+  align-items:stretch;
+  margin-top:16px;
+}
+
+.kds-dispatch-selector>button{
+  min-height:64px;
+  border:1px solid #a8c8b7;
+  border-radius:15px;
+  color:#174b35;
+  background:#eef7f2;
+  font-size:34px;
+  font-weight:850;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+
+.kds-dispatch-selector>button:disabled{
+  opacity:.35;
+  cursor:not-allowed;
+}
+
+.kds-dispatch-selector>div{
+  display:grid;
+  place-items:center;
+  align-content:center;
+  min-width:0;
+  border:2px solid #8fb9a4;
+  border-radius:15px;
+  background:#fff;
+}
+
+.kds-dispatch-selector strong{
+  color:#153d2c;
+  font-size:34px;
+  line-height:1;
+}
+
+.kds-dispatch-selector span{
+  margin-top:4px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:850;
+}
+
+.kds-dispatch-all{
+  width:100%;
+  min-height:42px;
+  margin-top:10px;
+}
+
+.kds-dispatch-result{
+  margin-top:14px;
+  padding:11px 12px;
+  border-radius:11px;
+  font-size:12px;
+  font-weight:850;
+  line-height:1.4;
+}
+
+.kds-dispatch-result.partial{
+  color:#6d5312;
+  background:#fff5d8;
+}
+
+.kds-dispatch-result.complete{
+  color:#1e6645;
+  background:#e8f5ed;
+}
+
+.kds-dispatch-error{
+  margin-top:10px;
+}
+
+.kds-dispatch-actions{
+  display:grid;
+  grid-template-columns:1fr 1.35fr;
+  gap:10px;
+  margin-top:16px;
+}
+
+.kds-dispatch-actions .btn{
+  min-height:50px;
+  font-size:12px;
+}
+
+@media(max-width:650px){
+  .kds-product-row{
+    grid-template-columns:48px minmax(0,1fr) auto;
+    column-gap:9px;
+  }
+
   .kds-item-dispatch{
-    width:100%;
+    min-width:88px;
+    min-height:48px;
+    padding:9px 10px;
+    font-size:11px;
+  }
+
+  .kds-dispatch-modal{
+    padding:10px;
+  }
+
+  .kds-dispatch-card{
+    width:min(460px,100%);
+    padding:18px;
   }
 }
+
+@media(max-width:430px){
+  .kds-product-row{
+    grid-template-columns:44px minmax(0,1fr) 82px;
+    column-gap:8px;
+  }
+
+  .kds-item-dispatch{
+    min-width:82px;
+    width:82px;
+    padding:8px 6px;
+    font-size:10px;
+  }
+
+  .kds-dispatch-selector{
+    grid-template-columns:58px minmax(0,1fr) 58px;
+    gap:9px;
+  }
+
+  .kds-dispatch-selector>button{
+    min-height:60px;
+  }
+
+  .kds-dispatch-actions{
+    grid-template-columns:1fr;
+  }
+}
+
