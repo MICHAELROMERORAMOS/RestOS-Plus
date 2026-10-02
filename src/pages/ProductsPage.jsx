@@ -31,6 +31,7 @@ const emptyProduct = {
   currentStock: null,
   allergens: [],
   active: true,
+  locationSettings: {},
 }
 
 export default function ProductsPage() {
@@ -40,6 +41,7 @@ export default function ProductsPage() {
     menuCategories,
     menuStations,
     allergenCatalog,
+    locations,
     activeLocation,
     currencyCode,
     formatMoney,
@@ -79,6 +81,12 @@ export default function ProductsPage() {
     setForm({
       ...emptyProduct,
       categoryId: activeCategories[0]?.id || '',
+      locationSettings: Object.fromEntries(
+        (locations || []).map((location) => [
+          String(location.id),
+          { active: true, priceOverride: '' },
+        ]),
+      ),
     })
     setShowProduct(true)
   }
@@ -122,12 +130,58 @@ export default function ProductsPage() {
           : (allergen.subtypes || []).map((subtype) => subtype.id),
       })),
       active: product.active !== false,
+      locationSettings: Object.fromEntries(
+        (locations || []).map((location) => {
+          const config = product.locationAvailability?.[String(location.id)]
+          return [
+            String(location.id),
+            {
+              active: config?.active === true,
+              priceOverride: config?.priceOverride == null ? '' : String(config.priceOverride),
+            },
+          ]
+        }),
+      ),
     })
     setShowProduct(true)
   }
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function updateLocationSetting(locationId, patch) {
+    const key = String(locationId)
+    setForm((current) => ({
+      ...current,
+      locationSettings: {
+        ...(current.locationSettings || {}),
+        [key]: {
+          active: false,
+          priceOverride: '',
+          ...(current.locationSettings?.[key] || {}),
+          ...patch,
+        },
+      },
+    }))
+  }
+
+  function setAllLocationsActive(active) {
+    setForm((current) => ({
+      ...current,
+      locationSettings: Object.fromEntries(
+        (locations || []).map((location) => {
+          const key = String(location.id)
+          return [
+            key,
+            {
+              active,
+              priceOverride: current.locationSettings?.[key]?.priceOverride || '',
+            },
+          ]
+        }),
+      ),
+    }))
   }
 
   function allergenSelection(allergenId) {
@@ -215,10 +269,26 @@ export default function ProductsPage() {
       ? null
       : Number(String(form.inventoryMaxStock).replace(',', '.'))
     const inventoryOpeningStock = Number(String(form.inventoryOpeningStock || 0).replace(',', '.'))
+    const locationSettings = (locations || []).map((location) => {
+      const config = form.locationSettings?.[String(location.id)] || {}
+      const rawOverride = String(config.priceOverride ?? '').trim()
+      const priceOverride = rawOverride === '' ? null : Number(rawOverride.replace(',', '.'))
+      return {
+        locationId: location.id,
+        active: config.active === true,
+        priceOverride,
+      }
+    })
 
     if (!form.name.trim()) return window.alert('Escribe el nombre del producto.')
     if (!Number.isFinite(price) || price < 0) return window.alert('Escribe un precio válido.')
     if (!Number.isFinite(taxRate) || taxRate < 0) return window.alert('La tasa de impuesto no es válida.')
+    if (locationSettings.some((location) => (
+      location.priceOverride != null
+      && (!Number.isFinite(location.priceOverride) || location.priceOverride < 0)
+    ))) {
+      return window.alert('Revisa los precios específicos por sucursal.')
+    }
 
     if (form.directInventory) {
       if (!canManageInventory) {
@@ -267,6 +337,7 @@ export default function ProductsPage() {
         inventoryOpeningStock: form.id ? 0 : inventoryOpeningStock,
         active: form.active,
         allergens: form.allergens,
+        locationSettings,
       })
 
       await refreshMenu()
@@ -345,9 +416,9 @@ export default function ProductsPage() {
           </div>
           <div className="list">
             <div className="row"><b>Productos registrados</b><strong>{products.length}</strong></div>
-            <div className="row"><b>Activos</b><strong>{products.filter((product) => product.active).length}</strong></div>
-            <div className="row"><b>Cocina</b><strong>{products.filter((product) => product.active && product.station === 'kitchen').length}</strong></div>
-            <div className="row"><b>Bar</b><strong>{products.filter((product) => product.active && product.station === 'bar').length}</strong></div>
+            <div className="row"><b>Disponibles en esta sucursal</b><strong>{products.filter((product) => product.available).length}</strong></div>
+            <div className="row"><b>Cocina</b><strong>{products.filter((product) => product.available && product.station === 'kitchen').length}</strong></div>
+            <div className="row"><b>Bar</b><strong>{products.filter((product) => product.available && product.station === 'bar').length}</strong></div>
           </div>
         </div>
       </div>
@@ -366,11 +437,12 @@ export default function ProductsPage() {
         ) : products.length ? (
           <div className="menu-product-list">
             {products.map((product) => (
-              <article className={`menu-product-card ${product.active ? '' : 'inactive'}`} key={product.id}>
+              <article className={`menu-product-card ${product.available ? '' : 'inactive'}`} key={product.id}>
                 <div className="menu-product-main">
                   <div className="menu-product-title">
                     <h4>{product.name}</h4>
-                    {!product.active && <span className="badge">INACTIVO</span>}
+                    {!product.active && <span className="badge">INACTIVO GLOBAL</span>}
+                    {product.active && !product.activeAtLocation && <span className="badge">NO DISPONIBLE AQUÍ</span>}
                   </div>
                   <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
                   {product.description && <p>{product.description}</p>}
@@ -401,7 +473,10 @@ export default function ProductsPage() {
                   )}
                 </div>
 
-                <strong className="menu-product-price">{formatMoney(product.price)}</strong>
+                <div className="menu-product-price-wrap">
+                  <strong className="menu-product-price">{formatMoney(product.price)}</strong>
+                  {product.priceOverride != null && <small>Precio de esta sucursal</small>}
+                </div>
 
                 {canManage && (
                   <button
@@ -511,6 +586,65 @@ export default function ProductsPage() {
                 <span>SKU / Código</span>
                 <input value={form.sku} onChange={(event) => updateField('sku', event.target.value)} placeholder="Opcional" />
               </label>
+
+              <section className="product-branches-section wide">
+                <div className="product-branches-heading">
+                  <div>
+                    <span className="product-allergens-kicker">DISPONIBILIDAD POR SUCURSAL</span>
+                    <h4>Sucursales donde se vende</h4>
+                    <p>
+                      El producto pertenece al catálogo general de la empresa. Aquí decides en qué sucursales aparece
+                      y puedes asignar un precio diferente sin duplicar el producto.
+                    </p>
+                  </div>
+                  <div className="product-branches-actions">
+                    <button type="button" className="btn" onClick={() => setAllLocationsActive(true)}>Activar todas</button>
+                    <button type="button" className="btn" onClick={() => setAllLocationsActive(false)}>Desactivar todas</button>
+                  </div>
+                </div>
+
+                <div className="product-branch-list">
+                  {(locations || []).map((location) => {
+                    const config = form.locationSettings?.[String(location.id)] || {
+                      active: false,
+                      priceOverride: '',
+                    }
+                    return (
+                      <div className={`product-branch-row ${config.active ? 'active' : ''}`} key={location.id}>
+                        <label className="product-branch-toggle">
+                          <input
+                            type="checkbox"
+                            checked={config.active === true}
+                            onChange={(event) => updateLocationSetting(location.id, { active: event.target.checked })}
+                          />
+                          <span>
+                            <b>{location.name}</b>
+                            {activeLocation?.id === location.id && <small>Sucursal seleccionada actualmente</small>}
+                          </span>
+                        </label>
+
+                        <label className="product-branch-price">
+                          <span>Precio específico ({currencyCode})</span>
+                          <input
+                            inputMode="decimal"
+                            value={config.priceOverride ?? ''}
+                            placeholder={`General: ${form.price || '0.00'}`}
+                            disabled={config.active !== true}
+                            onChange={(event) => updateLocationSetting(location.id, {
+                              priceOverride: event.target.value,
+                            })}
+                          />
+                          <small>Vacío = usa el precio general.</small>
+                        </label>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {!(locations || []).length && (
+                  <div className="notice warn">No hay sucursales disponibles para este usuario.</div>
+                )}
+              </section>
 
               <section className="product-allergens-section wide">
                 <div className="product-allergens-heading">
@@ -708,7 +842,10 @@ export default function ProductsPage() {
               </div>
 
               <label className="toggle-row wide">
-                <span>Producto activo / disponible</span>
+                <span>
+                  <b>Producto activo en la empresa</b>
+                  <small>Si lo desactivas aquí, quedará oculto en todas las sucursales aunque estén marcadas arriba.</small>
+                </span>
                 <input type="checkbox" checked={form.active} onChange={(event) => updateField('active', event.target.checked)} />
               </label>
               </div>
