@@ -817,6 +817,26 @@ export function RestaurantProvider({ children }) {
     state.settings.blockInsufficientInventory,
   ])
 
+  useEffect(() => {
+    if (auth.isDesignMode || !activeLocation?.id) return undefined
+
+    const nextExpiry = (products || [])
+      .map((product) => product.temporaryUnavailableUntil)
+      .filter(Boolean)
+      .map((value) => new Date(value).getTime())
+      .filter((value) => Number.isFinite(value) && value > Date.now())
+      .sort((a, b) => a - b)[0]
+
+    if (!nextExpiry) return undefined
+
+    const delay = Math.min(Math.max(1000, nextExpiry - Date.now() + 1000), 2147483000)
+    const temporaryAvailabilityRefreshTimer = window.setTimeout(() => {
+      refreshMenu()
+    }, delay)
+
+    return () => window.clearTimeout(temporaryAvailabilityRefreshTimer)
+  }, [auth.isDesignMode, activeLocation?.id, products, refreshMenu])
+
   const refreshRemoteData = useCallback(async (locationIdOverride = null) => {
     if (auth.isDesignMode) {
       setProducts(DEMO_PRODUCTS)
