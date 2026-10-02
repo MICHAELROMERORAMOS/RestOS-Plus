@@ -549,6 +549,18 @@ export async function advanceStationRoundRemote(orderServerId, roundServerId, st
   return data
 }
 
+export async function markOrderItemServedRemote(orderServerId, itemServerId) {
+  const client = requireSupabase()
+
+  const { data, error } = await client.rpc('mark_order_item_served', {
+    p_order_id: orderServerId,
+    p_item_id: itemServerId,
+  })
+
+  if (error) throw error
+  return data
+}
+
 export async function markRoundServedRemote(orderServerId, roundServerId) {
   const client = requireSupabase()
 
