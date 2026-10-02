@@ -20,7 +20,7 @@ export async function loadStaffAdminData(restaurantId) {
       .order('requested_at', { ascending: true }),
     client
       .from('roles')
-      .select('id,name,description,active')
+      .select('id,name,description,active,company_scope')
       .eq('restaurant_id', restaurantId)
       .eq('active', true)
       .order('name'),
