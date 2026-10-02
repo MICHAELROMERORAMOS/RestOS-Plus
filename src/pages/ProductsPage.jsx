@@ -109,7 +109,7 @@ export default function ProductsPage() {
       id: product.id,
       name: product.name || '',
       description: product.description || '',
-      price: String(product.price ?? ''),
+      price: String(product.basePrice ?? product.price ?? ''),
       taxRate: String(product.taxRate ?? 0),
       sku: product.sku || '',
       categoryId: product.categoryId || '',
