@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
-import { createMenuCategory, loadDirectProductMasterConfig, saveMenuProduct } from '../services/menuService.js'
+import { createMenuCategory, loadCompanyMasterCatalog, loadDirectProductMasterConfig, saveMenuProduct } from '../services/menuService.js'
 
 const INVENTORY_UNITS = [
   { value: 'unidad', label: 'Unidad' },
@@ -37,15 +37,9 @@ const emptyProduct = {
 export default function ProductsPage() {
   const auth = useAuth()
   const {
-    products,
-    menuCategories,
-    menuStations,
-    allergenCatalog,
     locations,
     currencyCode,
     formatMoney,
-    remoteLoading,
-    remoteError,
     refreshMenu,
   } = useRestaurant()
 
@@ -59,6 +53,38 @@ export default function ProductsPage() {
   const [form, setForm] = useState(emptyProduct)
   const [categoryName, setCategoryName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [products, setProducts] = useState([])
+  const [menuCategories, setMenuCategories] = useState([])
+  const [allergenCatalog, setAllergenCatalog] = useState([])
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState('')
+
+  async function refreshCatalog() {
+    if (auth.isDesignMode || !restaurantId) {
+      setProducts([])
+      setMenuCategories([])
+      setAllergenCatalog([])
+      setCatalogLoading(false)
+      return
+    }
+
+    setCatalogLoading(true)
+    setCatalogError('')
+    try {
+      const catalog = await loadCompanyMasterCatalog(restaurantId)
+      setProducts(catalog.products || [])
+      setMenuCategories(catalog.categories || [])
+      setAllergenCatalog(catalog.allergenCatalog || [])
+    } catch (error) {
+      setCatalogError(error?.message || 'No se pudo cargar el catálogo maestro.')
+    } finally {
+      setCatalogLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refreshCatalog()
+  }, [restaurantId, auth.isDesignMode])
 
   const activeCategories = useMemo(
     () => menuCategories
@@ -67,15 +93,13 @@ export default function ProductsPage() {
     [menuCategories],
   )
 
-  const stationTypes = useMemo(() => {
-    const map = new Map()
-    ;(menuStations || []).forEach((station) => {
-      if (!map.has(station.stationType)) map.set(station.stationType, station.name)
-    })
-    if (!map.has('kitchen')) map.set('kitchen', 'Cocina')
-    if (!map.has('bar')) map.set('bar', 'Bar')
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [menuStations])
+  const stationTypes = useMemo(() => ([
+    { value: 'kitchen', label: 'Cocina' },
+    { value: 'bar', label: 'Bar' },
+    { value: 'dessert', label: 'Postres' },
+    { value: 'coffee', label: 'Café' },
+    { value: 'other', label: 'Otra estación' },
+  ]), [])
 
   function openNewProduct() {
     if (!canManage) return
@@ -242,7 +266,7 @@ export default function ProductsPage() {
     try {
       const category = await createMenuCategory(restaurantId, name, activeCategories.length)
       setCategoryName('')
-      await refreshMenu()
+      await refreshCatalog()
       setForm((current) => ({ ...current, categoryId: current.categoryId || category.id }))
     } catch (error) {
       window.alert(
@@ -338,7 +362,7 @@ export default function ProductsPage() {
         locationSettings,
       })
 
-      await refreshMenu()
+      await Promise.all([refreshCatalog(), refreshMenu()])
       setShowProduct(false)
       setForm(emptyProduct)
     } catch (error) {
@@ -361,13 +385,13 @@ export default function ProductsPage() {
           <p>Crea cada producto una sola vez y decide en qué sucursales se vende, su precio y su zona de preparación.</p>
         </div>
         {canManage && (
-          <button className="btn primary" onClick={openNewProduct} disabled={remoteLoading}>
+          <button className="btn primary" onClick={openNewProduct} disabled={catalogLoading}>
             ＋ Producto
           </button>
         )}
       </div>
 
-      {remoteError && <div className="notice warn">{remoteError}</div>}
+      {catalogError && <div className="notice warn">{catalogError}</div>}
       <div className="grid two">
         <div className="card">
           <div className="section-title">
@@ -424,11 +448,11 @@ export default function ProductsPage() {
             <h3>Lista de productos</h3>
             <p className="muted">Catálogo general de la empresa · las asignaciones se controlan por sucursal.</p>
           </div>
-          <button className="btn" onClick={() => refreshMenu()} disabled={remoteLoading}>↻ Actualizar</button>
+          <button className="btn" onClick={() => refreshCatalog()} disabled={catalogLoading}>↻ Actualizar</button>
         </div>
 
-        {remoteLoading ? (
-          <div className="empty-inline">Cargando menú desde Supabase…</div>
+        {catalogLoading ? (
+          <div className="empty-inline">Cargando catálogo maestro desde Supabase…</div>
         ) : products.length ? (
           <div className="menu-product-list">
             {products.map((product) => (
