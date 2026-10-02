@@ -210,7 +210,7 @@ export default function BranchesPage() {
           <small>{branches.length} registradas</small>
         </div>
         <div className="card stat">
-          <span className="label">Sucursal actual</span>
+          <span className="label">Última sucursal operativa</span>
           <strong className="branch-company-name">{restaurant.activeLocation?.name || '—'}</strong>
           <small>{restaurant.activeLocation?.code || 'Sin código'}</small>
         </div>
@@ -267,7 +267,7 @@ export default function BranchesPage() {
                     <div>
                       <div className="branch-name-line">
                         <h3>{branch.name}</h3>
-                        {isCurrent && <span className="badge ok-badge">Sucursal actual</span>}
+                        {isCurrent && <span className="badge ok-badge">Última operativa</span>}
                         {!branch.active && <span className="badge">Inactiva</span>}
                       </div>
                       <small>{branch.code || 'Sin código'}</small>
