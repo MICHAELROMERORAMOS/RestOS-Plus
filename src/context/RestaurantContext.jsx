@@ -2578,22 +2578,35 @@ export function RestaurantProvider({ children }) {
     updateState, auth.isDesignMode, state.orders, refreshOperationalOrdersByIds, activeLocation,
   ])
 
-  const markTableItemDelivered = useCallback(async (orderId, lineId) => {
+  const markTableItemDelivered = useCallback(async (orderId, lineId, quantity) => {
     const order = state.orders.find((candidate) => candidate.id === orderId)
     const item = order?.rounds
       ?.flatMap((round) => round.items || [])
       .find((candidate) => String(candidate.lineId) === String(lineId))
 
     if (!order || order.mode !== 'table') {
-      return { ok: false, message: 'El despacho individual solo está disponible para pedidos de mesa.' }
+      return { ok: false, message: 'El despacho por cantidad solo está disponible para pedidos de mesa.' }
     }
 
     if (!item || item.voided) {
       return { ok: false, message: 'No se encontró el producto activo en la orden.' }
     }
 
-    if (item.prepStatus !== 'ready') {
-      return { ok: false, message: 'Solo se pueden despachar productos que ya estén listos.' }
+    if (!['preparing', 'ready'].includes(item.prepStatus)) {
+      return { ok: false, message: 'Primero debes iniciar la preparación antes de entregar este producto.' }
+    }
+
+    const totalQuantity = Number(item.quantity || 0)
+    const servedQuantity = Number(item.servedQuantity || 0)
+    const remainingQuantity = Math.max(0, totalQuantity - servedQuantity)
+    const dispatchQuantity = Number(quantity)
+
+    if (!Number.isFinite(dispatchQuantity) || dispatchQuantity <= 0) {
+      return { ok: false, message: 'Selecciona una cantidad válida para entregar.' }
+    }
+
+    if (dispatchQuantity > remainingQuantity + 0.0001) {
+      return { ok: false, message: 'La cantidad seleccionada supera las unidades pendientes.' }
     }
 
     if (!auth.isDesignMode) {
@@ -2602,27 +2615,40 @@ export function RestaurantProvider({ children }) {
       }
 
       try {
-        await markOrderItemServedRemote(order.serverId, item.lineId)
+        const result = await markOrderItemServedRemote(order.serverId, item.lineId, dispatchQuantity)
         await refreshOperationalOrdersByIds([order.serverId], activeLocation)
         await refreshOperationalSummary(activeLocation)
-        return { ok: true }
+        return { ok: true, ...result }
       } catch (error) {
-        return { ok: false, message: error?.message || 'No se pudo despachar el producto.' }
+        return { ok: false, message: error?.message || 'No se pudo entregar la cantidad seleccionada.' }
       }
     }
 
     updateState((previous) => {
       let nextOrders = previous.orders.map((candidate) => {
         if (candidate.id !== orderId || candidate.mode !== 'table') return candidate
+
         return {
           ...candidate,
           rounds: (candidate.rounds || []).map((round) => ({
             ...round,
-            items: (round.items || []).map((line) => (
-              String(line.lineId) === String(lineId) && !line.voided && line.prepStatus === 'ready'
-                ? { ...line, prepStatus: 'delivered' }
-                : line
-            )),
+            items: (round.items || []).map((line) => {
+              if (
+                String(line.lineId) !== String(lineId)
+                || line.voided
+                || !['preparing', 'ready'].includes(line.prepStatus)
+              ) return line
+
+              const total = Number(line.quantity || 0)
+              const currentServed = Number(line.servedQuantity || 0)
+              const nextServed = Math.min(total, currentServed + dispatchQuantity)
+
+              return {
+                ...line,
+                servedQuantity: nextServed,
+                prepStatus: nextServed >= total ? 'delivered' : line.prepStatus,
+              }
+            }),
           })),
         }
       })
@@ -2684,12 +2710,16 @@ export function RestaurantProvider({ children }) {
           ...previous.activity,
           !remaining
             ? `Orden #${orderId} despachada completamente`
-            : `Producto despachado · Orden #${orderId}`,
+            : `${dispatchQuantity} unidad${dispatchQuantity === 1 ? '' : 'es'} entregada${dispatchQuantity === 1 ? '' : 's'} · Orden #${orderId}`,
         ],
       }
     })
 
-    return { ok: true }
+    return {
+      ok: true,
+      dispatchedQuantity: dispatchQuantity,
+      remainingQuantity: Math.max(0, remainingQuantity - dispatchQuantity),
+    }
   }, [
     auth.isDesignMode, state.orders, updateState, refreshOperationalOrdersByIds,
     refreshOperationalSummary, activeLocation,
@@ -3152,15 +3182,34 @@ export function RestaurantProvider({ children }) {
 
   const stationJobs = useCallback((station) => {
     const jobs = []
+
     state.orders.forEach((order) => {
       order.rounds?.forEach((round) => {
-        const items = round.items.filter((item) => (
-          !item.voided
-          && item.station === station
-          && item.prepStatus !== 'delivered'
-          && (order.mode === 'table' || item.prepStatus !== 'ready')
-        ))
-        if (items.length) jobs.push({ order, round, items, status: deriveRoundStatus(round, station) })
+        const items = (round.items || [])
+          .filter((item) => (
+            !item.voided
+            && item.station === station
+            && item.prepStatus !== 'delivered'
+            && (order.mode === 'table' || item.prepStatus !== 'ready')
+          ))
+          .map((item) => {
+            const totalQuantity = Number(item.quantity || 0)
+            const servedQuantity = Number(item.servedQuantity || 0)
+            return {
+              ...item,
+              pendingQuantity: Math.max(0, totalQuantity - servedQuantity),
+            }
+          })
+          .filter((item) => item.pendingQuantity > 0.0001)
+
+        if (items.length) {
+          jobs.push({
+            order,
+            round,
+            items,
+            status: deriveRoundStatus(round, station),
+          })
+        }
       })
     })
 
