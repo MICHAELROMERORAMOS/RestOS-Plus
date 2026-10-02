@@ -107,12 +107,14 @@ export default function StationPage({ station }) {
           total: 0,
           newQty: 0,
           preparingQty: 0,
+          readyQty: 0,
         }
 
         const quantity = Number(item.quantity || 0)
         current.total += quantity
 
-        if (item.prepStatus === 'preparing') current.preparingQty += quantity
+        if (item.prepStatus === 'ready') current.readyQty += quantity
+        else if (item.prepStatus === 'preparing') current.preparingQty += quantity
         else current.newQty += quantity
 
         totals.set(key, current)
@@ -576,9 +578,11 @@ export default function StationPage({ station }) {
                     <div className="station-summary-copy">
                       <b>{item.name}</b>
                       <small>
-                        {item.newQty > 0 && `${item.newQty} nueva${item.newQty === 1 ? '' : 's'}`}
-                        {item.newQty > 0 && item.preparingQty > 0 ? ' · ' : ''}
-                        {item.preparingQty > 0 && `${item.preparingQty} preparando`}
+                        {[
+                          item.newQty > 0 ? `${item.newQty} nueva${item.newQty === 1 ? '' : 's'}` : '',
+                          item.preparingQty > 0 ? `${item.preparingQty} preparando` : '',
+                          item.readyQty > 0 ? `${item.readyQty} lista${item.readyQty === 1 ? '' : 's'} para despachar` : '',
+                        ].filter(Boolean).join(' · ')}
                       </small>
                     </div>
                   </div>
