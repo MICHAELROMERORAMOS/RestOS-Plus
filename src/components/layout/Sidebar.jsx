@@ -8,6 +8,7 @@ export default function Sidebar({
   onLogout,
   collapsed = false,
   onToggleCollapsed,
+  contextLabel = '',
 }) {
   return (
     <aside className={`side ${collapsed ? 'collapsed' : ''}`}>
@@ -28,6 +29,12 @@ export default function Sidebar({
           {collapsed ? '›' : '‹'}
         </button>
       </div>
+
+      {contextLabel && (
+        <div className="side-context-label" title={contextLabel}>
+          <span>{contextLabel}</span>
+        </div>
+      )}
 
       <nav className="nav side-nav">
         {items.map((item) => (
