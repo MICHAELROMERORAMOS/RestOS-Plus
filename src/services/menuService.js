@@ -38,14 +38,10 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       .from('product_locations')
       .select('product_id,location_id,active,price_override')
       .eq('restaurant_id', restaurantId),
-    client
-      .from('product_unavailability_requests')
-      .select('id,product_id,reason,unavailable_until')
-      .eq('restaurant_id', restaurantId)
-      .eq('location_id', locationId)
-      .eq('status', 'approved')
-      .gt('unavailable_until', new Date().toISOString())
-      .order('unavailable_until', { ascending: false }),
+    client.rpc('load_product_unavailability_state', {
+      p_restaurant_id: restaurantId,
+      p_location_id: locationId,
+    }),
     client
       .from('kitchen_stations')
       .select('id,location_id,name,station_type,display_order,active')
