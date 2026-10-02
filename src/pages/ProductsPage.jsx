@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
-import { createMenuCategory, loadDirectProductInventoryConfig, saveMenuProduct } from '../services/menuService.js'
+import { createMenuCategory, loadDirectProductMasterConfig, saveMenuProduct } from '../services/menuService.js'
 
 const INVENTORY_UNITS = [
   { value: 'unidad', label: 'Unidad' },
@@ -42,7 +42,6 @@ export default function ProductsPage() {
     menuStations,
     allergenCatalog,
     locations,
-    activeLocation,
     currencyCode,
     formatMoney,
     remoteLoading,
@@ -97,9 +96,9 @@ export default function ProductsPage() {
     if (!canManage) return
 
     let directConfig = null
-    if (product.inventoryMode === 'direct' && canManageInventory && restaurantId && activeLocation?.id) {
+    if (product.inventoryMode === 'direct' && canManageInventory && restaurantId) {
       try {
-        const configs = await loadDirectProductInventoryConfig(restaurantId, activeLocation.id)
+        const configs = await loadDirectProductMasterConfig(restaurantId, [product.id])
         directConfig = configs[String(product.id)] || null
       } catch (error) {
         window.alert(error?.message || 'No se pudieron cargar los datos de inventario de este producto.')
@@ -123,7 +122,7 @@ export default function ProductsPage() {
       inventoryMinStock: String(directConfig?.minStock ?? ''),
       inventoryMaxStock: directConfig?.maxStock == null ? '' : String(directConfig.maxStock),
       inventoryOpeningStock: '',
-      currentStock: directConfig?.currentStock ?? null,
+      currentStock: null,
       allergens: (product.allergens || []).map((allergen) => ({
         allergenId: allergen.allergenId,
         level: allergen.level === 'may_contain' ? 'may_contain' : 'contains',
@@ -259,8 +258,8 @@ export default function ProductsPage() {
   async function saveProduct(event) {
     event.preventDefault()
 
-    if (!restaurantId || !activeLocation?.id) {
-      return window.alert('No se encontró el restaurante o la sucursal activa.')
+    if (!restaurantId) {
+      return window.alert('No se encontró la empresa activa.')
     }
 
     const price = Number(String(form.price).replace(',', '.'))
@@ -270,7 +269,6 @@ export default function ProductsPage() {
     const inventoryMaxStock = form.inventoryMaxStock === ''
       ? null
       : Number(String(form.inventoryMaxStock).replace(',', '.'))
-    const inventoryOpeningStock = Number(String(form.inventoryOpeningStock || 0).replace(',', '.'))
     const locationSettings = (locations || []).map((location) => {
       const config = form.locationSettings?.[String(location.id)] || {}
       const rawOverride = String(config.priceOverride ?? '').trim()
@@ -296,8 +294,8 @@ export default function ProductsPage() {
       if (!canManageInventory) {
         return window.alert('Tu rol necesita permiso de inventario para vincular un producto directamente al stock.')
       }
-      if (![inventoryAverageCost, inventoryMinStock, inventoryOpeningStock].every((value) => Number.isFinite(value) && value >= 0)) {
-        return window.alert('Revisa costo unitario, stock mínimo y stock inicial.')
+      if (![inventoryAverageCost, inventoryMinStock].every((value) => Number.isFinite(value) && value >= 0)) {
+        return window.alert('Revisa costo unitario y stock mínimo.')
       }
       if (inventoryMaxStock != null && (!Number.isFinite(inventoryMaxStock) || inventoryMaxStock < inventoryMinStock)) {
         return window.alert('El stock máximo no puede ser menor que el stock mínimo.')
@@ -323,7 +321,6 @@ export default function ProductsPage() {
       await saveMenuProduct({
         productId: form.id,
         restaurantId,
-        locationId: activeLocation.id,
         categoryId: form.categoryId || null,
         name: form.name,
         description: form.description,
@@ -336,7 +333,6 @@ export default function ProductsPage() {
         inventoryAverageCost,
         inventoryMinStock,
         inventoryMaxStock,
-        inventoryOpeningStock: form.id ? 0 : inventoryOpeningStock,
         active: form.active,
         allergens: form.allergens,
         locationSettings,
@@ -360,21 +356,18 @@ export default function ProductsPage() {
     <section className="view active products-admin-view">
       <div className="hero products-admin-hero">
         <div>
-          <h2>Productos y menú</h2>
-          <p>El menú ya se guarda en Supabase y define qué productos van a Cocina o Bar.</p>
+          <span className="company-control-kicker">CONTROL CENTRAL · CATÁLOGO</span>
+          <h2>Catálogo maestro</h2>
+          <p>Crea cada producto una sola vez y decide en qué sucursales se vende, su precio y su zona de preparación.</p>
         </div>
         {canManage && (
-          <button className="btn primary" onClick={openNewProduct} disabled={!activeLocation || remoteLoading}>
+          <button className="btn primary" onClick={openNewProduct} disabled={remoteLoading}>
             ＋ Producto
           </button>
         )}
       </div>
 
       {remoteError && <div className="notice warn">{remoteError}</div>}
-      {!activeLocation && !remoteLoading && (
-        <div className="notice warn">Necesitas una sucursal activa antes de crear el menú.</div>
-      )}
-
       <div className="grid two">
         <div className="card">
           <div className="section-title">
@@ -412,15 +405,15 @@ export default function ProductsPage() {
         <div className="card">
           <div className="section-title">
             <div>
-              <h3>Resumen del menú</h3>
-              <p className="muted">Productos activos e inactivos registrados en Supabase.</p>
+              <h3>Resumen del catálogo</h3>
+              <p className="muted">Estado general del catálogo de toda la empresa.</p>
             </div>
           </div>
           <div className="list">
             <div className="row"><b>Productos registrados</b><strong>{products.length}</strong></div>
-            <div className="row"><b>Disponibles en esta sucursal</b><strong>{products.filter((product) => product.available).length}</strong></div>
-            <div className="row"><b>Cocina</b><strong>{products.filter((product) => product.available && product.station === 'kitchen').length}</strong></div>
-            <div className="row"><b>Bar</b><strong>{products.filter((product) => product.available && product.station === 'bar').length}</strong></div>
+            <div className="row"><b>Activos globalmente</b><strong>{products.filter((product) => product.active).length}</strong></div>
+            <div className="row"><b>Cocina</b><strong>{products.filter((product) => product.active && product.station === 'kitchen').length}</strong></div>
+            <div className="row"><b>Bar</b><strong>{products.filter((product) => product.active && product.station === 'bar').length}</strong></div>
           </div>
         </div>
       </div>
@@ -429,7 +422,7 @@ export default function ProductsPage() {
         <div className="section-title">
           <div>
             <h3>Lista de productos</h3>
-            <p className="muted">{activeLocation ? `Sucursal: ${activeLocation.name}` : 'Sin sucursal activa'}</p>
+            <p className="muted">Catálogo general de la empresa · las asignaciones se controlan por sucursal.</p>
           </div>
           <button className="btn" onClick={() => refreshMenu()} disabled={remoteLoading}>↻ Actualizar</button>
         </div>
@@ -439,14 +432,18 @@ export default function ProductsPage() {
         ) : products.length ? (
           <div className="menu-product-list">
             {products.map((product) => (
-              <article className={`menu-product-card ${product.available ? '' : 'inactive'}`} key={product.id}>
+              <article className={`menu-product-card ${product.active ? '' : 'inactive'}`} key={product.id}>
                 <div className="menu-product-main">
                   <div className="menu-product-title">
                     <h4>{product.name}</h4>
                     {!product.active && <span className="badge">INACTIVO GLOBAL</span>}
-                    {product.active && !product.activeAtLocation && <span className="badge">NO DISPONIBLE AQUÍ</span>}
+                    {product.active && Object.values(product.locationAvailability || {}).filter((item) => item.active).length === 0 && <span className="badge">SIN SUCURSAL ASIGNADA</span>}
                   </div>
-                  <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
+                  <small>
+                    {product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'} · {
+                      Object.values(product.locationAvailability || {}).filter((item) => item.active).length
+                    } sucursal(es)
+                  </small>
                   {product.description && <p>{product.description}</p>}
                   {product.sku && <small>SKU: {product.sku}</small>}
                   {product.inventoryMode === 'direct' && <span className="badge ok-badge">Inventario directo</span>}
@@ -476,8 +473,8 @@ export default function ProductsPage() {
                 </div>
 
                 <div className="menu-product-price-wrap">
-                  <strong className="menu-product-price">{formatMoney(product.price)}</strong>
-                  {product.priceOverride != null && <small>Precio de esta sucursal</small>}
+                  <strong className="menu-product-price">{formatMoney(product.basePrice ?? product.price)}</strong>
+                  <small>Precio general</small>
                 </div>
 
                 {canManage && (
@@ -621,7 +618,7 @@ export default function ProductsPage() {
                           />
                           <span>
                             <b>{location.name}</b>
-                            {activeLocation?.id === location.id && <small>Sucursal seleccionada actualmente</small>}
+                            <small>{config.active ? 'Incluido en el menú de esta sucursal' : 'No se vende en esta sucursal'}</small>
                           </span>
                         </label>
 
@@ -782,9 +779,7 @@ export default function ProductsPage() {
                         <b>Artículo de inventario vinculado</b>
                         <small>Se creará automáticamente con el mismo nombre y SKU del producto.</small>
                       </div>
-                      {form.id && form.currentStock != null && (
-                        <span className="badge">Stock actual: {Number(form.currentStock || 0).toLocaleString('es-CO', { maximumFractionDigits: 3 })}</span>
-                      )}
+                      <span className="badge">Configuración maestra</span>
                     </div>
 
                     <label>
@@ -824,20 +819,8 @@ export default function ProductsPage() {
                       />
                     </label>
 
-                    {!form.id && (
-                      <label>
-                        <span>Stock inicial</span>
-                        <input
-                          inputMode="decimal"
-                          value={form.inventoryOpeningStock}
-                          onChange={(event) => updateField('inventoryOpeningStock', event.target.value)}
-                          placeholder="0"
-                        />
-                      </label>
-                    )}
-
                     <div className="notice">
-                      <b>Precio de venta:</b> se toma del campo Precio del producto. <b>Costo unitario:</b> se usa para valorar inventario, FIFO y margen.
+                      <b>El stock físico no se define aquí.</b> Las existencias se registran y controlan por sucursal desde Inventario. El costo y los límites son datos maestros del artículo.
                     </div>
                   </div>
                 )}
