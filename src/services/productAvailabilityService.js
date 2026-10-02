@@ -60,13 +60,10 @@ export async function listMyPendingProductUnavailabilityRequests({
   locationId,
 }) {
   const client = requireSupabase()
-  const { data, error } = await client
-    .from('product_unavailability_requests')
-    .select('id,product_id,reason,duration_minutes,authorization_expires_at,email_sent_at,created_at')
-    .eq('restaurant_id', restaurantId)
-    .eq('location_id', locationId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
+  const { data, error } = await client.rpc('list_my_pending_product_unavailability', {
+    p_restaurant_id: restaurantId,
+    p_location_id: locationId,
+  })
 
   if (error) throw error
   return data || []
