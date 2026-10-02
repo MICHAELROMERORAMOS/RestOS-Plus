@@ -5,6 +5,7 @@ import { useRestaurant } from '../context/RestaurantContext.jsx'
 export default function CompanyControlPage({ onNavigate, onEnterBranch }) {
   const auth = useAuth()
   const restaurant = useRestaurant()
+  const canCatalog = auth.can('products.catalog.manage')
   const canBranches = auth.can('branches.view')
   const canStaff = auth.can('staff.view')
 
@@ -41,6 +42,16 @@ export default function CompanyControlPage({ onNavigate, onEnterBranch }) {
       </div>
 
       <div className="company-control-grid section-gap">
+        {canCatalog && (
+          <button className="company-control-card" onClick={() => onNavigate('products')}>
+            <span className="company-control-icon">🍔</span>
+            <div>
+              <h3>Catálogo maestro</h3>
+              <p>Crea productos una sola vez y asigna sucursales, precios y zona de preparación.</p>
+            </div>
+            <span className="company-control-arrow">›</span>
+          </button>
+        )}
         {canBranches && (
           <button className="company-control-card" onClick={() => onNavigate('branches')}>
             <span className="company-control-icon">📍</span>
