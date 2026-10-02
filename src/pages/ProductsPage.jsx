@@ -51,7 +51,9 @@ export default function ProductsPage() {
   } = useRestaurant()
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
-  const canManage = auth.can('products.manage')
+  const canManageCatalog = auth.can('products.catalog.manage')
+  const canAssignBranches = auth.can('products.branch.assign')
+  const canManage = canManageCatalog && canAssignBranches
   const canManageInventory = auth.can('inventory.manage')
 
   const [showProduct, setShowProduct] = useState(false)
