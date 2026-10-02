@@ -18,6 +18,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
     { data: categories, error: categoriesError },
     { data: products, error: productsError },
     { data: productLocations, error: productLocationsError },
+    { data: temporaryUnavailable, error: temporaryUnavailableError },
     { data: stations, error: stationsError },
     { data: routes, error: routesError },
     { data: allergenConfig, error: allergenConfigError },
@@ -30,13 +31,21 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       .order('name', { ascending: true }),
     client
       .from('products')
-      .select('id,restaurant_id,category_id,sku,name,description,base_price,tax_rate,track_inventory,inventory_mode,active,created_at')
+      .select('id,restaurant_id,category_id,sku,name,description,base_price,tax_rate,track_inventory,inventory_mode,direct_inventory_item_id,preparation_station_type,active,created_at')
       .eq('restaurant_id', restaurantId)
       .order('name', { ascending: true }),
     client
       .from('product_locations')
       .select('product_id,location_id,active,price_override')
       .eq('restaurant_id', restaurantId),
+    client
+      .from('product_unavailability_requests')
+      .select('id,product_id,reason,unavailable_until')
+      .eq('restaurant_id', restaurantId)
+      .eq('location_id', locationId)
+      .eq('status', 'approved')
+      .gt('unavailable_until', new Date().toISOString())
+      .order('unavailable_until', { ascending: false }),
     client
       .from('kitchen_stations')
       .select('id,location_id,name,station_type,display_order,active')
@@ -55,6 +64,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
   if (categoriesError) throw categoriesError
   if (productsError) throw productsError
   if (productLocationsError) throw productLocationsError
+  if (temporaryUnavailableError) throw temporaryUnavailableError
   if (stationsError) throw stationsError
   if (routesError) throw routesError
   if (allergenConfigError) throw allergenConfigError
@@ -70,6 +80,11 @@ export async function loadMenuCatalog(restaurantId, locationId) {
   const categoryById = new Map((categories || []).map((category) => [category.id, category]))
   const stationById = new Map((stations || []).map((station) => [station.id, station]))
   const routeByProduct = new Map((routes || []).map((route) => [route.product_id, route]))
+  const temporaryByProduct = new Map()
+  ;(temporaryUnavailable || []).forEach((row) => {
+    const key = String(row.product_id)
+    if (!temporaryByProduct.has(key)) temporaryByProduct.set(key, row)
+  })
   const locationsByProduct = new Map()
   ;(productLocations || []).forEach((row) => {
     const productId = String(row.product_id)
@@ -114,6 +129,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       const category = categoryById.get(product.category_id)
       const route = routeByProduct.get(product.id)
       const station = route ? stationById.get(route.station_id) : null
+      const temporary = temporaryByProduct.get(String(product.id)) || null
       const locationAvailability = locationsByProduct.get(String(product.id)) || {}
       const currentLocation = locationAvailability[String(locationId)] || null
       const basePrice = Number(product.base_price || 0)
@@ -134,8 +150,9 @@ export async function loadMenuCatalog(restaurantId, locationId) {
         sku: product.sku || '',
         categoryId: product.category_id || null,
         category: category?.name || 'Sin categoría',
-        station: station?.station_type || 'kitchen',
-        stationName: station?.name || 'Cocina',
+        station: product.preparation_station_type || station?.station_type || 'kitchen',
+        stationName: station?.name || (product.preparation_station_type === 'bar' ? 'Bar' : 'Cocina'),
+        directInventoryItemId: product.direct_inventory_item_id || null,
         trackInventory: Boolean(product.track_inventory),
         inventoryMode: product.inventory_mode || (product.track_inventory ? 'recipe' : 'none'),
         allergens: (productAllergens[String(product.id)] || []).map((allergen) => ({
@@ -154,7 +171,10 @@ export async function loadMenuCatalog(restaurantId, locationId) {
             level: subtype.level === 'may_contain' ? 'may_contain' : 'contains',
           })),
         })),
-        available: product.active !== false && currentLocation?.active === true,
+        temporarilyUnavailable: Boolean(temporary),
+        temporaryUnavailableReason: temporary?.reason || '',
+        temporaryUnavailableUntil: temporary?.unavailable_until || null,
+        available: product.active !== false && currentLocation?.active === true && !temporary,
         active: product.active !== false,
       }
     }),
@@ -189,7 +209,7 @@ export async function createMenuCategory(restaurantId, name, displayOrder = 0) {
 export async function saveMenuProduct({
   productId = null,
   restaurantId,
-  locationId,
+  locationId = null,
   categoryId = null,
   name,
   description = '',
@@ -229,10 +249,9 @@ export async function saveMenuProduct({
         : Number(location.priceOverride),
     }))
 
-  const { data, error } = await client.rpc('save_menu_product_full_config', {
+  const { data, error } = await client.rpc('save_company_catalog_product', {
     p_product_id: productId,
     p_restaurant_id: restaurantId,
-    p_location_id: locationId,
     p_category_id: categoryId || null,
     p_name: clean(name),
     p_description: clean(description) || null,
@@ -245,7 +264,6 @@ export async function saveMenuProduct({
     p_inventory_average_cost: Number(inventoryAverageCost || 0),
     p_inventory_min_stock: Number(inventoryMinStock || 0),
     p_inventory_max_stock: inventoryMaxStock === '' || inventoryMaxStock == null ? null : Number(inventoryMaxStock),
-    p_inventory_opening_stock: Number(inventoryOpeningStock || 0),
     p_active: Boolean(active),
     p_allergens: normalizedAllergens,
     p_locations: normalizedLocations,
@@ -273,6 +291,49 @@ export async function loadDirectProductInventoryConfig(restaurantId, locationId)
       minStock: Number(item.minStock || 0),
       maxStock: item.maxStock == null ? null : Number(item.maxStock),
       currentStock: Number(item.currentStock || 0),
+    }
+  })
+  return byProduct
+}
+
+
+export async function loadDirectProductMasterConfig(restaurantId, productIds = []) {
+  const client = requireSupabase()
+  const ids = Array.from(new Set((productIds || []).filter(Boolean)))
+  if (!ids.length) return {}
+
+  const { data: products, error: productsError } = await client
+    .from('products')
+    .select('id,direct_inventory_item_id')
+    .eq('restaurant_id', restaurantId)
+    .in('id', ids)
+
+  if (productsError) throw productsError
+
+  const itemIds = Array.from(new Set(
+    (products || []).map((product) => product.direct_inventory_item_id).filter(Boolean),
+  ))
+  if (!itemIds.length) return {}
+
+  const { data: items, error: itemsError } = await client
+    .from('inventory_items')
+    .select('id,unit,average_cost,min_stock,max_stock')
+    .eq('restaurant_id', restaurantId)
+    .in('id', itemIds)
+
+  if (itemsError) throw itemsError
+
+  const itemById = new Map((items || []).map((item) => [String(item.id), item]))
+  const byProduct = {}
+  ;(products || []).forEach((product) => {
+    const item = itemById.get(String(product.direct_inventory_item_id || ''))
+    if (!item) return
+    byProduct[String(product.id)] = {
+      inventoryItemId: item.id,
+      unit: item.unit || 'unidad',
+      averageCost: Number(item.average_cost || 0),
+      minStock: Number(item.min_stock || 0),
+      maxStock: item.max_stock == null ? null : Number(item.max_stock),
     }
   })
   return byProduct
