@@ -29,6 +29,7 @@ import {
   loadOperationalState,
   loadOperationalSummary,
   loadTableOrderSessions,
+  markOrderItemServedRemote,
   markRoundServedRemote,
   recordOrderPaymentsRemote,
   releaseEmptyQuickOrderRemote,
@@ -2522,6 +2523,13 @@ export function RestaurantProvider({ children }) {
             return { ...order, status: 'refund_due' }
           }
 
+          if (order.mode === 'table') {
+            return {
+              ...order,
+              status: orderBalance(order) <= 0.005 ? 'ready' : 'pay',
+            }
+          }
+
           if (order.status === 'waiting_food' && orderBalance(order) <= 0.005) {
             return {
               ...order,
@@ -2568,6 +2576,123 @@ export function RestaurantProvider({ children }) {
     })
   }, [
     updateState, auth.isDesignMode, state.orders, refreshOperationalOrdersByIds, activeLocation,
+  ])
+
+  const markTableItemDelivered = useCallback(async (orderId, lineId) => {
+    const order = state.orders.find((candidate) => candidate.id === orderId)
+    const item = order?.rounds
+      ?.flatMap((round) => round.items || [])
+      .find((candidate) => String(candidate.lineId) === String(lineId))
+
+    if (!order || order.mode !== 'table') {
+      return { ok: false, message: 'El despacho individual solo está disponible para pedidos de mesa.' }
+    }
+
+    if (!item || item.voided) {
+      return { ok: false, message: 'No se encontró el producto activo en la orden.' }
+    }
+
+    if (item.prepStatus !== 'ready') {
+      return { ok: false, message: 'Solo se pueden despachar productos que ya estén listos.' }
+    }
+
+    if (!auth.isDesignMode) {
+      if (!order.serverId) {
+        return { ok: false, message: 'No se encontró la orden sincronizada.' }
+      }
+
+      try {
+        await markOrderItemServedRemote(order.serverId, item.lineId)
+        await refreshOperationalOrdersByIds([order.serverId], activeLocation)
+        await refreshOperationalSummary(activeLocation)
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error?.message || 'No se pudo despachar el producto.' }
+      }
+    }
+
+    updateState((previous) => {
+      let nextOrders = previous.orders.map((candidate) => {
+        if (candidate.id !== orderId || candidate.mode !== 'table') return candidate
+        return {
+          ...candidate,
+          rounds: (candidate.rounds || []).map((round) => ({
+            ...round,
+            items: (round.items || []).map((line) => (
+              String(line.lineId) === String(lineId) && !line.voided && line.prepStatus === 'ready'
+                ? { ...line, prepStatus: 'delivered' }
+                : line
+            )),
+          })),
+        }
+      })
+
+      const changedOrder = nextOrders.find((candidate) => candidate.id === orderId)
+      const remaining = (changedOrder?.rounds || [])
+        .flatMap((round) => round.items || [])
+        .filter((line) => !line.voided)
+        .some((line) => line.prepStatus !== 'delivered')
+
+      if (!remaining && changedOrder) {
+        nextOrders = nextOrders.map((candidate) => {
+          if (candidate.id !== orderId) return candidate
+          if (Number(candidate.refundDue || 0) > 0.005) {
+            return { ...candidate, status: 'refund_due' }
+          }
+
+          const paid = orderBalance(candidate) <= 0.005
+          return {
+            ...candidate,
+            status: paid ? 'closed' : 'pay',
+            closedAt: paid ? Date.now() : candidate.closedAt,
+          }
+        })
+      }
+
+      const refreshed = nextOrders.find((candidate) => candidate.id === orderId)
+      const tables = previous.tables.map((table) => {
+        if (!refreshed?.tableIds?.includes(table.id)) return table
+
+        if (!remaining && refreshed.status === 'closed') {
+          return { ...table, status: 'free', releasedAt: Date.now() }
+        }
+
+        if (!remaining) {
+          if (Number(refreshed.refundDue || 0) > 0.005) return { ...table, status: 'refund_due' }
+          return { ...table, status: 'pay' }
+        }
+
+        const pendingLines = (refreshed.rounds || [])
+          .flatMap((round) => round.items || [])
+          .filter((line) => !line.voided && line.prepStatus !== 'delivered')
+
+        if (pendingLines.length && pendingLines.every((line) => line.prepStatus === 'ready')) {
+          return { ...table, status: 'ready' }
+        }
+
+        return {
+          ...table,
+          status: orderBalance(refreshed) <= 0.005 ? 'waiting_food' : 'occupied',
+        }
+      })
+
+      return {
+        ...previous,
+        orders: nextOrders,
+        tables,
+        activity: [
+          ...previous.activity,
+          !remaining
+            ? `Orden #${orderId} despachada completamente`
+            : `Producto despachado · Orden #${orderId}`,
+        ],
+      }
+    })
+
+    return { ok: true }
+  }, [
+    auth.isDesignMode, state.orders, updateState, refreshOperationalOrdersByIds,
+    refreshOperationalSummary, activeLocation,
   ])
 
   const markRoundDelivered = useCallback(async (orderId, roundId) => {
@@ -3029,7 +3154,12 @@ export function RestaurantProvider({ children }) {
     const jobs = []
     state.orders.forEach((order) => {
       order.rounds?.forEach((round) => {
-        const items = round.items.filter((item) => !item.voided && item.station === station && !['ready', 'delivered'].includes(item.prepStatus))
+        const items = round.items.filter((item) => (
+          !item.voided
+          && item.station === station
+          && item.prepStatus !== 'delivered'
+          && (order.mode === 'table' || item.prepStatus !== 'ready')
+        ))
         if (items.length) jobs.push({ order, round, items, status: deriveRoundStatus(round, station) })
       })
     })
@@ -3108,6 +3238,7 @@ export function RestaurantProvider({ children }) {
     applyKitchenApprovedVoidRequest,
     voidPaidTableAccount,
     advanceStationRound,
+    markTableItemDelivered,
     markRoundDelivered,
     transferCurrentTable,
     joinTable,
@@ -3140,7 +3271,7 @@ export function RestaurantProvider({ children }) {
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
     setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, releaseEmptyDeliveryOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
-    advanceStationRound, markRoundDelivered,
+    advanceStationRound, markTableItemDelivered, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
     tableSessionForTable, tableDraftForTable, getTableDraftCount,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,
