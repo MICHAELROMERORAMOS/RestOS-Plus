@@ -131,6 +131,23 @@ export async function loadUserAccess(user) {
     }
   }
 
+  const { data: platformAdmin, error: platformAdminError } = await client.rpc('is_platform_admin')
+  if (platformAdminError) throw platformAdminError
+
+  if (platformAdmin) {
+    return {
+      active: true,
+      status: 'active',
+      profile,
+      membership: null,
+      role: null,
+      restaurant: null,
+      platformAdmin: true,
+      platformOnly: true,
+      permissions: [],
+    }
+  }
+
   const { data: membership, error: membershipError } = await client
     .from('memberships')
     .select('id,restaurant_id,role_id,status,all_locations')
@@ -151,17 +168,15 @@ export async function loadUserAccess(user) {
     }
   }
 
-  const [roleResult, restaurantResult, permissionResult, platformAdminResult] = await Promise.all([
+  const [roleResult, restaurantResult, permissionResult] = await Promise.all([
     client.from('roles').select('id,name,company_scope').eq('id', membership.role_id).single(),
     client.from('restaurants').select('id,name,owner_user_id').eq('id', membership.restaurant_id).single(),
     client.from('role_permissions').select('permission_code').eq('role_id', membership.role_id),
-    client.rpc('is_platform_admin'),
   ])
 
   if (roleResult.error) throw roleResult.error
   if (restaurantResult.error) throw restaurantResult.error
   if (permissionResult.error) throw permissionResult.error
-  if (platformAdminResult.error) throw platformAdminResult.error
 
   return {
     active: true,
@@ -170,7 +185,8 @@ export async function loadUserAccess(user) {
     membership,
     role: roleResult.data,
     restaurant: restaurantResult.data,
-    platformAdmin: Boolean(platformAdminResult.data),
+    platformAdmin: false,
+    platformOnly: false,
     permissions: permissionResult.data?.map((row) => row.permission_code) || [],
   }
 }
