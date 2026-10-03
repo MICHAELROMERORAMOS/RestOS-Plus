@@ -6,6 +6,7 @@ import { loadCompanyProfile, saveCompanyProfile } from '../services/invoiceRegis
 import {
   loadBranchStationSettings,
   saveBranchStationSetting,
+  setDefaultBranchStation,
 } from '../services/stationSettingsService.js'
 
 function SettingsSection({
@@ -77,6 +78,7 @@ export default function SettingsPage() {
   const [stationSettings, setStationSettings] = useState([])
   const [stationLoading, setStationLoading] = useState(false)
   const [stationSavingType, setStationSavingType] = useState('')
+  const [defaultStationSaving, setDefaultStationSaving] = useState(false)
 
   async function refreshStationSettings() {
     if (!activeLocation?.id || auth.isDesignMode) {
@@ -101,43 +103,68 @@ export default function SettingsPage() {
   async function saveStation(station, patch) {
     if (!canManageSettings || !activeLocation?.id) return
 
+    const activeStations = stationSettings.filter((item) => item.active)
+    const defaultStation = stationSettings.find((item) => item.isDefault && item.active) || null
     const next = {
       active: patch.active ?? station.active,
       outputMode: patch.outputMode ?? station.outputMode,
     }
 
     if (station.active && next.active === false) {
+      if (activeStations.length <= 1) {
+        window.alert('Cada sucursal debe conservar al menos una estación activa.')
+        return
+      }
+
+      if (station.isDefault) {
+        window.alert('Antes de apagar esta estación, selecciona otra estación activa como predeterminada.')
+        return
+      }
+
       const confirmed = window.confirm(
-        `¿Apagar la estación “${station.name}”?\n\nSolo será posible si ningún producto activo de esta sucursal está asignado a esta estación.`,
+        `¿Apagar la estación “${station.name}”?\n\nMientras esté apagada, sus nuevas comandas se enviarán automáticamente a “${defaultStation?.name || 'la estación predeterminada'}”. Al volver a encenderla, RestOS+ restaurará su ruta normal.`,
       )
       if (!confirmed) return
     }
 
     setStationSavingType(station.stationType)
     try {
-      const saved = await saveBranchStationSetting({
+      await saveBranchStationSetting({
         locationId: activeLocation.id,
         stationType: station.stationType,
         active: next.active,
         outputMode: next.outputMode,
       })
 
-      setStationSettings((current) => current.map((item) => (
-        item.stationType === station.stationType
-          ? {
-            ...item,
-            active: saved.active === true,
-            outputMode: saved.outputMode || next.outputMode,
-            id: saved.id || item.id,
-          }
-          : item
-      )))
-
-      await refreshMenu()
+      await Promise.all([
+        refreshStationSettings(),
+        refreshMenu(),
+      ])
     } catch (error) {
       window.alert(error?.message || 'No se pudo guardar la estación.')
     } finally {
       setStationSavingType('')
+    }
+  }
+
+  async function makeDefaultStation(station) {
+    if (!canManageSettings || !activeLocation?.id || !station.active || station.isDefault) return
+
+    setDefaultStationSaving(true)
+    try {
+      await setDefaultBranchStation({
+        locationId: activeLocation.id,
+        stationType: station.stationType,
+      })
+
+      await Promise.all([
+        refreshStationSettings(),
+        refreshMenu(),
+      ])
+    } catch (error) {
+      window.alert(error?.message || 'No se pudo cambiar la estación predeterminada.')
+    } finally {
+      setDefaultStationSaving(false)
     }
   }
 
@@ -335,21 +362,43 @@ export default function SettingsPage() {
                         <span className="station-setting-icon">{station.icon}</span>
                         <div>
                           <h4>{station.name}</h4>
-                          <small>{station.active ? 'Estación encendida' : 'Estación apagada'}</small>
+                          <small>
+                            {station.active ? 'Estación encendida' : 'Estación apagada'}
+                            {station.isDefault ? ' · Predeterminada' : ''}
+                          </small>
                         </div>
                         <label className="station-setting-switch">
                           <input
                             type="checkbox"
                             checked={station.active}
-                            disabled={!canManageSettings || saving}
+                            disabled={!canManageSettings || saving || defaultStationSaving || (station.active && station.isDefault)}
                             onChange={(event) => saveStation(station, { active: event.target.checked })}
+                            title={station.active && station.isDefault ? 'Selecciona otra estación predeterminada antes de apagar esta.' : ''}
                           />
                           <span>{station.active ? 'ON' : 'OFF'}</span>
                         </label>
                       </div>
 
                       {station.active && (
-                        <div className="station-output-choice">
+                        <>
+                          <div className="station-default-choice">
+                            <span>Estación de respaldo</span>
+                            <button
+                              type="button"
+                              className={station.isDefault ? 'active' : ''}
+                              disabled={!canManageSettings || saving || defaultStationSaving || station.isDefault}
+                              onClick={() => makeDefaultStation(station)}
+                            >
+                              {station.isDefault ? '★ Predeterminada' : '☆ Usar como predeterminada'}
+                            </button>
+                            <small>
+                              {station.isDefault
+                                ? 'Las comandas de una estación apagada o fuera de servicio se enviarán aquí.'
+                                : 'Solo puede existir una estación predeterminada por sucursal.'}
+                            </small>
+                          </div>
+
+                          <div className="station-output-choice">
                           <span>Salida de comandas</span>
                           <div className="station-output-buttons">
                             <button
@@ -375,6 +424,7 @@ export default function SettingsPage() {
                               : 'La estación queda definida para impresión. La vinculación de la impresora física se realizará desde la integración de impresoras.'}
                           </small>
                         </div>
+                        </>
                       )}
 
                       {saving && <div className="station-setting-saving">Guardando en Supabase…</div>}
@@ -385,7 +435,7 @@ export default function SettingsPage() {
             )}
 
             <div className="notice section-gap">
-              Cocina, Bar, Postres, Café y Otra estación son independientes. No puedes apagar una estación mientras tenga productos activos asignados a esta sucursal.
+              Siempre debe existir al menos una estación activa y exactamente una predeterminada. Si una estación no predeterminada se apaga, sus comandas se desvían temporalmente a la predeterminada y vuelven a su estación normal cuando esta se reactiva.
             </div>
           </>
         )}
