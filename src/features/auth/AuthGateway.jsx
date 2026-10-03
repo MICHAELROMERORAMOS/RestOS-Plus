@@ -21,6 +21,13 @@ import {
 const OTP_SECONDS = 180
 const validEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 
+function isDeveloperPortalPath(pathname = window.location.pathname) {
+  const normalized = pathname.replace(/\/+$/, '') || '/'
+  return normalized === '/developer'
+    || normalized.startsWith('/developer/')
+    || normalized === '/empresas-restos'
+}
+
 function useCountdown(activeKey) {
   const [seconds, setSeconds] = useState(OTP_SECONDS)
   useEffect(() => {
@@ -64,20 +71,36 @@ function OtpBoxes({ value, onChange }) {
 }
 
 function AuthFrame({ children }) {
+  const developerPortal = isDeveloperPortalPath()
   return (
-    <div className="auth-shell">
+    <div className={`auth-shell ${developerPortal ? 'developer-auth-shell' : ''}`}>
       <div className="auth-wrap">
         <div className="auth-brand">
-          <div className="mark">RestOS+</div>
+          <div className="mark">{developerPortal ? 'RestOS+ · DEV' : 'RestOS+'}</div>
           <div>
-            <h2>Todo el restaurante, en un solo sistema.</h2>
-            <p>Mesas, pedidos, cocina, bar, caja, inventario, reservas, clientes y equipo conectados en una sola operación.</p>
+            <h2>{developerPortal ? 'Consola privada de plataforma.' : 'Todo el restaurante, en un solo sistema.'}</h2>
+            <p>
+              {developerPortal
+                ? 'Administración de RestOS+, empresas cliente, altas y operaciones exclusivas del desarrollador.'
+                : 'Mesas, pedidos, cocina, bar, caja, inventario, reservas, clientes y equipo conectados en una sola operación.'}
+            </p>
           </div>
           <div className="auth-points">
-            <span>✓ Cuenta abierta por mesa y comandas por rondas</span>
-            <span>✓ Servicio rápido / prepago con turno o pager</span>
-            <span>✓ Roles, permisos y aprobación de acceso</span>
-            <span>✓ Preparado para Supabase y operación multi-sucursal</span>
+            {developerPortal ? (
+              <>
+                <span>✓ Acceso separado de empresas y sucursales</span>
+                <span>✓ Solo administradores de plataforma</span>
+                <span>✓ Ningún contexto de restaurante activo</span>
+                <span>✓ Operaciones administrativas auditables</span>
+              </>
+            ) : (
+              <>
+                <span>✓ Cuenta abierta por mesa y comandas por rondas</span>
+                <span>✓ Servicio rápido / prepago con turno o pager</span>
+                <span>✓ Roles, permisos y aprobación de acceso</span>
+                <span>✓ Preparado para Supabase y operación multi-sucursal</span>
+              </>
+            )}
           </div>
         </div>
         <div className="auth-panel">{children}</div>
@@ -88,6 +111,7 @@ function AuthFrame({ children }) {
 
 export default function AuthGateway({ children }) {
   const auth = useAuth()
+  const developerPortal = isDeveloperPortalPath()
   const [screen, setScreen] = useState('login')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -277,8 +301,12 @@ export default function AuthGateway({ children }) {
   const screens = {
     login: (
       <div className="auth-view active">
-        <h1>Bienvenido</h1>
-        <p className="sub">Ingresa a RestOS+ con tu correo y contraseña.</p>
+        <h1>{developerPortal ? 'Acceso de desarrollador' : 'Bienvenido'}</h1>
+        <p className="sub">
+          {developerPortal
+            ? 'Ingresa a la consola privada de RestOS+. Solo las cuentas de plataforma autorizadas pueden continuar.'
+            : 'Ingresa a RestOS+ con tu correo y contraseña.'}
+        </p>
         {!auth.isSupabaseConfigured && (
           <div className="notice warn"><b>Supabase aún no está configurado en este entorno.</b> La aplicación completa puede probarse con Modo diseño. Cuando se cree el archivo <code>.env</code>, el login real quedará activo.</div>
         )}
@@ -320,7 +348,9 @@ export default function AuthGateway({ children }) {
         </form>
         <div className="auth-links">
           <button className="linkbtn" onClick={() => setScreen('forgot')}>¿Olvidaste tu contraseña?</button>
-          <button className="linkbtn" onClick={() => setScreen('register')}>Crear cuenta</button>
+          {!developerPortal && (
+            <button className="linkbtn" onClick={() => setScreen('register')}>Crear cuenta</button>
+          )}
         </div>
       </div>
     ),
