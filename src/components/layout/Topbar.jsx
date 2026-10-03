@@ -12,10 +12,8 @@ export default function Topbar({
   onLocationChange,
   workspaceMode = 'branch',
   canCompanyControl = false,
-  canPlatformAdmin = false,
   onEnterCentral,
   onEnterBranch,
-  onEnterPlatform,
 }) {
   const [switching, setSwitching] = useState(false)
 
@@ -44,18 +42,13 @@ export default function Topbar({
 
   const isBranch = workspaceMode === 'branch'
   const isCentral = workspaceMode === 'central'
-  const isPlatform = workspaceMode === 'platform'
 
   return (
     <header className="top">
       <div className="top-title-block">
         <h1>{title}</h1>
 
-        {isPlatform ? (
-          <div className="top-branch-context top-scope-context">
-            <span className="top-scope-pill platform">🌐 Plataforma RestOS+</span>
-          </div>
-        ) : isCentral ? (
+        {isCentral ? (
           <div className="top-branch-context top-scope-context">
             <span className="top-company-name">{companyName || 'Empresa'}</span>
             <span className="top-context-separator">·</span>
@@ -102,10 +95,6 @@ export default function Topbar({
 
         {!isCentral && canCompanyControl && (
           <button className="btn" onClick={onEnterCentral}>🏢 Control central</button>
-        )}
-
-        {!isPlatform && canPlatformAdmin && (
-          <button className="btn" onClick={onEnterPlatform}>🌐 Plataforma</button>
         )}
 
         {isBranch && canKitchen && <button className="btn" onClick={onKitchen}>🍳 Cocina</button>}
