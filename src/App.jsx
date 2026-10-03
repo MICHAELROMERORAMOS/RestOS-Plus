@@ -21,7 +21,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import ReservationsPage from './pages/ReservationsPage.jsx'
 import StaffPage from './pages/StaffPage.jsx'
 import BranchesPage from './pages/BranchesPage.jsx'
-import PlatformCompaniesPage from './pages/PlatformCompaniesPage.jsx'
+import DeveloperPortal from './pages/DeveloperPortal.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
@@ -34,7 +34,6 @@ function MainApplication() {
   const accessibleItems = useMemo(
     () => NAV_ITEMS.filter((item) => {
       if (item.id === 'bar' && restaurant.state.settings.splitStations === false) return false
-      if (item.platformAdmin) return Boolean(auth.userContext?.platformAdmin)
       if (item.permission && !auth.can(item.permission)) return false
       if (item.contextPermission && !auth.can(item.contextPermission)) return false
       return true
@@ -42,7 +41,6 @@ function MainApplication() {
     [
       auth.permissions,
       auth.isDesignMode,
-      auth.userContext?.platformAdmin,
       restaurant.state.settings.splitStations,
     ],
   )
@@ -175,7 +173,6 @@ function MainApplication() {
     reservations: <ReservationsPage />,
     staff: <StaffPage />,
     branches: <BranchesPage />,
-    'platform-companies': <PlatformCompaniesPage />,
     reports: <ReportsPage />,
     'shift-close': <ShiftClosePage />,
     tv: <TvPage />,
@@ -214,13 +211,45 @@ function MainApplication() {
       onLocationChange={restaurant.switchLocation}
       workspaceMode={activeScope}
       canCompanyControl={auth.can('company.control.view')}
-      canPlatformAdmin={Boolean(auth.userContext?.platformAdmin)}
       onEnterCentral={() => navigate('central')}
       onEnterBranch={enterBranch}
-      onEnterPlatform={() => navigate('platform-companies')}
     >
       {activePage}
     </AppShell>
+  )
+}
+
+function isDeveloperPortalPath(pathname = window.location.pathname) {
+  const normalized = pathname.replace(/\/+$/, '') || '/'
+  return normalized === '/developer'
+    || normalized.startsWith('/developer/')
+    || normalized === '/empresas-restos'
+}
+
+function AuthenticatedApplication() {
+  const auth = useAuth()
+  const developerPortal = isDeveloperPortalPath()
+
+  useEffect(() => {
+    if (auth.userContext?.platformOnly && !developerPortal) {
+      window.location.replace('/developer')
+    }
+  }, [auth.userContext?.platformOnly, developerPortal])
+
+  if (developerPortal) return <DeveloperPortal />
+
+  if (auth.userContext?.platformOnly) {
+    return (
+      <div className="app-loader">
+        <div><strong>RestOS+</strong><span>Abriendo Developer Console…</span></div>
+      </div>
+    )
+  }
+
+  return (
+    <RestaurantProvider>
+      <MainApplication />
+    </RestaurantProvider>
   )
 }
 
@@ -228,9 +257,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AuthGateway>
-        <RestaurantProvider>
-          <MainApplication />
-        </RestaurantProvider>
+        <AuthenticatedApplication />
       </AuthGateway>
     </AuthProvider>
   )
