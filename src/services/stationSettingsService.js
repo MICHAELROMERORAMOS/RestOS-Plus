@@ -19,7 +19,7 @@ export async function loadBranchStationSettings(locationId) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('kitchen_stations')
-    .select('id,location_id,name,station_type,display_order,active,output_mode,updated_at')
+    .select('id,location_id,name,station_type,display_order,active,output_mode,is_default,updated_at')
     .eq('location_id', locationId)
     .order('display_order', { ascending: true })
 
@@ -37,6 +37,7 @@ export async function loadBranchStationSettings(locationId) {
       displayOrder: station?.display_order ?? 0,
       active: station?.active === true,
       outputMode: station?.output_mode || 'screen',
+      isDefault: station?.is_default === true,
       updatedAt: station?.updated_at || null,
     }
   })
@@ -54,6 +55,21 @@ export async function saveBranchStationSetting({
     p_station_type: stationType,
     p_active: Boolean(active),
     p_output_mode: outputMode === 'printer' ? 'printer' : 'screen',
+  })
+
+  if (error) throw error
+  return data
+}
+
+
+export async function setDefaultBranchStation({
+  locationId,
+  stationType,
+}) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('set_default_branch_station', {
+    p_location_id: locationId,
+    p_station_type: stationType,
   })
 
   if (error) throw error
