@@ -6917,3 +6917,52 @@ html[data-restos-surface="platform-admin"] body{
 html[data-restos-surface="platform-admin"] .developer-portal{
   min-height:100dvh;
 }
+
+
+/* Mobile logout access */
+.top-right-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  min-width:0;
+}
+.top-mobile-logout{
+  display:none;
+  flex:0 0 auto;
+  min-height:40px;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:0 12px;
+  background:#fff;
+  color:var(--danger);
+  font-weight:900;
+  box-shadow:0 2px 8px #18211b0a;
+}
+.top-mobile-logout-icon{
+  font-size:18px;
+  line-height:1;
+}
+@media(max-width:1000px){
+  .top-mobile-logout{
+    display:inline-flex;
+  }
+}
+@media(max-width:650px){
+  .top-right-actions{
+    gap:6px;
+  }
+  .top-mobile-logout{
+    width:40px;
+    height:40px;
+    min-height:40px;
+    padding:0;
+    border-radius:11px;
+  }
+  .top-mobile-logout-text{
+    display:none;
+  }
+}

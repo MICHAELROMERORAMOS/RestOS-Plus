@@ -14,6 +14,7 @@ export default function Topbar({
   canCompanyControl = false,
   onEnterCentral,
   onEnterBranch,
+  onLogout,
 }) {
   const [switching, setSwitching] = useState(false)
 
@@ -77,28 +78,41 @@ export default function Topbar({
         )}
       </div>
 
-      <div className="actions top-context-actions">
-        {isCentral && locations.length > 0 && (
-          <select
-            className="top-enter-branch"
-            value=""
-            onChange={enterBranchFromCentral}
-            disabled={switching}
-            aria-label="Entrar a una sucursal"
-          >
-            <option value="">📍 Entrar a sucursal…</option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>{location.name}</option>
-            ))}
-          </select>
-        )}
+      <div className="top-right-actions">
+        <div className="actions top-context-actions">
+          {isCentral && locations.length > 0 && (
+            <select
+              className="top-enter-branch"
+              value=""
+              onChange={enterBranchFromCentral}
+              disabled={switching}
+              aria-label="Entrar a una sucursal"
+            >
+              <option value="">📍 Entrar a sucursal…</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>{location.name}</option>
+              ))}
+            </select>
+          )}
 
-        {!isCentral && canCompanyControl && (
-          <button className="btn" onClick={onEnterCentral}>🏢 Control central</button>
-        )}
+          {!isCentral && canCompanyControl && (
+            <button className="btn" onClick={onEnterCentral}>🏢 Control central</button>
+          )}
 
-        {isBranch && canKitchen && <button className="btn" onClick={onKitchen}>🍳 Cocina</button>}
-        {isBranch && canOrder && <button className="btn primary" onClick={onNewOrder}>＋ Nuevo pedido</button>}
+          {isBranch && canKitchen && <button className="btn" onClick={onKitchen}>🍳 Cocina</button>}
+          {isBranch && canOrder && <button className="btn primary" onClick={onNewOrder}>＋ Nuevo pedido</button>}
+        </div>
+
+        <button
+          type="button"
+          className="top-mobile-logout"
+          onClick={onLogout}
+          aria-label="Cerrar sesión"
+          title="Cerrar sesión"
+        >
+          <span className="top-mobile-logout-icon">↪</span>
+          <span className="top-mobile-logout-text">Salir</span>
+        </button>
       </div>
     </header>
   )

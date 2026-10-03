@@ -81,6 +81,7 @@ export default function AppShell({
           canCompanyControl={canCompanyControl}
           onEnterCentral={onEnterCentral}
           onEnterBranch={onEnterBranch}
+          onLogout={onLogout}
         />
         <div className="content-scroll">
           <div className="content">{children}</div>
