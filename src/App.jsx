@@ -33,7 +33,12 @@ function MainApplication() {
 
   const accessibleItems = useMemo(
     () => NAV_ITEMS.filter((item) => {
-      if (item.id === 'bar' && restaurant.state.settings.splitStations === false) return false
+      if (item.stationType) {
+        const station = restaurant.menuStations.find((candidate) => (
+          candidate.stationType === item.stationType && candidate.active !== false
+        ))
+        if (!station) return false
+      }
       if (item.permission && !auth.can(item.permission)) return false
       if (item.contextPermission && !auth.can(item.contextPermission)) return false
       return true
@@ -41,7 +46,7 @@ function MainApplication() {
     [
       auth.permissions,
       auth.isDesignMode,
-      restaurant.state.settings.splitStations,
+      restaurant.menuStations,
     ],
   )
 
@@ -163,6 +168,9 @@ function MainApplication() {
     order: <OrderPage onNavigate={navigate} />,
     kitchen: <StationPage station="kitchen" />,
     bar: <StationPage station="bar" />,
+    dessert: <StationPage station="dessert" />,
+    coffee: <StationPage station="coffee" />,
+    'other-station': <StationPage station="other" />,
     cashier: <CashierPage />,
     'void-invoice': <InvoiceVoidPage />,
     'invoice-register': <InvoiceRegisterPage />,
@@ -202,7 +210,7 @@ function MainApplication() {
         await auth.logout()
         window.history.replaceState({ view: 'dashboard' }, '', '/')
       }}
-      canKitchen={activeScope === 'branch' && auth.can('kitchen.view')}
+      canKitchen={activeScope === 'branch' && auth.can('kitchen.view') && restaurant.menuStations.some((station) => station.stationType === 'kitchen' && station.active !== false)}
       canOrder={activeScope === 'branch' && auth.can('orders.create')}
       onNewOrder={() => navigate('tables')}
       companyName={auth.userContext?.restaurant || 'Empresa'}
