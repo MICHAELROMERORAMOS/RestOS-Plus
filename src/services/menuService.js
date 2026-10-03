@@ -44,7 +44,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
     }),
     client
       .from('kitchen_stations')
-      .select('id,location_id,name,station_type,display_order,active')
+      .select('id,location_id,name,station_type,display_order,active,output_mode')
       .eq('location_id', locationId)
       .eq('active', true)
       .order('display_order', { ascending: true }),
@@ -105,6 +105,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
       name: station.name,
       stationType: station.station_type,
       active: station.active,
+      outputMode: station.output_mode || 'screen',
     })),
     allergenCatalog: allergenCatalog.map((allergen) => ({
       id: allergen.id,
