@@ -2124,13 +2124,13 @@ export function RestaurantProvider({ children }) {
         productId: product.id,
         name: product.name,
         price: product.price,
-        station: state.settings.splitStations === false ? 'kitchen' : product.station,
+        station: product.station,
         category: product.category,
         quantity: 1,
         note: '',
       }]
     })
-  }, [state.settings.splitStations])
+  }, [])
 
   const changeDraftQuantity = useCallback((draftId, delta) => {
     setDraft((lines) => lines
