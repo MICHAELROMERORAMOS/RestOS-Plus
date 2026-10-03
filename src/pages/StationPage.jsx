@@ -6,6 +6,14 @@ import {
   reviewKitchenVoidRequest,
 } from '../services/voidAuthorizationService.js'
 
+const STATION_META = {
+  kitchen: { name: 'Cocina', label: 'Kitchen Display', icon: '🍳' },
+  bar: { name: 'Bar', label: 'Bar Display', icon: '🍸' },
+  dessert: { name: 'Postres', label: 'Postres Display', icon: '🍰' },
+  coffee: { name: 'Café', label: 'Café Display', icon: '☕' },
+  other: { name: 'Otra estación', label: 'Estación Display', icon: '📍' },
+}
+
 function declaredAllergiesForItems(items) {
   const byId = new Map()
 
@@ -67,6 +75,7 @@ export default function StationPage({ station }) {
     tableLabel,
     formatMoney,
     voidRequestsVersion,
+    menuStations,
   } = useRestaurant()
   const audioContextRef = useRef(null)
   const knownJobKeysRef = useRef(new Set())
@@ -95,10 +104,11 @@ export default function StationPage({ station }) {
     .map(({ order, round }) => `${order.serverId || order.id}:${round.serverId || round.id}`)
     .sort()
     .join('|')
-  const isBar = station === 'bar'
-  const label = isBar ? 'Bar Display' : 'Kitchen Display'
-  const stationName = isBar ? 'Bar' : 'Cocina'
-  const icon = isBar ? '🍸' : '🍳'
+  const stationMeta = STATION_META[station] || STATION_META.other
+  const stationConfig = menuStations.find((item) => item.stationType === station) || null
+  const label = stationMeta.label
+  const stationName = stationMeta.name
+  const icon = stationMeta.icon
   const canReviewVoids = station === 'kitchen' && auth.can('orders.void.review_unpaid')
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
 
