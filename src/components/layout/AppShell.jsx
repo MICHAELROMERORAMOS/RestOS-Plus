@@ -28,10 +28,8 @@ export default function AppShell({
   onLocationChange,
   workspaceMode = 'branch',
   canCompanyControl = false,
-  canPlatformAdmin = false,
   onEnterCentral,
   onEnterBranch,
-  onEnterPlatform,
 }) {
   const current = navItems.find((item) => item.id === activeView)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarPreference)
@@ -81,10 +79,8 @@ export default function AppShell({
           onLocationChange={onLocationChange}
           workspaceMode={workspaceMode}
           canCompanyControl={canCompanyControl}
-          canPlatformAdmin={canPlatformAdmin}
           onEnterCentral={onEnterCentral}
           onEnterBranch={onEnterBranch}
-          onEnterPlatform={onEnterPlatform}
         />
         <div className="content-scroll">
           <div className="content">{children}</div>
