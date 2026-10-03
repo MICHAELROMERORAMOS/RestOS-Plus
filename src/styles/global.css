@@ -6908,3 +6908,12 @@ html, body {
   color:var(--muted);
   line-height:1.4;
 }
+
+
+/* Admin subdomain hard boundary */
+html[data-restos-surface="platform-admin"] body{
+  background:#0d1420;
+}
+html[data-restos-surface="platform-admin"] .developer-portal{
+  min-height:100dvh;
+}

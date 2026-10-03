@@ -6,25 +6,26 @@ export default function DeveloperPortal() {
   const auth = useAuth()
 
   useEffect(() => {
-    if (window.location.pathname !== '/developer') {
-      window.history.replaceState({ portal: 'developer' }, '', '/developer')
+    document.title = 'RestOS+ Admin · Plataforma'
+    if (window.location.pathname !== '/') {
+      window.history.replaceState({ portal: 'admin' }, '', '/')
     }
   }, [])
 
   async function logout() {
     await auth.logout()
-    window.history.replaceState({ portal: 'developer' }, '', '/developer')
+    window.history.replaceState({ portal: 'admin' }, '', '/')
   }
 
   if (!auth.userContext?.platformAdmin) {
     return (
       <div className="developer-portal developer-access-denied">
         <section className="developer-access-card">
-          <span className="developer-console-kicker">RESTOS+ · DEVELOPER CONSOLE</span>
+          <span className="developer-console-kicker">RESTOS+ · ADMIN PORTAL</span>
           <h1>Acceso restringido</h1>
           <p>Esta dirección pertenece exclusivamente a la administración de la plataforma RestOS+.</p>
           <div className="developer-access-actions">
-            <button className="btn" onClick={() => window.location.replace('/')}>Volver a RestOS+</button>
+            <button className="btn" onClick={() => window.location.replace('https://restosplus.com/')}>Abrir RestOS+ clientes</button>
             <button className="btn primary" onClick={logout}>Cerrar sesión</button>
           </div>
         </section>
@@ -37,7 +38,7 @@ export default function DeveloperPortal() {
       <header className="developer-console-header">
         <div className="developer-console-brand">
           <span className="developer-console-kicker">RESTOS+ · PRIVATE PLATFORM</span>
-          <strong>Developer Console</strong>
+          <strong>Admin Portal</strong>
           <small>Administración global · sin empresa ni sucursal activa</small>
         </div>
 
@@ -46,7 +47,7 @@ export default function DeveloperPortal() {
             <b>{auth.userContext?.name || 'Desarrollador'}</b>
             <span>{auth.userContext?.email || 'Administrador de plataforma'}</span>
           </div>
-          <span className="developer-console-role">DESARROLLADOR</span>
+          <span className="developer-console-role">PLATFORM ADMIN</span>
           <button className="btn" onClick={logout}>Cerrar sesión</button>
         </div>
       </header>

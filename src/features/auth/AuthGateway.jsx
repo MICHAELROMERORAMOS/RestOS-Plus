@@ -6,6 +6,7 @@ import {
   isDesktopDevice,
   requestDesktopFullscreen,
 } from '../../lib/desktopLaunch.js'
+import { isPlatformAdminSurface } from '../../lib/appSurface.js'
 import {
   requestPasswordRecovery,
   resendSignupOtp,
@@ -20,13 +21,6 @@ import {
 
 const OTP_SECONDS = 180
 const validEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-
-function isDeveloperPortalPath(pathname = window.location.pathname) {
-  const normalized = pathname.replace(/\/+$/, '') || '/'
-  return normalized === '/developer'
-    || normalized.startsWith('/developer/')
-    || normalized === '/empresas-restos'
-}
 
 function useCountdown(activeKey) {
   const [seconds, setSeconds] = useState(OTP_SECONDS)
@@ -71,22 +65,22 @@ function OtpBoxes({ value, onChange }) {
 }
 
 function AuthFrame({ children }) {
-  const developerPortal = isDeveloperPortalPath()
+  const platformPortal = isPlatformAdminSurface()
   return (
-    <div className={`auth-shell ${developerPortal ? 'developer-auth-shell' : ''}`}>
+    <div className={`auth-shell ${platformPortal ? 'developer-auth-shell' : ''}`}>
       <div className="auth-wrap">
         <div className="auth-brand">
-          <div className="mark">{developerPortal ? 'RestOS+ · DEV' : 'RestOS+'}</div>
+          <div className="mark">{platformPortal ? 'RestOS+ · ADMIN' : 'RestOS+'}</div>
           <div>
-            <h2>{developerPortal ? 'Consola privada de plataforma.' : 'Todo el restaurante, en un solo sistema.'}</h2>
+            <h2>{platformPortal ? 'Portal privado de administración.' : 'Todo el restaurante, en un solo sistema.'}</h2>
             <p>
-              {developerPortal
-                ? 'Administración de RestOS+, empresas cliente, altas y operaciones exclusivas del desarrollador.'
+              {platformPortal
+                ? 'Administración global de RestOS+, empresas cliente, altas y operaciones exclusivas de plataforma.'
                 : 'Mesas, pedidos, cocina, bar, caja, inventario, reservas, clientes y equipo conectados en una sola operación.'}
             </p>
           </div>
           <div className="auth-points">
-            {developerPortal ? (
+            {platformPortal ? (
               <>
                 <span>✓ Acceso separado de empresas y sucursales</span>
                 <span>✓ Solo administradores de plataforma</span>
@@ -111,7 +105,7 @@ function AuthFrame({ children }) {
 
 export default function AuthGateway({ children }) {
   const auth = useAuth()
-  const developerPortal = isDeveloperPortalPath()
+  const platformPortal = isPlatformAdminSurface()
   const [screen, setScreen] = useState('login')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -131,7 +125,7 @@ export default function AuthGateway({ children }) {
     return <div className="app-loader"><div><strong>RestOS+</strong><span>Cargando sesión…</span></div></div>
   }
 
-  if (developerPortal && (auth.mode === 'pending' || auth.mode === 'onboarding')) {
+  if (platformPortal && (auth.mode === 'pending' || auth.mode === 'onboarding')) {
     return (
       <AuthFrame>
         <div className="auth-view active pending-card">
@@ -314,10 +308,10 @@ export default function AuthGateway({ children }) {
   const screens = {
     login: (
       <div className="auth-view active">
-        <h1>{developerPortal ? 'Acceso de desarrollador' : 'Bienvenido'}</h1>
+        <h1>{platformPortal ? 'Acceso de plataforma' : 'Bienvenido'}</h1>
         <p className="sub">
-          {developerPortal
-            ? 'Ingresa a la consola privada de RestOS+. Solo las cuentas de plataforma autorizadas pueden continuar.'
+          {platformPortal
+            ? 'Ingresa al portal privado de RestOS+. Solo las cuentas Platform Admin autorizadas pueden continuar.'
             : 'Ingresa a RestOS+ con tu correo y contraseña.'}
         </p>
         {!auth.isSupabaseConfigured && (
@@ -361,7 +355,7 @@ export default function AuthGateway({ children }) {
         </form>
         <div className="auth-links">
           <button className="linkbtn" onClick={() => setScreen('forgot')}>¿Olvidaste tu contraseña?</button>
-          {!developerPortal && (
+          {!platformPortal && (
             <button className="linkbtn" onClick={() => setScreen('register')}>Crear cuenta</button>
           )}
         </div>

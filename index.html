@@ -16,6 +16,19 @@
           window.location.hash
         )
       }
+
+      if (window.location.hostname === 'admin.restosplus.com') {
+        document.title = 'RestOS+ Admin · Plataforma'
+        document.documentElement.dataset.restosSurface = 'platform-admin'
+
+        var canonical = document.querySelector('link[rel="canonical"]')
+        if (canonical) canonical.setAttribute('href', 'https://admin.restosplus.com/')
+
+        var robots = document.createElement('meta')
+        robots.name = 'robots'
+        robots.content = 'noindex,nofollow,noarchive'
+        document.head.appendChild(robots)
+      }
     </script>
     <style>
       #boot-status{min-height:100vh;display:grid;place-items:center;background:#102f24;color:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:24px;text-align:center}

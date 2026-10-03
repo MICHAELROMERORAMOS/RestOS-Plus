@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { ALL_PERMISSIONS } from '../config/navigation.js'
 import { friendlyAuthError } from '../lib/authErrors.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
+import { isPlatformAdminSurface } from '../lib/appSurface.js'
 import {
   getAuthenticatedUser,
   loadUserAccess,
@@ -83,7 +84,9 @@ export function AuthProvider({ children }) {
       return { mode: 'signedOut' }
     }
     try {
-      const access = await loadUserAccess(user)
+      const access = await loadUserAccess(user, {
+        platformPortal: isPlatformAdminSurface(),
+      })
       if (!access.active) {
         const onboarding = access.onboarding || {}
         const actionable = ['onboarding_required', 'company_rejected', 'employee_rejected'].includes(access.status)
@@ -212,7 +215,7 @@ export function AuthProvider({ children }) {
   }, [enterDesignMode, handleUser])
 
   useEffect(() => {
-    if (mode !== 'authenticated' || !userContext?.id) return undefined
+    if (mode !== 'authenticated' || !userContext?.id || userContext?.platformOnly) return undefined
 
     let refreshing = false
     const unsubscribe = subscribeToUserAccess(userContext.id, async () => {

@@ -107,7 +107,7 @@ export async function getAuthenticatedUser() {
   return supabase.auth.getUser()
 }
 
-export async function loadUserAccess(user) {
+export async function loadUserAccess(user, { platformPortal = false } = {}) {
   const client = requireSupabase()
   const { data: profile, error: profileError } = await client
     .from('profiles')
@@ -134,7 +134,21 @@ export async function loadUserAccess(user) {
   const { data: platformAdmin, error: platformAdminError } = await client.rpc('is_platform_admin')
   if (platformAdminError) throw platformAdminError
 
-  if (platformAdmin) {
+  if (platformPortal) {
+    if (!platformAdmin) {
+      return {
+        active: false,
+        status: 'platform_denied',
+        profile,
+        membership: null,
+        role: null,
+        restaurant: null,
+        platformAdmin: false,
+        platformOnly: true,
+        permissions: [],
+      }
+    }
+
     return {
       active: true,
       status: 'active',

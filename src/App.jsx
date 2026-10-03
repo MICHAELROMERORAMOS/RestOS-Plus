@@ -26,6 +26,7 @@ import ReportsPage from './pages/ReportsPage.jsx'
 import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import { isLegacyPlatformPath, isPlatformAdminSurface } from './lib/appSurface.js'
 
 function MainApplication() {
   const auth = useAuth()
@@ -227,29 +228,21 @@ function MainApplication() {
   )
 }
 
-function isDeveloperPortalPath(pathname = window.location.pathname) {
-  const normalized = pathname.replace(/\/+$/, '') || '/'
-  return normalized === '/developer'
-    || normalized.startsWith('/developer/')
-    || normalized === '/empresas-restos'
-}
-
 function AuthenticatedApplication() {
-  const auth = useAuth()
-  const developerPortal = isDeveloperPortalPath()
+  const platformSurface = isPlatformAdminSurface()
 
   useEffect(() => {
-    if (auth.userContext?.platformOnly && !developerPortal) {
-      window.location.replace('/developer')
+    if (!platformSurface && isLegacyPlatformPath()) {
+      window.location.replace('/')
     }
-  }, [auth.userContext?.platformOnly, developerPortal])
+  }, [platformSurface])
 
-  if (developerPortal) return <DeveloperPortal />
+  if (platformSurface) return <DeveloperPortal />
 
-  if (auth.userContext?.platformOnly) {
+  if (isLegacyPlatformPath()) {
     return (
       <div className="app-loader">
-        <div><strong>RestOS+</strong><span>Abriendo Developer Console…</span></div>
+        <div><strong>RestOS+</strong><span>Abriendo aplicación de clientes…</span></div>
       </div>
     )
   }
