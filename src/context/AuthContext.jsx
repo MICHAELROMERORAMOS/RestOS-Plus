@@ -139,12 +139,14 @@ export function AuthProvider({ children }) {
       setUserContext({
         id: user.id,
         name: access.profile.full_name || access.profile.username || user.email,
-        role: access.role?.name || 'Rol',
-        restaurant: access.restaurant?.name || 'Restaurante',
-        companyScope: Boolean(access.role?.company_scope),
-        isPrimaryOwner: access.restaurant?.owner_user_id === user.id,
-        membership: access.membership,
+        email: access.profile.email || user.email,
+        role: access.platformOnly ? 'Desarrollador RestOS+' : (access.role?.name || 'Rol'),
+        restaurant: access.platformOnly ? null : (access.restaurant?.name || 'Restaurante'),
+        companyScope: access.platformOnly ? false : Boolean(access.role?.company_scope),
+        isPrimaryOwner: access.platformOnly ? false : access.restaurant?.owner_user_id === user.id,
+        membership: access.membership || null,
         platformAdmin: Boolean(access.platformAdmin),
+        platformOnly: Boolean(access.platformOnly),
       })
       sessionStorage.removeItem(DESIGN_SESSION_KEY)
       setPendingState(null)
