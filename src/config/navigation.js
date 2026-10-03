@@ -51,7 +51,6 @@ export const NAV_ITEMS = [
     scope: 'central',
   },
 
-  { id: 'platform-companies', path: '/empresas-restos', icon: '🌐', label: 'Empresas RestOS+', platformAdmin: true, scope: 'platform' },
 ]
 
 const EXTRA_PERMISSIONS = [
