@@ -6871,3 +6871,40 @@ html, body {
     grid-template-columns:1fr;
   }
 }
+
+
+.station-default-choice{
+  display:grid;
+  gap:8px;
+  padding:12px 0;
+  border-top:1px solid var(--line);
+}
+.station-default-choice>span{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.station-default-choice button{
+  min-height:42px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:#fff;
+  color:var(--text);
+  font-weight:900;
+  cursor:pointer;
+}
+.station-default-choice button.active{
+  border-color:#d2ad4f;
+  background:#fff8df;
+  color:#6f5100;
+}
+.station-default-choice button:disabled{
+  cursor:not-allowed;
+  opacity:.72;
+}
+.station-default-choice small{
+  color:var(--muted);
+  line-height:1.4;
+}
