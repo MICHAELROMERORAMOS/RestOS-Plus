@@ -131,6 +131,19 @@ export default function AuthGateway({ children }) {
     return <div className="app-loader"><div><strong>RestOS+</strong><span>Cargando sesión…</span></div></div>
   }
 
+  if (developerPortal && (auth.mode === 'pending' || auth.mode === 'onboarding')) {
+    return (
+      <AuthFrame>
+        <div className="auth-view active pending-card">
+          <div className="pending-icon">🛡</div>
+          <h1>Cuenta no autorizada</h1>
+          <p>Esta cuenta no pertenece a la administración de plataforma de RestOS+.</p>
+          <button className="auth-btn" onClick={auth.logout}>Volver al acceso de desarrollador</button>
+        </div>
+      </AuthFrame>
+    )
+  }
+
   if (auth.mode === 'pending') {
     const pending = auth.pendingState || { title: 'Acceso pendiente', message: 'Tu cuenta todavía no está habilitada.', icon: '⏳' }
     return (
