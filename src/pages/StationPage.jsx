@@ -451,7 +451,13 @@ export default function StationPage({ station }) {
   }
 
   return (
-    <section className={`view active station-view ${isBar ? 'bar-station' : 'kitchen-station'}`}>
+    <section className={`view active station-view ${station === 'bar' ? 'bar-station' : 'kitchen-station'}`}>
+      {stationConfig?.outputMode === 'printer' && (
+        <div className="notice warn station-printer-fallback">
+          🖨️ Esta estación está configurada en modo <b>Impresora</b>. La pantalla permanece disponible como respaldo hasta vincular la impresora física.
+        </div>
+      )}
+
       <div className="hero station-hero">
         <div>
           <h2>{label}</h2>
@@ -629,7 +635,7 @@ export default function StationPage({ station }) {
             <div>
               <div className="icon">✓</div>
               <h3>Sin comandas pendientes</h3>
-              <p>Los nuevos envíos para {isBar ? 'bar' : 'cocina'} aparecerán aquí automáticamente.</p>
+              <p>Los nuevos envíos para {stationName.toLowerCase()} aparecerán aquí automáticamente.</p>
             </div>
           </div>
         )}
