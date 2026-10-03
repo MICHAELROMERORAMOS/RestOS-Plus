@@ -6762,3 +6762,112 @@ html, body {
     display:grid;
   }
 }
+
+
+/* Preparation station settings */
+.station-settings-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.station-setting-card{
+  display:grid;
+  gap:14px;
+  padding:15px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#fff;
+  transition:.15s ease;
+}
+.station-setting-card.active{
+  border-color:#9fc8b3;
+  background:#f9fcfa;
+}
+.station-setting-card.inactive{
+  opacity:.72;
+  background:#fafafa;
+}
+.station-setting-head{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  align-items:center;
+  gap:11px;
+}
+.station-setting-icon{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:#eef5f1;
+  font-size:22px;
+}
+.station-setting-head h4{
+  margin:0 0 2px;
+  font-size:15px;
+}
+.station-setting-head small,
+.station-output-choice small{
+  color:var(--muted);
+  line-height:1.4;
+}
+.station-setting-switch{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:10px;
+  font-weight:950;
+}
+.station-setting-switch input{
+  width:20px;
+  height:20px;
+}
+.station-output-choice{
+  display:grid;
+  gap:8px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+.station-output-choice>span{
+  font-size:10px;
+  font-weight:950;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.station-output-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.station-output-buttons button{
+  min-height:44px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:#fff;
+  color:var(--text);
+  font-weight:900;
+  cursor:pointer;
+}
+.station-output-buttons button.active{
+  border-color:#69a081;
+  background:#e9f4ee;
+  color:#19563a;
+}
+.station-output-buttons button:disabled{
+  cursor:not-allowed;
+  opacity:.55;
+}
+.station-setting-saving{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:850;
+}
+.station-printer-fallback{
+  margin-bottom:12px;
+}
+@media(max-width:760px){
+  .station-settings-grid{
+    grid-template-columns:1fr;
+  }
+}
