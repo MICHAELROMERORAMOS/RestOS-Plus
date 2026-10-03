@@ -3,6 +3,10 @@ import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { CURRENCY_OPTIONS } from '../lib/currency.js'
 import { loadCompanyProfile, saveCompanyProfile } from '../services/invoiceRegisterService.js'
+import {
+  loadBranchStationSettings,
+  saveBranchStationSetting,
+} from '../services/stationSettingsService.js'
 
 function SettingsSection({
   title,
@@ -40,6 +44,7 @@ export default function SettingsPage() {
     setCurrency,
     setInventoryStockControl,
     setOperationalBehavior,
+    refreshMenu,
   } = useRestaurant()
   const auth = useAuth()
   const canManageTables = auth.can('tables.manage')
@@ -69,6 +74,72 @@ export default function SettingsPage() {
   const [currencySaving, setCurrencySaving] = useState(false)
   const [inventoryControlSaving, setInventoryControlSaving] = useState(false)
   const [operationSaving, setOperationSaving] = useState(false)
+  const [stationSettings, setStationSettings] = useState([])
+  const [stationLoading, setStationLoading] = useState(false)
+  const [stationSavingType, setStationSavingType] = useState('')
+
+  async function refreshStationSettings() {
+    if (!activeLocation?.id || auth.isDesignMode) {
+      setStationSettings([])
+      return
+    }
+
+    setStationLoading(true)
+    try {
+      setStationSettings(await loadBranchStationSettings(activeLocation.id))
+    } catch (error) {
+      window.alert(error?.message || 'No se pudieron cargar las estaciones de preparación.')
+    } finally {
+      setStationLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refreshStationSettings()
+  }, [activeLocation?.id, auth.isDesignMode])
+
+  async function saveStation(station, patch) {
+    if (!canManageSettings || !activeLocation?.id) return
+
+    const next = {
+      active: patch.active ?? station.active,
+      outputMode: patch.outputMode ?? station.outputMode,
+    }
+
+    if (station.active && next.active === false) {
+      const confirmed = window.confirm(
+        `¿Apagar la estación “${station.name}”?\n\nSolo será posible si ningún producto activo de esta sucursal está asignado a esta estación.`,
+      )
+      if (!confirmed) return
+    }
+
+    setStationSavingType(station.stationType)
+    try {
+      const saved = await saveBranchStationSetting({
+        locationId: activeLocation.id,
+        stationType: station.stationType,
+        active: next.active,
+        outputMode: next.outputMode,
+      })
+
+      setStationSettings((current) => current.map((item) => (
+        item.stationType === station.stationType
+          ? {
+            ...item,
+            active: saved.active === true,
+            outputMode: saved.outputMode || next.outputMode,
+            id: saved.id || item.id,
+          }
+          : item
+      )))
+
+      await refreshMenu()
+    } catch (error) {
+      window.alert(error?.message || 'No se pudo guardar la estación.')
+    } finally {
+      setStationSavingType('')
+    }
+  }
 
   async function changeCurrency(event) {
     const code = event.target.value
@@ -90,22 +161,6 @@ export default function SettingsPage() {
     const allowPager = event.target.checked
     setOperationSaving(true)
     const result = await setOperationalBehavior({ allowPager })
-    setOperationSaving(false)
-    if (!result.ok) window.alert(result.message)
-  }
-
-  async function changeStationSeparation(event) {
-    const splitStations = event.target.checked
-
-    if (!splitStations) {
-      const confirmed = window.confirm(
-        '¿Unificar Cocina y Bar?\n\nLas nuevas comandas de productos configurados como Bar también se enviarán a Cocina. Las comandas ya enviadas conservarán su estación actual.',
-      )
-      if (!confirmed) return
-    }
-
-    setOperationSaving(true)
-    const result = await setOperationalBehavior({ splitStations })
     setOperationSaving(false)
     if (!result.ok) window.alert(result.message)
   }
@@ -209,25 +264,6 @@ export default function SettingsPage() {
               />
             </label>
 
-            <label className="toggle-row operational-setting-row">
-              <span>
-                <b>Separar Cocina / Bar</b>
-                <small>
-                  {operationSaving
-                    ? 'Guardando en Supabase…'
-                    : settings.splitStations !== false
-                      ? 'Activo: cada producto se envía a su estación configurada, Cocina o Bar.'
-                      : 'Desactivado: toda nueva preparación se envía únicamente a Cocina.'}
-                </small>
-              </span>
-              <input
-                type="checkbox"
-                checked={settings.splitStations !== false}
-                onChange={changeStationSeparation}
-                disabled={!canManageSettings || operationSaving}
-              />
-            </label>
-
             <label className="toggle-row inventory-control-toggle">
               <span>
                 <b>Bloquear productos sin insumos suficientes</b>
@@ -252,7 +288,7 @@ export default function SettingsPage() {
         <div className="card">
           <h3>Integraciones</h3>
           <div className="list">
-            <div className="row"><b>Impresoras</b><span className="badge">Pendiente</span></div>
+            <div className="row"><b>Salida de estaciones</b><span className="badge ok-badge">Pantalla / Impresora</span></div>
             <div className="row"><b>Instagram / Facebook</b><span className="badge">Pendiente API</span></div>
             <div className="row"><b>Base de datos</b><span className="badge ok-badge">Supabase · conectado</span></div>
             <div className="row"><b>Sucursal operativa</b><span className="badge">{activeLocation?.name || (remoteLoading ? 'Cargando…' : 'Sin sucursal')}</span></div>
@@ -264,6 +300,95 @@ export default function SettingsPage() {
           <div className="notice warn">Que el cliente Supabase esté configurado no significa que Auth esté listo: todavía debes activar plantillas OTP, URLs y Google desde el panel de Supabase.</div>
         </div>
       </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Estaciones de preparación"
+        description="Activa únicamente las estaciones que usa esta sucursal y define si trabajan con pantalla o impresora."
+        icon="🍳"
+        badge={activeLocation ? `${stationSettings.filter((station) => station.active).length} activas` : 'Sin sucursal'}
+        defaultOpen
+      >
+        {!activeLocation ? (
+          <div className="notice warn">Selecciona primero una sucursal para configurar sus estaciones.</div>
+        ) : (
+          <>
+            <div className="section-title">
+              <div>
+                <h3>{activeLocation.name}</h3>
+                <p className="muted">
+                  El Catálogo maestro solo podrá asignar productos a estaciones que estén encendidas en esta sucursal.
+                </p>
+              </div>
+              <span className="badge">{canManageSettings ? 'Administrador' : 'Solo lectura'}</span>
+            </div>
+
+            {stationLoading ? (
+              <div className="empty-inline">Cargando estaciones…</div>
+            ) : (
+              <div className="station-settings-grid section-gap">
+                {stationSettings.map((station) => {
+                  const saving = stationSavingType === station.stationType
+                  return (
+                    <article className={`station-setting-card ${station.active ? 'active' : 'inactive'}`} key={station.stationType}>
+                      <div className="station-setting-head">
+                        <span className="station-setting-icon">{station.icon}</span>
+                        <div>
+                          <h4>{station.name}</h4>
+                          <small>{station.active ? 'Estación encendida' : 'Estación apagada'}</small>
+                        </div>
+                        <label className="station-setting-switch">
+                          <input
+                            type="checkbox"
+                            checked={station.active}
+                            disabled={!canManageSettings || saving}
+                            onChange={(event) => saveStation(station, { active: event.target.checked })}
+                          />
+                          <span>{station.active ? 'ON' : 'OFF'}</span>
+                        </label>
+                      </div>
+
+                      {station.active && (
+                        <div className="station-output-choice">
+                          <span>Salida de comandas</span>
+                          <div className="station-output-buttons">
+                            <button
+                              type="button"
+                              className={station.outputMode === 'screen' ? 'active' : ''}
+                              disabled={!canManageSettings || saving}
+                              onClick={() => saveStation(station, { outputMode: 'screen' })}
+                            >
+                              🖥️ Pantalla
+                            </button>
+                            <button
+                              type="button"
+                              className={station.outputMode === 'printer' ? 'active' : ''}
+                              disabled={!canManageSettings || saving}
+                              onClick={() => saveStation(station, { outputMode: 'printer' })}
+                            >
+                              🖨️ Impresora
+                            </button>
+                          </div>
+                          <small>
+                            {station.outputMode === 'screen'
+                              ? 'Las comandas se trabajan desde la pantalla de esta estación.'
+                              : 'La estación queda definida para impresión. La vinculación de la impresora física se realizará desde la integración de impresoras.'}
+                          </small>
+                        </div>
+                      )}
+
+                      {saving && <div className="station-setting-saving">Guardando en Supabase…</div>}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="notice section-gap">
+              Cocina, Bar, Postres, Café y Otra estación son independientes. No puedes apagar una estación mientras tenga productos activos asignados a esta sucursal.
+            </div>
+          </>
+        )}
       </SettingsSection>
 
       <SettingsSection
