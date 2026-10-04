@@ -32,7 +32,7 @@ function pickupIdentity(order, tableLabel) {
   return `Turno ${order.id}`
 }
 
-function OrderCard({ order, status, tableLabel }) {
+function OrderCard({ order, status, tableLabel, onDeliver, delivering }) {
   const meta = STATUS_META[status]
   return (
     <article style={{
@@ -44,13 +44,28 @@ function OrderCard({ order, status, tableLabel }) {
         {pickupIdentity(order, tableLabel)}
       </div>
       <div style={{ marginTop: 9, opacity: .72, fontSize: 14, fontWeight: 700 }}>{meta.detail}</div>
+      {status === 'ready' && order.mode === 'table' ? (
+        <button
+          type="button"
+          disabled={delivering}
+          onClick={() => onDeliver(order)}
+          style={{
+            width: '100%', marginTop: 14, minHeight: 46, border: 0, borderRadius: 12,
+            cursor: delivering ? 'wait' : 'pointer', fontSize: 16, fontWeight: 900,
+            background: '#22c55e', color: '#052e16', opacity: delivering ? .65 : 1,
+          }}
+        >
+          {delivering ? 'Entregando…' : 'Entregar'}
+        </button>
+      ) : null}
     </article>
   )
 }
 
 export default function TvPage({ standalone = false }) {
-  const { state, tableLabel, refreshOperationalData, remoteLoading, activeLocation } = useRestaurant()
+  const { state, tableLabel, refreshOperationalData, remoteLoading, activeLocation, markRoundDelivered } = useRestaurant()
   const [now, setNow] = useState(() => new Date())
+  const [deliveringOrderId, setDeliveringOrderId] = useState(null)
   useEffect(() => {
     if (!standalone) return undefined
     document.documentElement.style.background = '#0f172a'
@@ -84,6 +99,33 @@ export default function TvPage({ standalone = false }) {
     Object.values(groups).forEach((orders) => orders.sort((a, b) => Number(a.created || 0) - Number(b.created || 0)))
     return groups
   }, [state.orders])
+
+  const deliverReadyTableOrder = async (order) => {
+    if (!order || order.mode !== 'table' || deliveringOrderId) return
+
+    const readyRounds = (order.rounds || []).filter((round) => {
+      const items = (round.items || []).filter((item) => !item.voided)
+      return items.length && items.some((item) => item.prepStatus === 'ready')
+    })
+    if (!readyRounds.length) return
+
+    const identity = pickupIdentity(order, tableLabel)
+    const confirmed = window.confirm(`¿Confirmas que ${identity} ya fue entregado? Se quitará de la lista de pedidos listos.`)
+    if (!confirmed) return
+
+    setDeliveringOrderId(order.id)
+    try {
+      for (const round of readyRounds) {
+        const result = await markRoundDelivered(order.id, round.id)
+        if (result?.ok === false) throw new Error(result.message || 'No se pudo marcar el pedido como entregado.')
+      }
+      await refreshOperationalData?.()
+    } catch (error) {
+      window.alert(error?.message || 'No se pudo marcar el pedido como entregado.')
+    } finally {
+      setDeliveringOrderId(null)
+    }
+  }
 
   const restaurantName = state.settings.restaurantName || 'RestOS+'
   const branchName = activeLocation?.name || ''
@@ -121,7 +163,7 @@ export default function TvPage({ standalone = false }) {
               </header>
               <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
                 {board[status].length
-                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} />)
+                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} onDeliver={deliverReadyTableOrder} delivering={deliveringOrderId === order.id} />)
                   : <div style={{ padding: '24px 10px', textAlign: 'center', opacity: .42, fontWeight: 700 }}>Sin pedidos</div>}
               </div>
             </section>
