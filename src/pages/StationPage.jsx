@@ -70,8 +70,6 @@ export default function StationPage({ station }) {
   const {
     stationJobs,
     advanceStationRound,
-    markTableItemDelivered,
-    markTableStationRoundDelivered,
     tableLabel,
     formatMoney,
     voidRequestsVersion,
@@ -588,37 +586,12 @@ export default function StationPage({ station }) {
                         </small>
                       )}
                     </div>
-
-                    {canDispatch && (
-                      <button
-                        type="button"
-                        className="btn primary kds-item-dispatch"
-                        onClick={() => openDispatchModal(order, item)}
-                      >
-                        ✓ Entregar
-                      </button>
-                    )}
                   </div>
                 )
               })}
             </div>
 
-            {order.mode === 'table' ? (
-              <button
-                className={`btn kds-action ${status === 'new' ? '' : 'primary'}`}
-                onClick={async () => {
-                  if (status === 'new') {
-                    const result = await advanceStationRound(order.id, round.id, station)
-                    if (result?.ok === false) window.alert(result.message)
-                    return
-                  }
-
-                  openDispatchAllModal(order, round, items)
-                }}
-              >
-                {status === 'new' ? `${icon} Empezar preparación` : '✓ Entregar todo'}
-              </button>
-            ) : status !== 'ready' && (
+            {status !== 'ready' && (
               <button
                 className={`btn kds-action ${status === 'preparing' ? 'primary' : ''}`}
                 onClick={async () => {
