@@ -34,7 +34,7 @@ function pickupIdentity(order, tableLabel) {
   return `Turno ${order.id}`
 }
 
-export default function TvPage() {
+export default function TvPage({ standalone = false }) {
   const {
     state,
     tableLabel,
@@ -43,6 +43,20 @@ export default function TvPage() {
     activeLocation,
   } = useRestaurant()
   const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    if (!standalone) return undefined
+    document.documentElement.style.background = '#0f172a'
+    document.body.style.margin = '0'
+    document.body.style.background = '#0f172a'
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.documentElement.style.background = ''
+      document.body.style.margin = ''
+      document.body.style.background = ''
+      document.body.style.overflow = ''
+    }
+  }, [standalone])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30000)
@@ -68,10 +82,13 @@ export default function TvPage() {
   const timeLabel = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <section className="view active">
+    <section className="view active" style={standalone ? { width: '100vw', height: '100dvh', margin: 0, padding: 0, overflow: 'hidden' } : undefined}>
       <div style={{
-        minHeight: 'calc(100vh - 110px)',
-        borderRadius: 24,
+        width: standalone ? '100vw' : undefined,
+        height: standalone ? '100dvh' : undefined,
+        minHeight: standalone ? '100dvh' : 'calc(100vh - 110px)',
+        boxSizing: 'border-box',
+        borderRadius: standalone ? 0 : 24,
         padding: 'clamp(20px, 3vw, 42px)',
         background: 'linear-gradient(145deg, rgba(15,23,42,.98), rgba(30,41,59,.98))',
         color: '#fff',
