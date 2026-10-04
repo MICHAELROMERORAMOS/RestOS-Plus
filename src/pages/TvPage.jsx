@@ -1,13 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { useAuth } from '../context/AuthContext.jsx'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
-import { loadOperationalHistory } from '../services/operationalService.js'
 
 const STATUS_META = {
-  sent: { label: 'Enviados', detail: 'Enviado a preparación', accent: '#94a3b8' },
+  sent: { label: 'Enviados a preparación', detail: 'Enviado a preparación', accent: '#94a3b8' },
   preparing: { label: 'Preparando', detail: 'En preparación', accent: '#f59e0b' },
   ready: { label: 'Listos', detail: 'Listo para recoger', accent: '#22c55e' },
-  delivered: { label: 'Entregados', detail: 'Entregado', accent: '#38bdf8' },
 }
 
 function activeItems(order) {
@@ -17,7 +14,6 @@ function activeItems(order) {
 function displayStatus(order) {
   const items = activeItems(order)
   if (!items.length) return null
-  if (items.every((item) => item.prepStatus === 'delivered')) return 'delivered'
   if (items.some((item) => item.prepStatus === 'preparing')) return 'preparing'
   if (items.some((item) => item.prepStatus === 'new')) return 'sent'
   if (items.some((item) => item.prepStatus === 'ready')) return 'ready'
@@ -53,22 +49,8 @@ function OrderCard({ order, status, tableLabel }) {
 }
 
 export default function TvPage({ standalone = false }) {
-  const auth = useAuth()
   const { state, tableLabel, refreshOperationalData, remoteLoading, activeLocation } = useRestaurant()
   const [now, setNow] = useState(() => new Date())
-  const [historyOrders, setHistoryOrders] = useState([])
-  const restaurantId = auth.userContext?.membership?.restaurant_id || null
-
-  const refreshHistory = useCallback(async () => {
-    if (!restaurantId || !activeLocation?.id) return
-    try {
-      const result = await loadOperationalHistory(restaurantId, activeLocation.id, { limit: 30 })
-      setHistoryOrders(result.orders || [])
-    } catch {
-      // The live operational board remains usable even if recent history cannot be loaded.
-    }
-  }, [restaurantId, activeLocation?.id])
-
   useEffect(() => {
     if (!standalone) return undefined
     document.documentElement.style.background = '#0f172a'
@@ -84,33 +66,24 @@ export default function TvPage({ standalone = false }) {
   }, [standalone])
 
   useEffect(() => {
-    refreshHistory()
     const timer = window.setInterval(() => {
       setNow(new Date())
       refreshOperationalData?.()
-      refreshHistory()
     }, 15000)
     return () => window.clearInterval(timer)
-  }, [refreshOperationalData, refreshHistory])
+  }, [refreshOperationalData, activeLocation?.id])
 
   const board = useMemo(() => {
-    const groups = { sent: [], preparing: [], ready: [], delivered: [] }
+    const groups = { sent: [], preparing: [], ready: [] }
     ;(state.orders || []).filter((order) => ['table', 'quick'].includes(order.mode)).forEach((order) => {
       const status = displayStatus(order)
       if (status) groups[status].push(order)
     })
 
-    const activeIds = new Set((state.orders || []).map((order) => String(order.serverId || '')))
-    historyOrders
-      .filter((order) => ['table', 'quick'].includes(order.mode))
-      .filter((order) => !activeIds.has(String(order.serverId || '')))
-      .filter((order) => activeItems(order).length && activeItems(order).every((item) => item.prepStatus === 'delivered'))
-      .slice(0, 12)
-      .forEach((order) => groups.delivered.push(order))
 
     Object.values(groups).forEach((orders) => orders.sort((a, b) => Number(a.created || 0) - Number(b.created || 0)))
     return groups
-  }, [state.orders, historyOrders])
+  }, [state.orders])
 
   const restaurantName = state.settings.restaurantName || 'RestOS+'
   const branchName = activeLocation?.name || ''
@@ -139,7 +112,7 @@ export default function TvPage({ standalone = false }) {
           </div>
         </header>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'clamp(10px, 1.4vw, 20px)' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'clamp(10px, 1.4vw, 20px)' }}>
           {Object.entries(STATUS_META).map(([status, meta]) => (
             <section key={status} style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRadius: 20, background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', overflow: 'hidden' }}>
               <header style={{ padding: '16px 18px', borderBottom: `3px solid ${meta.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
