@@ -85,6 +85,13 @@ function MainApplication() {
   }, [])
 
   function navigate(view) {
+    if (view === 'tv') {
+      const tvUrl = new URL(pathForView('tv'), window.location.origin)
+      if (restaurant.activeLocation?.id) tvUrl.searchParams.set('location', restaurant.activeLocation.id)
+      window.open(tvUrl.toString(), '_blank', 'noopener,noreferrer')
+      return true
+    }
+
     const item = accessibleItems.find((candidate) => candidate.id === view)
 
     if (!item) {
@@ -189,6 +196,11 @@ function MainApplication() {
   }
 
   const activeViewAllowed = accessibleItems.some((item) => item.id === activeView)
+
+  if (activeView === 'tv' && activeViewAllowed) {
+    return <TvPage standalone />
+  }
+
   const activePage = activeViewAllowed
     ? (pages[activeView] || pages.dashboard)
     : (
