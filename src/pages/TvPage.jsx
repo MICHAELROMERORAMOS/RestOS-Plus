@@ -14,9 +14,15 @@ function activeItems(order) {
 function displayStatus(order) {
   const items = activeItems(order)
   if (!items.length) return null
-  if (items.some((item) => item.prepStatus === 'preparing')) return 'preparing'
-  if (items.some((item) => item.prepStatus === 'new')) return 'sent'
-  if (items.some((item) => item.prepStatus === 'ready')) return 'ready'
+
+  const pending = items.filter((item) => item.prepStatus !== 'delivered')
+  if (!pending.length) return null
+
+  // An order is ready only when every remaining item is ready. Delivered items
+  // from an earlier partial handoff must not prevent a table from reaching Listos.
+  if (pending.every((item) => item.prepStatus === 'ready')) return 'ready'
+  if (pending.some((item) => item.prepStatus === 'preparing')) return 'preparing'
+  if (pending.some((item) => item.prepStatus === 'new')) return 'sent'
   return null
 }
 
@@ -72,6 +78,8 @@ export default function TvPage({ standalone = false }) {
   const { state, tableLabel, refreshOperationalData, remoteLoading, activeLocation, markRoundDelivered } = useRestaurant()
   const [now, setNow] = useState(() => new Date())
   const [deliveringOrderId, setDeliveringOrderId] = useState(null)
+  const [deliveryCandidate, setDeliveryCandidate] = useState(null)
+  const [deliveryError, setDeliveryError] = useState('')
   useEffect(() => {
     if (!standalone) return undefined
     document.documentElement.style.background = '#0f172a'
@@ -106,19 +114,32 @@ export default function TvPage({ standalone = false }) {
     return groups
   }, [state.orders])
 
-  const deliverReadyOrder = async (order) => {
+  const requestDelivery = (order) => {
     if (!order || !['table', 'quick'].includes(order.mode) || deliveringOrderId) return
+    setDeliveryError('')
+    setDeliveryCandidate(order)
+  }
+
+  const cancelDelivery = () => {
+    if (deliveringOrderId) return
+    setDeliveryError('')
+    setDeliveryCandidate(null)
+  }
+
+  const confirmDelivery = async () => {
+    const order = deliveryCandidate
+    if (!order || deliveringOrderId) return
 
     const readyRounds = (order.rounds || []).filter((round) => {
-      const items = (round.items || []).filter((item) => !item.voided)
-      return items.length && items.some((item) => item.prepStatus === 'ready')
+      const items = (round.items || []).filter((item) => !item.voided && item.prepStatus !== 'delivered')
+      return items.length && items.every((item) => item.prepStatus === 'ready')
     })
-    if (!readyRounds.length) return
+    if (!readyRounds.length) {
+      setDeliveryError('Este pedido ya no tiene productos listos pendientes de entrega.')
+      return
+    }
 
-    const identity = pickupIdentity(order, tableLabel)
-    const confirmed = window.confirm(`¿Confirmas que ${identity} ya fue entregado? Se quitará de la lista de pedidos listos.`)
-    if (!confirmed) return
-
+    setDeliveryError('')
     setDeliveringOrderId(order.id)
     try {
       for (const round of readyRounds) {
@@ -126,8 +147,9 @@ export default function TvPage({ standalone = false }) {
         if (result?.ok === false) throw new Error(result.message || 'No se pudo marcar el pedido como entregado.')
       }
       await refreshOperationalData?.()
+      setDeliveryCandidate(null)
     } catch (error) {
-      window.alert(error?.message || 'No se pudo marcar el pedido como entregado.')
+      setDeliveryError(error?.message || 'No se pudo marcar el pedido como entregado.')
     } finally {
       setDeliveringOrderId(null)
     }
@@ -169,13 +191,73 @@ export default function TvPage({ standalone = false }) {
               </header>
               <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
                 {board[status].length
-                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} onDeliver={deliverReadyOrder} delivering={deliveringOrderId === order.id} />)
+                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} onDeliver={requestDelivery} delivering={deliveringOrderId === order.id} />)
                   : <div style={{ padding: '24px 10px', textAlign: 'center', opacity: .42, fontWeight: 700 }}>Sin pedidos</div>}
               </div>
             </section>
           ))}
         </div>
       </div>
+
+      {deliveryCandidate ? (
+        <div
+          role="presentation"
+          onClick={cancelDelivery}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10000, display: 'grid', placeItems: 'center',
+            padding: 20, background: 'rgba(2,6,23,.78)', backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delivery-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: 'min(92vw, 480px)', borderRadius: 24, padding: 26,
+              background: 'linear-gradient(145deg, #172033, #111827)', color: '#fff',
+              border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 28px 80px rgba(0,0,0,.48)',
+            }}
+          >
+            <div style={{
+              width: 58, height: 58, borderRadius: 18, display: 'grid', placeItems: 'center',
+              background: 'rgba(34,197,94,.14)', color: '#86efac', fontSize: 30, fontWeight: 900,
+            }}>✓</div>
+            <h2 id="delivery-confirm-title" style={{ margin: '18px 0 8px', fontSize: 28 }}>
+              Confirmar entrega
+            </h2>
+            <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 8 }}>
+              {pickupIdentity(deliveryCandidate, tableLabel)}
+            </div>
+            <p style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.55 }}>
+              Confirma únicamente cuando el pedido haya sido entregado al cliente. Al confirmar se quitará de la lista de pedidos listos.
+            </p>
+            {deliveryError ? (
+              <div style={{ marginTop: 16, padding: '11px 13px', borderRadius: 12, background: 'rgba(239,68,68,.14)', color: '#fecaca', fontWeight: 700 }}>
+                {deliveryError}
+              </div>
+            ) : null}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                disabled={Boolean(deliveringOrderId)}
+                onClick={cancelDelivery}
+                style={{ minHeight: 50, borderRadius: 13, border: '1px solid rgba(255,255,255,.16)', background: 'rgba(255,255,255,.07)', color: '#fff', fontSize: 16, fontWeight: 800, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(deliveringOrderId)}
+                onClick={confirmDelivery}
+                style={{ minHeight: 50, borderRadius: 13, border: 0, background: '#22c55e', color: '#052e16', fontSize: 16, fontWeight: 900, cursor: deliveringOrderId ? 'wait' : 'pointer', opacity: deliveringOrderId ? .7 : 1 }}
+              >
+                {deliveringOrderId ? 'Entregando…' : 'Sí, entregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
