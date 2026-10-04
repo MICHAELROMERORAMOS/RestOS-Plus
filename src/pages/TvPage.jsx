@@ -34,29 +34,35 @@ function pickupIdentity(order, tableLabel) {
 
 function OrderCard({ order, status, tableLabel, onDeliver, delivering }) {
   const meta = STATUS_META[status]
+  const canDeliver = status === 'ready'
   return (
-    <article style={{
-      borderRadius: 18, padding: '18px 20px', background: 'rgba(255,255,255,.09)',
-      border: '1px solid rgba(255,255,255,.14)', borderLeft: `6px solid ${meta.accent}`,
-      boxShadow: '0 12px 28px rgba(0,0,0,.16)',
-    }}>
+    <article
+      role={canDeliver ? 'button' : undefined}
+      tabIndex={canDeliver ? 0 : undefined}
+      onClick={canDeliver && !delivering ? () => onDeliver(order) : undefined}
+      onKeyDown={canDeliver && !delivering ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onDeliver(order)
+        }
+      } : undefined}
+      style={{
+        borderRadius: 18, padding: '18px 20px', background: 'rgba(255,255,255,.09)',
+        border: '1px solid rgba(255,255,255,.14)', borderLeft: `6px solid ${meta.accent}`,
+        boxShadow: '0 12px 28px rgba(0,0,0,.16)',
+        cursor: canDeliver ? (delivering ? 'wait' : 'pointer') : 'default',
+        opacity: delivering ? .65 : 1,
+        touchAction: canDeliver ? 'manipulation' : 'auto',
+      }}
+    >
       <div style={{ fontSize: 'clamp(24px, 2.6vw, 42px)', fontWeight: 900, lineHeight: 1.05, overflowWrap: 'anywhere' }}>
         {pickupIdentity(order, tableLabel)}
       </div>
       <div style={{ marginTop: 9, opacity: .72, fontSize: 14, fontWeight: 700 }}>{meta.detail}</div>
-      {status === 'ready' && order.mode === 'table' ? (
-        <button
-          type="button"
-          disabled={delivering}
-          onClick={() => onDeliver(order)}
-          style={{
-            width: '100%', marginTop: 14, minHeight: 46, border: 0, borderRadius: 12,
-            cursor: delivering ? 'wait' : 'pointer', fontSize: 16, fontWeight: 900,
-            background: '#22c55e', color: '#052e16', opacity: delivering ? .65 : 1,
-          }}
-        >
-          {delivering ? 'Entregando…' : 'Entregar'}
-        </button>
+      {canDeliver ? (
+        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 900, color: '#86efac' }}>
+          {delivering ? 'Entregando…' : 'Toca el pedido para entregar'}
+        </div>
       ) : null}
     </article>
   )
@@ -100,8 +106,8 @@ export default function TvPage({ standalone = false }) {
     return groups
   }, [state.orders])
 
-  const deliverReadyTableOrder = async (order) => {
-    if (!order || order.mode !== 'table' || deliveringOrderId) return
+  const deliverReadyOrder = async (order) => {
+    if (!order || !['table', 'quick'].includes(order.mode) || deliveringOrderId) return
 
     const readyRounds = (order.rounds || []).filter((round) => {
       const items = (round.items || []).filter((item) => !item.voided)
@@ -163,7 +169,7 @@ export default function TvPage({ standalone = false }) {
               </header>
               <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
                 {board[status].length
-                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} onDeliver={deliverReadyTableOrder} delivering={deliveringOrderId === order.id} />)
+                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} onDeliver={deliverReadyOrder} delivering={deliveringOrderId === order.id} />)
                   : <div style={{ padding: '24px 10px', textAlign: 'center', opacity: .42, fontWeight: 700 }}>Sin pedidos</div>}
               </div>
             </section>
