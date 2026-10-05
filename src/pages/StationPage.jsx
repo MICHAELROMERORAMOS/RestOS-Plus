@@ -74,6 +74,8 @@ export default function StationPage({ station }) {
     formatMoney,
     voidRequestsVersion,
     menuStations,
+    refreshOperationalData,
+    refreshOperationalSummary,
   } = useRestaurant()
   const audioContextRef = useRef(null)
   const knownJobKeysRef = useRef(new Set())
@@ -324,6 +326,13 @@ export default function StationPage({ station }) {
     try {
       await reviewKitchenVoidRequest(request.id, decision, note)
       setVoidRequests((current) => current.filter((item) => item.id !== request.id))
+
+      if (decision === 'approved') {
+        await Promise.all([
+          refreshOperationalData(),
+          refreshOperationalSummary(),
+        ])
+      }
     } catch (error) {
       window.alert(error?.message || 'No se pudo registrar la decisión de Cocina.')
     } finally {
