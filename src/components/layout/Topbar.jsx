@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 export default function Topbar({
   title,
@@ -17,6 +17,46 @@ export default function Topbar({
   onLogout,
 }) {
   const [switching, setSwitching] = useState(false)
+  const [fullscreen, setFullscreen] = useState(() => Boolean(
+    document.fullscreenElement || document.webkitFullscreenElement,
+  ))
+
+  useEffect(() => {
+    function syncFullscreenState() {
+      setFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement))
+    }
+
+    document.addEventListener('fullscreenchange', syncFullscreenState)
+    document.addEventListener('webkitfullscreenchange', syncFullscreenState)
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState)
+      document.removeEventListener('webkitfullscreenchange', syncFullscreenState)
+    }
+  }, [])
+
+  async function toggleFullscreen() {
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement
+
+    try {
+      if (fullscreenElement) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen
+        if (!exit) throw new Error('Fullscreen exit is not supported')
+        await exit.call(document)
+        return
+      }
+
+      const target = document.documentElement
+      const request = target.requestFullscreen || target.webkitRequestFullscreen
+      if (!request) {
+        window.alert('Este navegador o televisor no permite activar pantalla completa desde la página.')
+        return
+      }
+
+      await request.call(target)
+    } catch {
+      window.alert('No fue posible activar pantalla completa. Inténtalo nuevamente desde este botón.')
+    }
+  }
 
   async function changeLocation(event) {
     const locationId = event.target.value
@@ -102,6 +142,16 @@ export default function Topbar({
           {isBranch && canKitchen && <button className="btn" onClick={onKitchen}>🍳 Cocina</button>}
           {isBranch && canOrder && <button className="btn primary" onClick={onNewOrder}>＋ Nuevo pedido</button>}
         </div>
+
+        <button
+          type="button"
+          className={`top-fullscreen-toggle ${fullscreen ? 'active' : ''}`}
+          onClick={toggleFullscreen}
+          aria-label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+          title={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+        >
+          <span aria-hidden="true">{fullscreen ? '⤢' : '⛶'}</span>
+        </button>
 
         <button
           type="button"

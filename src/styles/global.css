@@ -6966,3 +6966,50 @@ html[data-restos-surface="platform-admin"] .developer-portal{
     display:none;
   }
 }
+
+
+/* Fullscreen display control */
+.top-fullscreen-toggle{
+  width:42px;
+  height:42px;
+  min-width:42px;
+  display:inline-grid;
+  place-items:center;
+  flex:0 0 42px;
+  border:1px solid #dfe5e1;
+  border-radius:12px;
+  background:#ffffffb8;
+  color:#53635b;
+  font-size:21px;
+  font-weight:900;
+  line-height:1;
+  opacity:.72;
+  box-shadow:0 2px 8px #18211b0a;
+  transition:opacity .15s ease,background .15s ease,border-color .15s ease,transform .15s ease;
+}
+.top-fullscreen-toggle:hover,
+.top-fullscreen-toggle:focus-visible{
+  opacity:1;
+  background:#fff;
+  border-color:#b9c8c0;
+  outline:none;
+}
+.top-fullscreen-toggle:active{
+  transform:scale(.96);
+}
+.top-fullscreen-toggle.active{
+  opacity:.92;
+  background:#edf5f1;
+  color:var(--brand);
+  border-color:#b7d0c3;
+}
+@media(max-width:650px){
+  .top-fullscreen-toggle{
+    width:40px;
+    height:40px;
+    min-width:40px;
+    flex-basis:40px;
+    border-radius:11px;
+    font-size:20px;
+  }
+}

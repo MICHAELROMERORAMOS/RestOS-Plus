@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { createMenuCategory, loadCompanyMasterCatalog, loadDirectProductMasterConfig, saveMenuProduct } from '../services/menuService.js'
+import {
+  PREPARATION_STATION_OPTIONS,
+  preparationStationDisplay,
+  preparationStationMeta,
+} from '../config/stations.js'
 
 const INVENTORY_UNITS = [
   { value: 'unidad', label: 'Unidad' },
@@ -93,13 +98,7 @@ export default function ProductsPage() {
     [menuCategories],
   )
 
-  const stationTypes = useMemo(() => ([
-    { value: 'kitchen', label: 'Cocina' },
-    { value: 'bar', label: 'Bar' },
-    { value: 'dessert', label: 'Postres' },
-    { value: 'coffee', label: 'Café' },
-    { value: 'other', label: 'Otra estación' },
-  ]), [])
+  const stationTypes = PREPARATION_STATION_OPTIONS
 
   function openNewProduct() {
     if (!canManage) return
@@ -436,8 +435,12 @@ export default function ProductsPage() {
           <div className="list">
             <div className="row"><b>Productos registrados</b><strong>{products.length}</strong></div>
             <div className="row"><b>Activos globalmente</b><strong>{products.filter((product) => product.active).length}</strong></div>
-            <div className="row"><b>Cocina</b><strong>{products.filter((product) => product.active && product.station === 'kitchen').length}</strong></div>
-            <div className="row"><b>Bar</b><strong>{products.filter((product) => product.active && product.station === 'bar').length}</strong></div>
+            {stationTypes.map((station) => (
+              <div className="row" key={station.value}>
+                <b>{station.icon} {station.label}</b>
+                <strong>{products.filter((product) => product.active && product.station === station.value).length}</strong>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -464,7 +467,7 @@ export default function ProductsPage() {
                     {product.active && Object.values(product.locationAvailability || {}).filter((item) => item.active).length === 0 && <span className="badge">SIN SUCURSAL ASIGNADA</span>}
                   </div>
                   <small>
-                    {product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'} · {
+                    {product.category} · {preparationStationDisplay(product.station)} · {
                       Object.values(product.locationAvailability || {}).filter((item) => item.active).length
                     } sucursal(es)
                   </small>
@@ -574,15 +577,7 @@ export default function ProductsPage() {
                       onClick={() => updateField('station', station.value)}
                     >
                       <span className="product-choice-icon">
-                        {station.value === 'kitchen'
-                          ? '🍳'
-                          : station.value === 'bar'
-                            ? '🍸'
-                            : station.value === 'dessert'
-                              ? '🍰'
-                              : station.value === 'coffee'
-                                ? '☕'
-                                : '📍'}
+                        {preparationStationMeta(station.value).icon}
                       </span>
                       {station.label}
                     </button>

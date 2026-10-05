@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
+import { preparationStationDisplay } from '../config/stations.js'
 import {
   consumeProductUnavailabilityAuthorization,
   listMyPendingProductUnavailabilityRequests,
@@ -259,7 +260,7 @@ export default function ProductAvailabilityPage() {
                     <b>{product.name}</b>
                     <span className={'badge ' + (tone === 'ok' ? 'ok-badge' : '')}>{status}</span>
                   </div>
-                  <small>{product.category} · {product.station === 'bar' ? '🍸 Bar' : '🍳 Cocina'}</small>
+                  <small>{product.category} · {preparationStationDisplay(product.station)}</small>
                   <p>{detail}</p>
                 </div>
 

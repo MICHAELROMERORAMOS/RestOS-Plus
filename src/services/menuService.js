@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
+import { preparationStationLabel } from '../config/stations.js'
 
 function requireSupabase() {
   if (!isSupabaseConfigured || !supabase) {
@@ -149,7 +150,7 @@ export async function loadMenuCatalog(restaurantId, locationId) {
         categoryId: product.category_id || null,
         category: category?.name || 'Sin categoría',
         station: product.preparation_station_type || station?.station_type || 'kitchen',
-        stationName: station?.name || (product.preparation_station_type === 'bar' ? 'Bar' : 'Cocina'),
+        stationName: station?.name || preparationStationLabel(product.preparation_station_type),
         directInventoryItemId: product.direct_inventory_item_id || null,
         trackInventory: Boolean(product.track_inventory),
         inventoryMode: product.inventory_mode || (product.track_inventory ? 'recipe' : 'none'),
@@ -433,7 +434,7 @@ export async function loadCompanyMasterCatalog(restaurantId) {
         categoryId: product.category_id || null,
         category: category?.name || 'Sin categoría',
         station: product.preparation_station_type || 'kitchen',
-        stationName: product.preparation_station_type === 'bar' ? 'Bar' : 'Cocina',
+        stationName: preparationStationLabel(product.preparation_station_type),
         directInventoryItemId: product.direct_inventory_item_id || null,
         trackInventory: Boolean(product.track_inventory),
         inventoryMode: product.inventory_mode || (product.track_inventory ? 'recipe' : 'none'),
