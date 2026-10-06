@@ -5,18 +5,25 @@ export default function Sidebar({
   activeView,
   onNavigate,
   userContext,
+  companyName = '',
   onLogout,
   collapsed = false,
   onToggleCollapsed,
   contextLabel = '',
 }) {
+  const resolvedCompanyName = companyName || userContext?.restaurant || 'RestOS+'
+  const resolvedContextLabel = contextLabel || 'Sucursal'
+  const companyInitial = resolvedCompanyName.trim().charAt(0).toUpperCase() || 'R'
+
   return (
     <aside className={`side ${collapsed ? 'collapsed' : ''}`}>
       <div className="side-head">
-        <div className="brand" title="RestOS+">
-          <span className="brand-full">RestOS+</span>
-          <span className="brand-short">R</span>
-          <small>RESTAURANT SYSTEM</small>
+        <div className="brand sidebar-company-brand" title={resolvedCompanyName}>
+          <span className="brand-full sidebar-company-name">{resolvedCompanyName}</span>
+          <span className="brand-short">{companyInitial}</span>
+          <small className="sidebar-location-name" title={resolvedContextLabel}>
+            {resolvedContextLabel}
+          </small>
         </div>
 
         <button
@@ -29,12 +36,6 @@ export default function Sidebar({
           {collapsed ? '›' : '‹'}
         </button>
       </div>
-
-      {contextLabel && (
-        <div className="side-context-label" title={contextLabel}>
-          <span>{contextLabel}</span>
-        </div>
-      )}
 
       <nav className="nav side-nav">
         {items.map((item) => (

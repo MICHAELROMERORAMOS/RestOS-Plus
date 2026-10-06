@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import Sidebar from './Sidebar.jsx'
 import Topbar from './Topbar.jsx'
 
-const SIDEBAR_STORAGE_KEY = 'restos-plus-sidebar-collapsed'
+const SIDEBAR_STORAGE_KEY = 'restos-plus-sidebar-collapsed-v2'
 
 function loadSidebarPreference() {
   try {
@@ -44,7 +44,6 @@ export default function AppShell({
 
   function handleSidebarNavigate(view) {
     onNavigate(view)
-    setSidebarCollapsed(true)
   }
 
   const contextLabel = workspaceMode === 'platform'
@@ -60,6 +59,7 @@ export default function AppShell({
         activeView={activeView}
         onNavigate={handleSidebarNavigate}
         userContext={userContext}
+        companyName={companyName}
         onLogout={onLogout}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={() => setSidebarCollapsed((currentValue) => !currentValue)}
