@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+  id="https://www.restosplus.com/tv" version="1.0.0" viewmodes="maximized">
+  <tizen:application id="RstOsTV1.RestOSTV" package="RstOsTV1" required_version="6.0"/>
+  <content src="index.html"/>
+  <name>RestOS+ TV</name>
+  <description>RestOS+ - Estado de pedidos para Samsung TV</description>
+  <tizen:profile name="tv-samsung"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <access origin="https://www.restosplus.com" subdomains="true"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+    encryption="disable" install-location="auto" hwkey-event="enable" pointing-device-support="enable"/>
+</widget>
