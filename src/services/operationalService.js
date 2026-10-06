@@ -8,6 +8,26 @@ function requireSupabase() {
   return supabase
 }
 
+function normalizeQuickIdentityError(error) {
+  const raw = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`
+
+  if (
+    raw.includes('orders_active_quick_pager_unique')
+    || raw.includes('pedido rápido activo con este PAGER/TURNO')
+  ) {
+    return new Error('Ya existe un pedido rápido activo con este PAGER/TURNO. Cierra ese pedido antes de reutilizar el número.')
+  }
+
+  if (
+    raw.includes('orders_active_quick_customer_unique')
+    || raw.includes('pedido rápido activo con este nombre')
+  ) {
+    return new Error('Ya existe un pedido rápido activo con este nombre. Cierra ese pedido antes de volver a utilizarlo.')
+  }
+
+  return error
+}
+
 function asNumber(value) {
   const number = Number(value || 0)
   return Number.isFinite(number) ? number : 0
@@ -440,7 +460,7 @@ export async function updateQuickOrderIdentityRemote({
     p_customer_name: customerName || null,
   })
 
-  if (error) throw error
+  if (error) throw normalizeQuickIdentityError(error)
   return data
 }
 
@@ -544,7 +564,7 @@ export async function sendOrderRoundRemote({
     })),
   })
 
-  if (error) throw error
+  if (error) throw normalizeQuickIdentityError(error)
   return data
 }
 
