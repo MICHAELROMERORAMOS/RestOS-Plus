@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
+import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
 
 const STATUS_META = {
   sent: { label: 'Enviados a preparación', detail: 'Enviado a preparación', accent: '#94a3b8' },
@@ -26,21 +27,18 @@ function displayStatus(order) {
   return null
 }
 
-function pickupIdentity(order, tableLabel) {
+function pickupIdentity(order, tableLabel, manualQuickIdentity) {
   if (order.mode === 'table') {
     const labels = (order.tableIds || []).map((tableId) => tableLabel(tableId)).filter(Boolean)
     return labels.length ? labels.join(' + ') : `Mesa · #${order.id}`
   }
-  const customerName = String(order.customerName || '').trim()
-  if (customerName) return customerName
-  const pager = String(order.pager || '').trim()
-  if (pager) return `Turno ${pager}`
-  return `Turno ${order.id}`
+  return quickServiceIdentity(order, { manual: manualQuickIdentity })
 }
 
-function OrderCard({ order, status, tableLabel, onDeliver, delivering }) {
+function OrderCard({ order, status, tableLabel, manualQuickIdentity, onDeliver, delivering }) {
   const meta = STATUS_META[status]
   const canDeliver = status === 'ready'
+  const identity = pickupIdentity(order, tableLabel, manualQuickIdentity)
   return (
     <article
       role={canDeliver ? 'button' : undefined}
@@ -53,23 +51,48 @@ function OrderCard({ order, status, tableLabel, onDeliver, delivering }) {
         }
       } : undefined}
       style={{
-        borderRadius: 18, padding: '18px 20px', background: 'rgba(255,255,255,.09)',
-        border: '1px solid rgba(255,255,255,.14)', borderLeft: `6px solid ${meta.accent}`,
-        boxShadow: '0 12px 28px rgba(0,0,0,.16)',
+        minHeight: 46,
+        borderRadius: 10,
+        padding: '6px 9px',
+        background: 'rgba(255,255,255,.09)',
+        border: '1px solid rgba(255,255,255,.13)',
+        borderLeft: `4px solid ${meta.accent}`,
+        boxShadow: '0 5px 14px rgba(0,0,0,.12)',
         cursor: canDeliver ? (delivering ? 'wait' : 'pointer') : 'default',
         opacity: delivering ? .65 : 1,
         touchAction: canDeliver ? 'manipulation' : 'auto',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0,1fr) auto',
+        gap: 8,
+        alignItems: 'center',
       }}
     >
-      <div style={{ fontSize: 'clamp(24px, 2.6vw, 42px)', fontWeight: 900, lineHeight: 1.05, overflowWrap: 'anywhere' }}>
-        {pickupIdentity(order, tableLabel)}
+      <div
+        title={identity}
+        style={{
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontSize: 'clamp(16px, 1.55vw, 24px)',
+          fontWeight: 900,
+          lineHeight: 1.05,
+        }}
+      >
+        {identity}
       </div>
-      <div style={{ marginTop: 9, opacity: .72, fontSize: 14, fontWeight: 700 }}>{meta.detail}</div>
-      {canDeliver ? (
-        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 900, color: '#86efac' }}>
-          {delivering ? 'Entregando…' : 'Toca el pedido para entregar'}
-        </div>
-      ) : null}
+      <div style={{
+        minWidth: 72,
+        textAlign: 'right',
+        opacity: canDeliver ? 1 : .68,
+        fontSize: 'clamp(8px, .72vw, 10px)',
+        lineHeight: 1.1,
+        fontWeight: 900,
+        color: canDeliver ? '#86efac' : '#e2e8f0',
+        textTransform: 'uppercase',
+      }}>
+        {delivering ? 'ENTREGANDO…' : canDeliver ? 'ENTREGAR' : meta.detail}
+      </div>
     </article>
   )
 }
@@ -157,6 +180,7 @@ export default function TvPage({ standalone = false }) {
 
   const restaurantName = state.settings.restaurantName || 'RestOS+'
   const branchName = activeLocation?.name || ''
+  const manualQuickIdentity = state.settings.allowPager !== false
   const timeLabel = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
   const totalVisible = Object.values(board).reduce((sum, orders) => sum + orders.length, 0)
 
@@ -165,34 +189,34 @@ export default function TvPage({ standalone = false }) {
       <div style={{
         width: standalone ? '100vw' : undefined, height: standalone ? '100dvh' : undefined,
         minHeight: standalone ? '100dvh' : 'calc(100vh - 110px)', boxSizing: 'border-box',
-        borderRadius: standalone ? 0 : 24, padding: 'clamp(16px, 2.2vw, 32px)',
+        borderRadius: standalone ? 0 : 18, padding: 'clamp(8px, 1vw, 14px)',
         background: 'linear-gradient(145deg, rgba(15,23,42,.99), rgba(30,41,59,.99))',
-        color: '#fff', display: 'flex', flexDirection: 'column', gap: 20, overflow: 'hidden',
+        color: '#fff', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden',
       }}>
-        <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, borderBottom: '1px solid rgba(255,255,255,.14)', paddingBottom: 16 }}>
+        <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid rgba(255,255,255,.14)', paddingBottom: 7 }}>
           <div>
-            <div style={{ opacity: .68, fontSize: 14, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+            <div style={{ opacity: .68, fontSize: 'clamp(9px, .8vw, 11px)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
               {restaurantName}{branchName ? ` · ${branchName}` : ''}
             </div>
-            <h1 style={{ margin: '5px 0 0', fontSize: 'clamp(30px, 4vw, 56px)', lineHeight: 1 }}>Estado de pedidos</h1>
+            <h1 style={{ margin: '2px 0 0', fontSize: 'clamp(23px, 2.7vw, 38px)', lineHeight: 1 }}>Estado de pedidos</h1>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 'clamp(26px, 3vw, 40px)', fontWeight: 900 }}>{timeLabel}</div>
-            <div style={{ opacity: .62, marginTop: 3 }}>{remoteLoading ? 'Actualizando…' : `${totalVisible} pedidos`}</div>
+            <div style={{ fontSize: 'clamp(20px, 2.1vw, 30px)', fontWeight: 900 }}>{timeLabel}</div>
+            <div style={{ opacity: .62, marginTop: 1, fontSize: 10 }}>{remoteLoading ? 'Actualizando…' : `${totalVisible} pedidos`}</div>
           </div>
         </header>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'clamp(10px, 1.4vw, 20px)' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'clamp(6px, .7vw, 10px)' }}>
           {Object.entries(STATUS_META).map(([status, meta]) => (
-            <section key={status} style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRadius: 20, background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', overflow: 'hidden' }}>
-              <header style={{ padding: '16px 18px', borderBottom: `3px solid ${meta.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 'clamp(18px, 2vw, 28px)' }}>{meta.label}</h2>
-                <strong style={{ minWidth: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>{board[status].length}</strong>
+            <section key={status} style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRadius: 12, background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.09)', overflow: 'hidden' }}>
+              <header style={{ padding: '7px 9px', borderBottom: `2px solid ${meta.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <h2 style={{ margin: 0, fontSize: 'clamp(13px, 1.45vw, 20px)', lineHeight: 1.1 }}>{meta.label}</h2>
+                <strong style={{ minWidth: 25, height: 25, display: 'grid', placeItems: 'center', borderRadius: 999, background: 'rgba(255,255,255,.12)', fontSize: 11 }}>{board[status].length}</strong>
               </header>
-              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
+              <div style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 5, overflowY: 'auto', scrollbarWidth: 'thin' }}>
                 {board[status].length
-                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} onDeliver={requestDelivery} delivering={deliveringOrderId === order.id} />)
-                  : <div style={{ padding: '24px 10px', textAlign: 'center', opacity: .42, fontWeight: 700 }}>Sin pedidos</div>}
+                  ? board[status].map((order) => <OrderCard key={`${status}-${order.serverId || order.id}`} order={order} status={status} tableLabel={tableLabel} manualQuickIdentity={manualQuickIdentity} onDeliver={requestDelivery} delivering={deliveringOrderId === order.id} />)
+                  : <div style={{ padding: '18px 8px', textAlign: 'center', opacity: .42, fontSize: 11, fontWeight: 700 }}>Sin pedidos</div>}
               </div>
             </section>
           ))}
@@ -227,7 +251,7 @@ export default function TvPage({ standalone = false }) {
               Confirmar entrega
             </h2>
             <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 8 }}>
-              {pickupIdentity(deliveryCandidate, tableLabel)}
+              {pickupIdentity(deliveryCandidate, tableLabel, manualQuickIdentity)}
             </div>
             <p style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.55 }}>
               Confirma únicamente cuando el pedido haya sido entregado al cliente. Al confirmar se quitará de la lista de pedidos listos.

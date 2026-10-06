@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
+import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
 import {
   listPendingKitchenVoidRequests,
   reviewKitchenVoidRequest,
@@ -114,6 +115,7 @@ export default function StationPage({ station }) {
   const canReviewVoids = station === 'kitchen' && auth.can('orders.void.review_unpaid')
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const allowIndividualItemReady = state.settings.allowIndividualItemReady !== false
+  const manualQuickIdentity = state.settings.allowPager !== false
 
   const preparationSummary = useMemo(() => {
     const totals = new Map()
@@ -538,7 +540,7 @@ export default function StationPage({ station }) {
                     : order.mode === 'delivery'
                       ? `🚚 Domicilio · ${order.delivery?.customerName || `Orden #${order.id}`}`
                       : order.mode === 'quick'
-                        ? `⚡ ${order.pager ? `Pager ${order.pager}` : order.customerName || `Orden #${order.id}`}`
+                        ? `⚡ ${quickServiceIdentity(order, { manual: manualQuickIdentity })}`
                         : `Orden #${order.id}`
                 }</h3>
                 <small>

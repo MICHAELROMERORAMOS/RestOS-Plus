@@ -14,6 +14,7 @@ import InvoiceCustomerFields, {
 } from '../components/payments/InvoiceCustomerFields.jsx'
 import { useRestaurant, orderBalance, orderHasInvoice, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
 import {
   consumeAccountVoidAuthorization,
   createKitchenVoidRequest,
@@ -460,13 +461,14 @@ export default function OrderPage({ onNavigate }) {
     && orderBalance(currentOrder) <= 0.005
 
   const manualQuickIdentity = state.settings.allowPager !== false
-  const quickIdentifier = manualQuickIdentity
-    ? (
-      pager.trim()
-        ? pager.trim()
-        : quickCustomerName.trim() || (currentOrder ? `Pedido #${currentOrder.id}` : 'Nuevo pedido')
-    )
-    : `Turno ${String(pager || currentOrder?.pager || currentOrder?.id || '—').trim()}`
+  const quickIdentifier = quickServiceIdentity({
+    id: currentOrder?.id,
+    pager: pager || currentOrder?.pager,
+    customerName: quickCustomerName || currentOrder?.customerName,
+  }, {
+    manual: manualQuickIdentity,
+    fallback: 'NUEVO PEDIDO',
+  })
 
   const paymentAccountLabel = orderMode === 'table'
     ? accountTableLabel
@@ -1167,13 +1169,13 @@ export default function OrderPage({ onNavigate }) {
 
             <div className="quick-identity-grid quick-identity-grid-modal">
               <label>
-                <span>Número</span>
+                <span>PAGER</span>
                 <input
                   autoFocus
                   value={pager}
                   disabled={Boolean(quickCustomerName.trim()) || quickIdentitySaving}
                   onChange={(event) => setPager(event.target.value)}
-                  placeholder="Ej. 16"
+                  placeholder="Ej. 01"
                 />
               </label>
 

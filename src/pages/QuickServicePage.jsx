@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderTotal } from '../context/RestaurantContext.jsx'
+import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
 
 function formatTime(value) {
   if (!value) return null
@@ -109,9 +110,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
       return
     }
 
-    const identifier = manualQuickIdentity
-      ? (order.pager ? String(order.pager) : order.customerName || `Pedido #${order.id}`)
-      : `Turno ${order.pager || order.id}`
+    const identifier = quickServiceIdentity(order, { manual: manualQuickIdentity })
 
     if (!window.confirm(`¿Deseas liberar ${identifier}? Todavía no tiene productos enviados.`)) return
 
@@ -162,9 +161,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
               const hasSentItems = (order.rounds || []).some((round) => (
                 (round.items || []).some((item) => !item.voided)
               ))
-              const identifier = manualQuickIdentity
-                ? (order.pager ? String(order.pager) : order.customerName || `Pedido #${order.id}`)
-                : `Turno ${order.pager || order.id}`
+              const identifier = quickServiceIdentity(order, { manual: manualQuickIdentity })
               const openedAt = formatTime(order.created)
               const responsible = shortName(order.openedByName)
               const canRelease = !hasSentItems && (order.openedByMe || auth.can('tables.manage'))
