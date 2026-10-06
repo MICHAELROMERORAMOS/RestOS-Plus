@@ -28,6 +28,7 @@ function branchError(error) {
   if (message.includes('Cannot deactivate the last active branch')) return 'No puedes desactivar la última sucursal activa de la empresa.'
   if (message.includes('Branch has active orders')) return 'No puedes desactivar esta sucursal mientras tenga pedidos activos.'
   if (message.includes('Branch has active table sessions')) return 'No puedes desactivar esta sucursal mientras haya una mesa en toma de pedido.'
+  if (message.includes('Active branch limit reached')) return 'La empresa alcanzó el número máximo de sucursales activas permitido por su suscripción.'
   if (message.includes('Not allowed to manage branches')) return 'Tu usuario no tiene permiso para administrar sucursales.'
   if (message.includes('Invoice prefix is already in use')) return 'Ese prefijo de facturación ya está usado por otra sucursal de la empresa.'
   if (message.includes('Invoice prefix is locked after the first invoice')) return 'El prefijo de facturación queda bloqueado después de emitir la primera factura.'
@@ -52,6 +53,8 @@ export default function BranchesPage() {
     () => branches.filter((branch) => branch.active !== false),
     [branches],
   )
+  const allowedBranchCount = Math.max(1, Number(company?.allowedBranchCount || 1))
+  const branchLimitReached = activeBranches.length >= allowedBranchCount
 
   async function refresh() {
     if (auth.isDesignMode || !restaurantId) {
@@ -77,6 +80,10 @@ export default function BranchesPage() {
   }, [restaurantId, auth.isDesignMode])
 
   function openNew() {
+    if (branchLimitReached) {
+      window.alert(`La empresa ya tiene ${activeBranches.length} de ${allowedBranchCount} sucursales activas permitidas. El límite solo puede ampliarse desde el portal admin de RestOS+.`)
+      return
+    }
     setEditing({ ...emptyBranch })
   }
 
@@ -193,10 +200,25 @@ export default function BranchesPage() {
           <h2>Empresa y sucursales</h2>
           <p>Administra las sedes operativas de {company?.name || auth.userContext?.restaurant || 'la empresa'}.</p>
         </div>
-        {canManage && <button className="btn primary" onClick={openNew}>＋ Nueva sucursal</button>}
+        {canManage && (
+          <button
+            className="btn primary"
+            onClick={openNew}
+            disabled={saving || branchLimitReached}
+            title={branchLimitReached ? 'Límite de sucursales activas alcanzado.' : ''}
+          >
+            ＋ Nueva sucursal
+          </button>
+        )}
       </div>
 
       {error && <div className="notice warn">{error}</div>}
+      {branchLimitReached && (
+        <div className="notice warn branch-limit-notice">
+          Esta empresa alcanzó su límite de <b>{allowedBranchCount} sucursal{allowedBranchCount === 1 ? '' : 'es'} activa{allowedBranchCount === 1 ? '' : 's'}</b>.
+          Para crear o reactivar otra sucursal, el administrador de RestOS+ debe ampliar el límite desde el portal de plataforma.
+        </div>
+      )}
 
       <div className="grid stats branch-stats">
         <div className="card stat">
@@ -206,8 +228,8 @@ export default function BranchesPage() {
         </div>
         <div className="card stat">
           <span className="label">Sucursales activas</span>
-          <strong>{activeBranches.length}</strong>
-          <small>{branches.length} registradas</small>
+          <strong>{activeBranches.length} / {allowedBranchCount}</strong>
+          <small>{branches.length} registradas · límite administrado por RestOS+</small>
         </div>
         <div className="card stat">
           <span className="label">Última sucursal operativa</span>
@@ -300,8 +322,18 @@ export default function BranchesPage() {
                       <button
                         className={`btn ${branch.active ? 'danger-outline' : ''}`}
                         onClick={() => toggleActive(branch)}
-                        disabled={saving || (branch.active && isCurrent)}
-                        title={branch.active && isCurrent ? 'Cambia primero a otra sucursal antes de desactivarla.' : ''}
+                        disabled={
+                          saving
+                          || (branch.active && isCurrent)
+                          || (!branch.active && branchLimitReached)
+                        }
+                        title={
+                          branch.active && isCurrent
+                            ? 'Cambia primero a otra sucursal antes de desactivarla.'
+                            : (!branch.active && branchLimitReached
+                              ? 'No se puede reactivar: la empresa alcanzó el límite de sucursales activas.'
+                              : '')
+                        }
                       >
                         {branch.active ? 'Desactivar' : 'Activar'}
                       </button>

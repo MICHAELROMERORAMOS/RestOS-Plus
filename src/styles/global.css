@@ -7013,3 +7013,107 @@ html[data-restos-surface="platform-admin"] .developer-portal{
     font-size:20px;
   }
 }
+
+
+/* Platform subscription controls */
+html[data-restos-surface="platform-admin"],
+html[data-restos-surface="platform-admin"] body{
+  height:100%;
+}
+html[data-restos-surface="platform-admin"] body{
+  overflow:hidden;
+}
+html[data-restos-surface="platform-admin"] .developer-portal{
+  height:100dvh;
+  min-height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable;
+}
+html[data-restos-surface="platform-admin"] .developer-console-header{
+  position:sticky;
+  top:0;
+  z-index:30;
+}
+.platform-company-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+}
+.platform-limit-cell.limit{
+  border-color:#e6c56f!important;
+  background:#fff9e8!important;
+}
+.platform-limit-cell.limit b{
+  color:#7a5a00;
+}
+.platform-subscription-modal{
+  width:min(570px,100%);
+  max-height:calc(100dvh - 32px);
+  overflow-y:auto;
+}
+.platform-subscription-current{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin:14px 0 18px;
+}
+.platform-subscription-current>div{
+  display:grid;
+  gap:4px;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#f7f9f8;
+}
+.platform-subscription-current span{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.platform-subscription-current strong{
+  font-size:25px;
+}
+.platform-subscription-modal .field{
+  display:grid;
+  gap:7px;
+}
+.platform-subscription-modal .field>span{
+  font-size:12px;
+  font-weight:900;
+}
+.platform-subscription-modal input{
+  width:100%;
+  min-height:48px;
+  border:1.5px solid #dce3df;
+  border-radius:12px;
+  padding:0 13px;
+  background:#fff;
+}
+.platform-subscription-help{
+  color:var(--muted);
+  line-height:1.4;
+}
+.platform-subscription-actions{
+  display:grid;
+  grid-template-columns:1fr 1.35fr;
+  gap:10px;
+  margin-top:16px;
+}
+.branch-limit-notice{
+  margin-bottom:18px;
+}
+@media(max-width:650px){
+  .platform-company-actions .btn{
+    width:100%;
+  }
+  .platform-subscription-current,
+  .platform-subscription-actions{
+    grid-template-columns:1fr;
+  }
+}

@@ -37,3 +37,18 @@ export async function rejectCompanyRegistration(requestId, reason = '') {
   if (error) throw error
   return data
 }
+
+
+export async function updatePlatformCompanySubscription({
+  restaurantId,
+  subscriptionStartedAt,
+  allowedBranchCount,
+}) {
+  const { data, error } = await requireSupabase().rpc('update_platform_company_subscription', {
+    p_restaurant_id: restaurantId,
+    p_subscription_started_at: subscriptionStartedAt,
+    p_allowed_branch_count: Number(allowedBranchCount),
+  })
+  if (error) throw error
+  return data
+}

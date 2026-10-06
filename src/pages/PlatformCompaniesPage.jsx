@@ -4,6 +4,7 @@ import {
   approveCompanyRegistration,
   loadPlatformCompanies,
   rejectCompanyRegistration,
+  updatePlatformCompanySubscription,
 } from '../services/platformAdminService.js'
 
 function formatDateTime(value) {
@@ -14,11 +15,27 @@ function formatDateTime(value) {
   }).format(new Date(value))
 }
 
+function formatDate(value) {
+  if (!value) return '—'
+  const normalized = String(value).slice(0, 10)
+  const [year, month, day] = normalized.split('-').map(Number)
+  if (!year || !month || !day) return normalized
+  return new Intl.DateTimeFormat('es', { dateStyle: 'medium' })
+    .format(new Date(year, month - 1, day))
+}
+
 function adminError(error) {
   const message = String(error?.message || '')
   if (message.includes('Platform administrator access required')) return 'Solo el administrador de la plataforma puede gestionar empresas.'
   if (message.includes('Applicant already belongs')) return 'El solicitante ya pertenece a una empresa activa.'
   if (message.includes('no longer pending')) return 'La solicitud ya fue procesada.'
+  if (message.includes('Allowed branch count cannot be lower than active branch count')) {
+    return 'El número de sucursales permitidas no puede ser menor que las sucursales que están activas.'
+  }
+  if (message.includes('Allowed branch count must be between')) {
+    return 'El número de sucursales permitidas debe estar entre 1 y 1000.'
+  }
+  if (message.includes('Subscription date is required')) return 'Selecciona la fecha de suscripción.'
   return message || 'No se pudo completar la operación.'
 }
 
@@ -30,6 +47,8 @@ export default function PlatformCompaniesPage() {
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('requests')
+  const [editingCompany, setEditingCompany] = useState(null)
+  const [subscriptionSaving, setSubscriptionSaving] = useState(false)
 
   const pending = useMemo(
     () => requests.filter((request) => request.status === 'pending'),
@@ -61,7 +80,7 @@ export default function PlatformCompaniesPage() {
 
   async function approve(request) {
     const confirmed = window.confirm(
-      `¿Aprobar la creación de “${request.companyName}”?\n\nSe creará automáticamente la empresa, su sucursal “${request.primaryBranchName || 'Principal'}”, los roles base y ${request.ownerName} quedará como Owner.`,
+      `¿Aprobar la creación de “${request.companyName}”?\n\nSe creará automáticamente la empresa, su sucursal “${request.primaryBranchName || 'Principal'}”, los roles base y ${request.ownerName} quedará como Owner. La suscripción comenzará hoy y tendrá 1 sucursal permitida inicialmente.`,
     )
     if (!confirmed) return
 
@@ -71,7 +90,7 @@ export default function PlatformCompaniesPage() {
       const result = await approveCompanyRegistration(request.id)
       await refresh()
       window.alert(
-        `Empresa creada correctamente.\n\nEmpresa: ${result?.company_name || request.companyName}\nCódigo de empresa: ${result?.join_code || 'generado'}`,
+        `Empresa creada correctamente.\n\nEmpresa: ${result?.company_name || request.companyName}\nCódigo de empresa: ${result?.join_code || 'generado'}\nSucursales permitidas: ${result?.allowed_branch_count || 1}`,
       )
     } catch (err) {
       setError(adminError(err))
@@ -99,6 +118,53 @@ export default function PlatformCompaniesPage() {
     }
   }
 
+  function openSubscriptionEditor(company) {
+    setEditingCompany({
+      id: company.id,
+      name: company.name,
+      subscriptionStartedAt: String(company.subscriptionStartedAt || '').slice(0, 10),
+      allowedBranchCount: Number(company.allowedBranchCount || 1),
+      activeBranchCount: Number(company.activeBranchCount || 0),
+    })
+  }
+
+  async function saveSubscription(event) {
+    event.preventDefault()
+    if (!editingCompany || subscriptionSaving) return
+
+    const allowed = Number(editingCompany.allowedBranchCount)
+    if (!editingCompany.subscriptionStartedAt) {
+      window.alert('Selecciona la fecha de suscripción.')
+      return
+    }
+    if (!Number.isInteger(allowed) || allowed < 1 || allowed > 1000) {
+      window.alert('El número de sucursales permitidas debe ser un entero entre 1 y 1000.')
+      return
+    }
+    if (allowed < Number(editingCompany.activeBranchCount || 0)) {
+      window.alert(
+        `Esta empresa tiene ${editingCompany.activeBranchCount} sucursales activas. Primero debes desactivar las excedentes o asignar un límite igual o mayor.`,
+      )
+      return
+    }
+
+    setSubscriptionSaving(true)
+    setError('')
+    try {
+      await updatePlatformCompanySubscription({
+        restaurantId: editingCompany.id,
+        subscriptionStartedAt: editingCompany.subscriptionStartedAt,
+        allowedBranchCount: allowed,
+      })
+      setEditingCompany(null)
+      await refresh()
+    } catch (err) {
+      setError(adminError(err))
+    } finally {
+      setSubscriptionSaving(false)
+    }
+  }
+
   if (!auth.userContext?.platformAdmin) {
     return (
       <section className="view active">
@@ -112,7 +178,7 @@ export default function PlatformCompaniesPage() {
       <div className="hero">
         <div>
           <h2>Administración de empresas</h2>
-          <p>Alta de nuevos clientes de RestOS+ y visión general de las empresas registradas.</p>
+          <p>Alta de clientes, suscripciones y capacidad de sucursales de cada tenant de RestOS+.</p>
         </div>
         <button className="btn" onClick={refresh} disabled={loading}>↻ Actualizar</button>
       </div>
@@ -136,9 +202,9 @@ export default function PlatformCompaniesPage() {
           <small>entre todas las empresas</small>
         </div>
         <div className="card stat">
-          <span className="label">Usuarios activos</span>
-          <strong>{companies.reduce((sum, company) => sum + Number(company.activeUserCount || 0), 0)}</strong>
-          <small>entre todas las empresas</small>
+          <span className="label">Capacidad contratada</span>
+          <strong>{companies.reduce((sum, company) => sum + Number(company.allowedBranchCount || 0), 0)}</strong>
+          <small>sucursales permitidas en total</small>
         </div>
       </div>
 
@@ -217,7 +283,7 @@ export default function PlatformCompaniesPage() {
           <div className="section-title">
             <div>
               <h3>Empresas registradas</h3>
-              <p className="muted">Cada empresa es un tenant independiente y puede tener múltiples sucursales.</p>
+              <p className="muted">La plataforma controla la fecha de suscripción y el máximo de sucursales activas de cada empresa.</p>
             </div>
           </div>
 
@@ -225,32 +291,130 @@ export default function PlatformCompaniesPage() {
             <div className="empty-inline">Cargando empresas…</div>
           ) : companies.length ? (
             <div className="platform-company-list">
-              {companies.map((company) => (
-                <article className="platform-company-card" key={company.id}>
-                  <div className="platform-company-head">
-                    <div>
-                      <h3>{company.name}</h3>
-                      <span>{company.legalName || 'Sin razón social'}</span>
-                    </div>
-                    <span className={`badge ${company.status === 'active' ? 'ok-badge' : ''}`}>
-                      {String(company.status || '').toUpperCase()}
-                    </span>
-                  </div>
+              {companies.map((company) => {
+                const activeBranches = Number(company.activeBranchCount || 0)
+                const allowedBranches = Number(company.allowedBranchCount || 1)
+                const atLimit = activeBranches >= allowedBranches
 
-                  <div className="platform-company-grid">
-                    <div><small>OWNER</small><b>{company.ownerName || '—'}</b><span>{company.ownerEmail || '—'}</span></div>
-                    <div><small>SUCURSALES</small><b>{company.activeBranchCount || 0} activas</b><span>{company.branchCount || 0} registradas</span></div>
-                    <div><small>USUARIOS</small><b>{company.activeUserCount || 0} activos</b></div>
-                    <div><small>CÓDIGO EMPRESA</small><b className="company-code">{company.joinCode || '—'}</b></div>
-                    <div><small>MONEDA</small><b>{company.currencyCode || '—'}</b></div>
-                    <div><small>CREADA</small><b>{formatDateTime(company.createdAt)}</b></div>
-                  </div>
-                </article>
-              ))}
+                return (
+                  <article className="platform-company-card" key={company.id}>
+                    <div className="platform-company-head">
+                      <div>
+                        <h3>{company.name}</h3>
+                        <span>{company.legalName || 'Sin razón social'}</span>
+                      </div>
+                      <span className={`badge ${company.status === 'active' ? 'ok-badge' : ''}`}>
+                        {String(company.status || '').toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="platform-company-grid">
+                      <div><small>OWNER</small><b>{company.ownerName || '—'}</b><span>{company.ownerEmail || '—'}</span></div>
+                      <div><small>FECHA DE SUSCRIPCIÓN</small><b>{formatDate(company.subscriptionStartedAt)}</b><span>inicio del servicio</span></div>
+                      <div className={atLimit ? 'platform-limit-cell limit' : 'platform-limit-cell'}>
+                        <small>SUCURSALES ACTIVAS</small>
+                        <b>{activeBranches}</b>
+                        <span>{company.branchCount || 0} registradas</span>
+                      </div>
+                      <div className={atLimit ? 'platform-limit-cell limit' : 'platform-limit-cell'}>
+                        <small>SUCURSALES PERMITIDAS</small>
+                        <b>{allowedBranches}</b>
+                        <span>{atLimit ? 'límite alcanzado' : `${allowedBranches - activeBranches} disponibles`}</span>
+                      </div>
+                      <div><small>USUARIOS</small><b>{company.activeUserCount || 0} activos</b></div>
+                      <div><small>CÓDIGO EMPRESA</small><b className="company-code">{company.joinCode || '—'}</b></div>
+                      <div><small>MONEDA</small><b>{company.currencyCode || '—'}</b></div>
+                      <div><small>CREADA</small><b>{formatDateTime(company.createdAt)}</b></div>
+                    </div>
+
+                    <div className="platform-company-actions">
+                      <button className="btn primary" onClick={() => openSubscriptionEditor(company)}>
+                        ⚙ Configurar suscripción
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           ) : (
             <div className="empty-block">Todavía no hay empresas registradas.</div>
           )}
+        </div>
+      )}
+
+      {editingCompany && (
+        <div className="modal open" onClick={() => !subscriptionSaving && setEditingCompany(null)}>
+          <form
+            className="modal-card platform-subscription-modal"
+            onSubmit={saveSubscription}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="section-title">
+              <div>
+                <span className="developer-console-kicker">CONTROL DE PLATAFORMA</span>
+                <h3>Suscripción · {editingCompany.name}</h3>
+                <p className="muted">Estos valores solo pueden modificarse desde el portal admin.</p>
+              </div>
+              <button type="button" className="btn" disabled={subscriptionSaving} onClick={() => setEditingCompany(null)}>×</button>
+            </div>
+
+            <div className="platform-subscription-current">
+              <div>
+                <span>Sucursales activas</span>
+                <strong>{editingCompany.activeBranchCount}</strong>
+              </div>
+              <div>
+                <span>Límite actual</span>
+                <strong>{editingCompany.allowedBranchCount}</strong>
+              </div>
+            </div>
+
+            <label className="field">
+              <span>Fecha de suscripción</span>
+              <input
+                type="date"
+                value={editingCompany.subscriptionStartedAt}
+                onChange={(event) => setEditingCompany((current) => ({
+                  ...current,
+                  subscriptionStartedAt: event.target.value,
+                }))}
+                required
+              />
+            </label>
+
+            <label className="field">
+              <span>Número de sucursales permitidas</span>
+              <input
+                type="number"
+                min={Math.max(1, editingCompany.activeBranchCount)}
+                max="1000"
+                step="1"
+                value={editingCompany.allowedBranchCount}
+                onChange={(event) => setEditingCompany((current) => ({
+                  ...current,
+                  allowedBranchCount: event.target.value,
+                }))}
+                required
+              />
+              <small className="platform-subscription-help">
+                No puede ser menor que las {editingCompany.activeBranchCount} sucursales que están activas.
+              </small>
+            </label>
+
+            <div className="notice">
+              Al alcanzar este límite, la empresa no podrá crear ni reactivar más sucursales.
+              El bloqueo se valida directamente en Supabase, no solamente en la interfaz.
+            </div>
+
+            <div className="platform-subscription-actions">
+              <button type="button" className="btn" disabled={subscriptionSaving} onClick={() => setEditingCompany(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn primary" disabled={subscriptionSaving}>
+                {subscriptionSaving ? 'Guardando…' : 'Guardar configuración'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </section>
