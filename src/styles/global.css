@@ -7160,3 +7160,129 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
   .branch-capacity-modal-actions{display:grid;grid-template-columns:1fr}
   .branch-capacity-modal-actions .btn{width:100%}
 }
+
+
+/* Compact three-column preparation boards */
+.station-view .kds.kds-large{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  align-items:start;
+}
+
+.station-view .kds-ticket{
+  padding:14px;
+  border-radius:16px;
+}
+
+.station-view .kds-ticket-head{
+  gap:8px;
+  margin-bottom:8px;
+}
+
+.station-view .kds-ticket-head h3{
+  font-size:17px;
+  line-height:1.15;
+}
+
+.station-view .kds-ticket-head small{
+  margin-top:3px;
+  font-size:10px;
+  line-height:1.3;
+}
+
+.station-view .kds-ticket-head .badge{
+  flex:0 0 auto;
+  padding:4px 7px;
+  font-size:9px;
+}
+
+.station-view .ticket .time,
+.station-view .kds-state{
+  margin:7px 0 9px;
+  font-size:15px;
+  line-height:1.15;
+}
+
+.station-view .kds-item-list{
+  gap:3px;
+  margin:8px 0 10px;
+  padding:5px 8px;
+  border-radius:12px;
+}
+
+.station-view .kds-product-row{
+  grid-template-columns:40px minmax(0,1fr);
+  gap:8px;
+  padding:7px 0;
+  font-size:14px;
+}
+
+.station-view .kds-qty{
+  min-height:30px;
+  border-radius:8px;
+  font-size:15px;
+}
+
+.station-view .kds-product-copy b{
+  display:block;
+  font-size:14px;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+
+.station-view .kds-product-copy small{
+  margin-top:3px;
+  font-size:10px;
+  line-height:1.3;
+}
+
+.station-view .kds-partial-dispatch{
+  padding:3px 6px;
+  font-size:9px!important;
+}
+
+.station-view .kds-action{
+  min-height:42px;
+  margin-top:9px;
+  padding:9px 11px;
+  font-size:12px;
+  border-radius:11px;
+}
+
+.station-view .kds-allergy-banner{
+  margin:7px 0;
+  padding:8px 9px;
+}
+
+.station-view .kds-allergy-banner strong{
+  font-size:11px;
+}
+
+.station-view .kds-allergy-banner span,
+.station-view .kds-allergy-banner small{
+  font-size:9px;
+}
+
+@media(max-width:1179px){
+  .station-view .kds.kds-large{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media(max-width:720px){
+  .station-view .kds.kds-large{
+    grid-template-columns:1fr!important;
+  }
+
+  .station-view .kds-ticket{
+    padding:13px;
+  }
+
+  .station-view .kds-ticket-head h3{
+    font-size:16px;
+  }
+
+  .station-view .kds-product-row{
+    grid-template-columns:38px minmax(0,1fr);
+  }
+}
