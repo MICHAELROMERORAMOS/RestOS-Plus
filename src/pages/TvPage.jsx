@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
 import { orderNumberLabel } from '../lib/orderNumber.js'
+
+const TV_VOICE_STORAGE_KEY = 'restos-tv-ready-voice-enabled'
 
 const STATUS_META = {
   sent: { label: 'Enviados a preparación', detail: 'Enviado a preparación', accent: '#94a3b8' },
@@ -34,6 +36,33 @@ function pickupIdentity(order, tableLabel, manualQuickIdentity) {
     return labels.length ? labels.join(' + ') : `Mesa · ${orderNumberLabel(order)}`
   }
   return quickServiceIdentity(order, { manual: manualQuickIdentity })
+}
+
+function readySpeechText(order, tableLabel, manualQuickIdentity) {
+  const identity = pickupIdentity(order, tableLabel, manualQuickIdentity)
+    .replace(/[⚡🚚·#]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return `${identity}, su pedido está listo`
+}
+
+function speakReadyOrder(order, tableLabel, manualQuickIdentity) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false
+
+  const text = readySpeechText(order, tableLabel, manualQuickIdentity)
+  const utterance = new SpeechSynthesisUtterance(text)
+  const voices = window.speechSynthesis.getVoices()
+  const spanishVoice = voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith('es-co'))
+    || voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith('es'))
+
+  utterance.lang = spanishVoice?.lang || 'es-CO'
+  utterance.voice = spanishVoice || null
+  utterance.rate = 0.92
+  utterance.pitch = 1
+  utterance.volume = 1
+  window.speechSynthesis.speak(utterance)
+  return true
 }
 
 function OrderCard({ order, status, tableLabel, manualQuickIdentity, onDeliver, delivering }) {
@@ -104,6 +133,16 @@ export default function TvPage({ standalone = false }) {
   const [deliveringOrderId, setDeliveringOrderId] = useState(null)
   const [deliveryCandidate, setDeliveryCandidate] = useState(null)
   const [deliveryError, setDeliveryError] = useState('')
+  const [voiceSupported] = useState(() => (
+    typeof window !== 'undefined'
+    && 'speechSynthesis' in window
+    && 'SpeechSynthesisUtterance' in window
+  ))
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.localStorage.getItem(TV_VOICE_STORAGE_KEY) !== 'false'
+  })
+  const readyOrderKeysRef = useRef(null)
   useEffect(() => {
     if (!standalone) return undefined
     document.documentElement.style.background = '#0f172a'
@@ -137,6 +176,47 @@ export default function TvPage({ standalone = false }) {
     Object.values(groups).forEach((orders) => orders.sort((a, b) => Number(a.created || 0) - Number(b.created || 0)))
     return groups
   }, [state.orders])
+
+  useEffect(() => {
+    const readyOrders = board.ready || []
+    const nextKeys = new Set(
+      readyOrders.map((order) => String(order.serverId || order.id)),
+    )
+
+    if (readyOrderKeysRef.current == null) {
+      readyOrderKeysRef.current = nextKeys
+      return
+    }
+
+    const previousKeys = readyOrderKeysRef.current
+    const newlyReady = readyOrders.filter((order) => (
+      !previousKeys.has(String(order.serverId || order.id))
+    ))
+
+    readyOrderKeysRef.current = nextKeys
+
+    if (!voiceSupported || !voiceEnabled || !newlyReady.length) return
+
+    newlyReady.forEach((order) => {
+      speakReadyOrder(order, tableLabel, manualQuickIdentity)
+    })
+  }, [board.ready, manualQuickIdentity, tableLabel, voiceEnabled, voiceSupported])
+
+  function toggleVoice() {
+    if (!voiceSupported) return
+
+    const next = !voiceEnabled
+    setVoiceEnabled(next)
+    window.localStorage.setItem(TV_VOICE_STORAGE_KEY, String(next))
+
+    window.speechSynthesis.cancel()
+    if (next) {
+      const utterance = new SpeechSynthesisUtterance('Voz de pedidos activada')
+      utterance.lang = 'es-CO'
+      utterance.rate = 0.95
+      window.speechSynthesis.speak(utterance)
+    }
+  }
 
   const requestDelivery = (order) => {
     if (!order || !['table', 'quick'].includes(order.mode) || deliveringOrderId) return
@@ -201,9 +281,32 @@ export default function TvPage({ standalone = false }) {
             </div>
             <h1 style={{ margin: '2px 0 0', fontSize: 'clamp(23px, 2.7vw, 38px)', lineHeight: 1 }}>Estado de pedidos</h1>
           </div>
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 'clamp(20px, 2.1vw, 30px)', fontWeight: 900 }}>{timeLabel}</div>
-            <div style={{ opacity: .62, marginTop: 1, fontSize: 10 }}>{remoteLoading ? 'Actualizando…' : `${totalVisible} pedidos`}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={toggleVoice}
+              disabled={!voiceSupported}
+              title={voiceSupported ? 'Activar o desactivar anuncios de pedidos listos' : 'Este navegador no permite lectura por voz'}
+              style={{
+                minHeight: 30,
+                padding: '5px 9px',
+                borderRadius: 9,
+                border: '1px solid rgba(255,255,255,.14)',
+                background: voiceEnabled && voiceSupported ? 'rgba(34,197,94,.16)' : 'rgba(255,255,255,.06)',
+                color: voiceEnabled && voiceSupported ? '#86efac' : '#cbd5e1',
+                fontSize: 9,
+                fontWeight: 900,
+                cursor: voiceSupported ? 'pointer' : 'not-allowed',
+                opacity: voiceSupported ? 1 : .45,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {voiceSupported ? (voiceEnabled ? '🔊 VOZ ON' : '🔇 VOZ OFF') : '🔇 SIN VOZ'}
+            </button>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 'clamp(20px, 2.1vw, 30px)', fontWeight: 900 }}>{timeLabel}</div>
+              <div style={{ opacity: .62, marginTop: 1, fontSize: 10 }}>{remoteLoading ? 'Actualizando…' : `${totalVisible} pedidos`}</div>
+            </div>
           </div>
         </header>
 
