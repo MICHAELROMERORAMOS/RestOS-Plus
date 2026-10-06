@@ -7333,3 +7333,54 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
 
 /* Navigation never collapses the sidebar automatically.
    The collapse button remains the only control that changes its state. */
+
+
+/* Individual ready controls */
+.station-view .kds-product-row{
+  grid-template-columns:40px minmax(0,1fr) auto;
+  align-items:center;
+}
+
+.kds-item-ready-button{
+  min-width:62px;
+  min-height:34px;
+  padding:6px 9px;
+  border:1px solid #9cc8ad;
+  border-radius:9px;
+  background:#edf8f1;
+  color:#19623e;
+  font-size:10px;
+  font-weight:950;
+  white-space:nowrap;
+  cursor:pointer;
+}
+
+.kds-item-ready-button:hover,
+.kds-item-ready-button:focus-visible{
+  background:#dff2e7;
+  border-color:#71ad89;
+  outline:none;
+}
+
+.kds-item-ready-state{
+  min-width:56px;
+  padding:5px 7px;
+  border-radius:8px;
+  background:#e8f5ed;
+  color:#217247;
+  font-size:9px;
+  font-weight:950;
+  text-align:center;
+  white-space:nowrap;
+}
+
+@media(max-width:720px){
+  .station-view .kds-product-row{
+    grid-template-columns:38px minmax(0,1fr) auto;
+  }
+
+  .kds-item-ready-button{
+    min-width:56px;
+    padding-inline:7px;
+  }
+}

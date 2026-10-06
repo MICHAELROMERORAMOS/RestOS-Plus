@@ -29,6 +29,7 @@ import {
   loadOperationalState,
   loadOperationalSummary,
   loadTableOrderSessions,
+  markOrderItemReadyRemote,
   markOrderItemServedRemote,
   markStationRoundServedRemote,
   markRoundServedRemote,
@@ -527,6 +528,7 @@ export function RestaurantProvider({ children }) {
         currency: remoteSettings.currency_code || previous.settings.currency,
         allowPager: remoteSettings.pager_enabled !== false,
         splitStations: remoteSettings.separate_kitchen_bar !== false,
+        allowIndividualItemReady: remoteSettings.allow_individual_item_ready !== false,
         blockInsufficientInventory: remoteSettings.block_insufficient_inventory !== false,
       },
     }))
@@ -2715,6 +2717,78 @@ export function RestaurantProvider({ children }) {
     updateState, auth.isDesignMode, state.orders, refreshOperationalOrdersByIds, activeLocation,
   ])
 
+  const markOrderItemReady = useCallback(async (orderId, lineId) => {
+    const order = state.orders.find((candidate) => candidate.id === orderId)
+    const item = order?.rounds
+      ?.flatMap((round) => round.items || [])
+      .find((candidate) => String(candidate.lineId) === String(lineId))
+
+    if (!order || !item || item.voided) {
+      return { ok: false, message: 'No se encontró el producto activo en la orden.' }
+    }
+
+    if (state.settings.allowIndividualItemReady === false) {
+      return { ok: false, message: 'El marcado individual de productos listos está desactivado en Configuración.' }
+    }
+
+    if (item.prepStatus === 'ready') {
+      return { ok: true, status: 'ready', alreadyReady: true }
+    }
+
+    if (item.prepStatus !== 'preparing') {
+      return { ok: false, message: 'Primero debes iniciar la preparación de la comanda.' }
+    }
+
+    if (!auth.isDesignMode) {
+      if (!order.serverId) {
+        return { ok: false, message: 'No se encontró la orden sincronizada.' }
+      }
+
+      try {
+        const result = await markOrderItemReadyRemote(order.serverId, item.lineId)
+        await refreshOperationalOrdersByIds([order.serverId], activeLocation)
+        await refreshOperationalSummary(activeLocation)
+        return { ok: true, ...result }
+      } catch (error) {
+        const message = String(error?.message || '')
+        return {
+          ok: false,
+          message: message.includes('Individual item readiness is disabled')
+            ? 'El marcado individual de productos listos está desactivado en Configuración.'
+            : (message || 'No se pudo marcar el producto como listo.'),
+        }
+      }
+    }
+
+    updateState((previous) => ({
+      ...previous,
+      orders: previous.orders.map((candidate) => candidate.id !== orderId ? candidate : {
+        ...candidate,
+        rounds: (candidate.rounds || []).map((round) => ({
+          ...round,
+          items: (round.items || []).map((line) => (
+            String(line.lineId) === String(lineId)
+            && !line.voided
+            && line.prepStatus === 'preparing'
+              ? { ...line, prepStatus: 'ready' }
+              : line
+          )),
+        })),
+      }),
+      activity: [...previous.activity, `Producto marcado listo · Orden #${orderId}`],
+    }))
+
+    return { ok: true, status: 'ready' }
+  }, [
+    auth.isDesignMode,
+    state.orders,
+    state.settings.allowIndividualItemReady,
+    updateState,
+    refreshOperationalOrdersByIds,
+    refreshOperationalSummary,
+    activeLocation,
+  ])
+
   const markTableItemDelivered = useCallback(async (orderId, lineId, quantity) => {
     const order = state.orders.find((candidate) => candidate.id === orderId)
     const item = order?.rounds
@@ -3361,23 +3435,32 @@ export function RestaurantProvider({ children }) {
     }
   }, [auth.isDesignMode, auth.permissions, restaurantId, updateSettings])
 
-  const setOperationalBehavior = useCallback(async ({ allowPager, splitStations }) => {
+  const setOperationalBehavior = useCallback(async ({
+    allowPager,
+    splitStations,
+    allowIndividualItemReady,
+  }) => {
     const nextAllowPager = allowPager == null
       ? state.settings.allowPager !== false
       : Boolean(allowPager)
     const nextSplitStations = splitStations == null
       ? state.settings.splitStations !== false
       : Boolean(splitStations)
+    const nextAllowIndividualItemReady = allowIndividualItemReady == null
+      ? state.settings.allowIndividualItemReady !== false
+      : Boolean(allowIndividualItemReady)
 
     if (auth.isDesignMode) {
       updateSettings({
         allowPager: nextAllowPager,
         splitStations: nextSplitStations,
+        allowIndividualItemReady: nextAllowIndividualItemReady,
       })
       return {
         ok: true,
         allowPager: nextAllowPager,
         splitStations: nextSplitStations,
+        allowIndividualItemReady: nextAllowIndividualItemReady,
       }
     }
 
@@ -3393,17 +3476,20 @@ export function RestaurantProvider({ children }) {
       const saved = await saveOperationalBehaviorSettings(restaurantId, {
         pagerEnabled: nextAllowPager,
         separateKitchenBar: nextSplitStations,
+        allowIndividualItemReady: nextAllowIndividualItemReady,
       })
 
       updateSettings({
         allowPager: saved.pager_enabled !== false,
         splitStations: saved.separate_kitchen_bar !== false,
+        allowIndividualItemReady: saved.allow_individual_item_ready !== false,
       })
 
       return {
         ok: true,
         allowPager: saved.pager_enabled !== false,
         splitStations: saved.separate_kitchen_bar !== false,
+        allowIndividualItemReady: saved.allow_individual_item_ready !== false,
       }
     } catch (error) {
       return {
@@ -3417,6 +3503,7 @@ export function RestaurantProvider({ children }) {
     restaurantId,
     state.settings.allowPager,
     state.settings.splitStations,
+    state.settings.allowIndividualItemReady,
     updateSettings,
   ])
 
@@ -3564,6 +3651,7 @@ export function RestaurantProvider({ children }) {
     applyKitchenApprovedVoidRequest,
     voidPaidTableAccount,
     advanceStationRound,
+    markOrderItemReady,
     markTableItemDelivered,
     markTableStationRoundDelivered,
     markRoundDelivered,
@@ -3598,7 +3686,7 @@ export function RestaurantProvider({ children }) {
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
     setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, canReleaseSettledTable, releaseSettledTable, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, releaseEmptyDeliveryOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
-    advanceStationRound, markTableItemDelivered, markTableStationRoundDelivered, markRoundDelivered,
+    advanceStationRound, markOrderItemReady, markTableItemDelivered, markTableStationRoundDelivered, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
     tableSessionForTable, tableDraftForTable, getTableDraftCount,
     addZone, updateZone, deleteZone, addTable, updateTable, deleteTable,

@@ -68,8 +68,10 @@ function itemAllergyAlert(item) {
 export default function StationPage({ station }) {
   const auth = useAuth()
   const {
+    state,
     stationJobs,
     advanceStationRound,
+    markOrderItemReady,
     tableLabel,
     formatMoney,
     voidRequestsVersion,
@@ -111,6 +113,7 @@ export default function StationPage({ station }) {
   const icon = stationMeta.icon
   const canReviewVoids = station === 'kitchen' && auth.can('orders.void.review_unpaid')
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
+  const allowIndividualItemReady = state.settings.allowIndividualItemReady !== false
 
   const preparationSummary = useMemo(() => {
     const totals = new Map()
@@ -468,7 +471,10 @@ export default function StationPage({ station }) {
       <div className="hero station-hero">
         <div>
           <h2>{label}</h2>
-          <p>Solo aparecen productos asignados a {stationName}.</p>
+          <p>
+            Solo aparecen productos asignados a {stationName}.
+            {allowIndividualItemReady && ' · Marcado individual activo.'}
+          </p>
         </div>
 
         <div className="station-hero-actions">
@@ -576,6 +582,11 @@ export default function StationPage({ station }) {
                   && ['preparing', 'ready'].includes(item.prepStatus)
                   && pendingQuantity > 0
                 )
+                const canMarkReady = (
+                  allowIndividualItemReady
+                  && item.prepStatus === 'preparing'
+                  && pendingQuantity > 0
+                )
 
                 return (
                   <div className="kds-line kds-product-row" key={item.lineId}>
@@ -595,6 +606,24 @@ export default function StationPage({ station }) {
                         </small>
                       )}
                     </div>
+
+                    {canMarkReady && (
+                      <button
+                        type="button"
+                        className="kds-item-ready-button"
+                        title="Marcar solo este producto como listo"
+                        onClick={async () => {
+                          const result = await markOrderItemReady(order.id, item.lineId)
+                          if (result?.ok === false) window.alert(result.message)
+                        }}
+                      >
+                        ✓ Listo
+                      </button>
+                    )}
+
+                    {allowIndividualItemReady && item.prepStatus === 'ready' && (
+                      <span className="kds-item-ready-state">✓ LISTO</span>
+                    )}
                   </div>
                 )
               })}

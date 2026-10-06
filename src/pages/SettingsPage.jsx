@@ -192,6 +192,14 @@ export default function SettingsPage() {
     if (!result.ok) window.alert(result.message)
   }
 
+  async function changeIndividualReady(event) {
+    const allowIndividualItemReady = event.target.checked
+    setOperationSaving(true)
+    const result = await setOperationalBehavior({ allowIndividualItemReady })
+    setOperationSaving(false)
+    if (!result.ok) window.alert(result.message)
+  }
+
   async function submitZone(event) {
     event.preventDefault()
     const result = await addZone(zoneName)
@@ -287,6 +295,25 @@ export default function SettingsPage() {
                 type="checkbox"
                 checked={settings.allowPager !== false}
                 onChange={changeManualQuickIdentity}
+                disabled={!canManageSettings || operationSaving}
+              />
+            </label>
+
+            <label className="toggle-row operational-setting-row">
+              <span>
+                <b>Permitir marcar productos listos individualmente</b>
+                <small>
+                  {operationSaving
+                    ? 'Guardando en Supabase…'
+                    : settings.allowIndividualItemReady !== false
+                      ? 'Activo: después de iniciar la preparación, cada producto puede marcarse listo por separado a medida que sale.'
+                      : 'Desactivado: la estación debe marcar la comanda completa como lista usando el botón general.'}
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.allowIndividualItemReady !== false}
+                onChange={changeIndividualReady}
                 disabled={!canManageSettings || operationSaving}
               />
             </label>
