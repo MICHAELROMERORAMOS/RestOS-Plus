@@ -144,6 +144,7 @@ export default function TvPage({ standalone = false }) {
   })
   const readyOrderKeysRef = useRef(null)
   const readyLocationRef = useRef(null)
+  const manualQuickIdentity = state.settings.allowPager !== false
   useEffect(() => {
     if (!standalone) return undefined
     document.documentElement.style.background = '#0f172a'
@@ -276,7 +277,6 @@ export default function TvPage({ standalone = false }) {
 
   const restaurantName = state.settings.restaurantName || 'RestOS+'
   const branchName = activeLocation?.name || ''
-  const manualQuickIdentity = state.settings.allowPager !== false
   const timeLabel = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
   const totalVisible = Object.values(board).reduce((sum, orders) => sum + orders.length, 0)
 
