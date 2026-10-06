@@ -143,6 +143,7 @@ export default function TvPage({ standalone = false }) {
     return window.localStorage.getItem(TV_VOICE_STORAGE_KEY) !== 'false'
   })
   const readyOrderKeysRef = useRef(null)
+  const readyLocationRef = useRef(null)
   useEffect(() => {
     if (!standalone) return undefined
     document.documentElement.style.background = '#0f172a'
@@ -178,12 +179,18 @@ export default function TvPage({ standalone = false }) {
   }, [state.orders])
 
   useEffect(() => {
+    if (!activeLocation?.id || remoteLoading) return
+
     const readyOrders = board.ready || []
     const nextKeys = new Set(
       readyOrders.map((order) => String(order.serverId || order.id)),
     )
 
-    if (readyOrderKeysRef.current == null) {
+    if (
+      readyLocationRef.current !== String(activeLocation.id)
+      || readyOrderKeysRef.current == null
+    ) {
+      readyLocationRef.current = String(activeLocation.id)
       readyOrderKeysRef.current = nextKeys
       return
     }
@@ -200,7 +207,15 @@ export default function TvPage({ standalone = false }) {
     newlyReady.forEach((order) => {
       speakReadyOrder(order, tableLabel, manualQuickIdentity)
     })
-  }, [board.ready, manualQuickIdentity, tableLabel, voiceEnabled, voiceSupported])
+  }, [
+    activeLocation?.id,
+    board.ready,
+    manualQuickIdentity,
+    remoteLoading,
+    tableLabel,
+    voiceEnabled,
+    voiceSupported,
+  ])
 
   function toggleVoice() {
     if (!voiceSupported) return
