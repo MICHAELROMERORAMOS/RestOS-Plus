@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>RestOS+ TV</title>
+  <style>
+    html,body{width:100%;height:100%;margin:0;background:#07111f;color:#fff;font-family:Arial,sans-serif;overflow:hidden}
+    main{height:100%;display:grid;place-items:center;text-align:center}
+    .logo{font-size:64px;font-weight:800;letter-spacing:-2px}.plus{color:#22c55e}
+    p{font-size:24px;color:#94a3b8}.spinner{width:52px;height:52px;margin:32px auto;border:6px solid #243244;border-top-color:#22c55e;border-radius:50%;animation:s 1s linear infinite}
+    @keyframes s{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<main><div><div class="logo">RestOS<span class="plus">+</span></div><div class="spinner"></div><p>Abriendo Estado de pedidos…</p></div></main>
+<script>
+(function () {
+  var target = 'https://www.restosplus.com/pantalla-tv?tvapp=samsung';
+  function openRestOS() { window.location.replace(target); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', openRestOS);
+  else openRestOS();
+})();
+</script>
+</body>
+</html>
