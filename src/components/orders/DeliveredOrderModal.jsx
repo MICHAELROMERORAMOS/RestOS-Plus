@@ -1,5 +1,6 @@
 import React from 'react'
 import { orderPaidTotal } from '../../context/RestaurantContext.jsx'
+import { orderNumberLabel } from '../../lib/orderNumber.js'
 
 export function deliveredItems(order) {
   return (order.rounds || []).flatMap((round) => (round.items || []))
@@ -13,7 +14,7 @@ export function isPaidAndDelivered(order, orderBalance) {
 
 function modeLabel(order, tableLabel) {
   if (order.mode === 'delivery') return `Domicilio · ${order.delivery?.customerName || 'Cliente'}`
-  if (order.mode === 'quick') return `Servicio rápido · Orden #${order.id}`
+  if (order.mode === 'quick') return `Servicio rápido · ${orderNumberLabel(order)}`
   return tableLabel || 'Mesa'
 }
 
@@ -40,7 +41,7 @@ export default function DeliveredOrderModal({
               const paid = orderPaidTotal(order)
               return <article className="card" key={order.id}>
                 <div className="section-title">
-                  <div><h4>{modeLabel(order, tableLabelFor?.(order))}</h4><small>Orden #{order.id}{order.invoiceNumber ? ` · Factura ${order.invoiceNumber}` : ''}</small></div>
+                  <div><h4>{modeLabel(order, tableLabelFor?.(order))}</h4><small>{orderNumberLabel(order)}{order.invoiceNumber ? ` · Factura ${order.invoiceNumber}` : ''}</small></div>
                   <small>{order.closedAt ? new Date(order.closedAt).toLocaleString('es-CO') : ''}</small>
                 </div>
                 <div className="list">

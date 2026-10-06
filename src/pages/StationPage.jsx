@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
+import { orderNumberLabel, preparationOrderNumber } from '../lib/orderNumber.js'
 import {
   listPendingKitchenVoidRequests,
   reviewKitchenVoidRequest,
@@ -116,6 +117,13 @@ export default function StationPage({ station }) {
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const allowIndividualItemReady = state.settings.allowIndividualItemReady !== false
   const manualQuickIdentity = state.settings.allowPager !== false
+
+  function visibleOrderRef(orderRef) {
+    const order = state.orders.find((candidate) => String(candidate.id) === String(orderRef))
+    return order
+      ? orderNumberLabel(order, { pending: `Orden #${orderRef}` })
+      : `Orden #${orderRef}`
+  }
 
   const preparationSummary = useMemo(() => {
     const totals = new Map()
@@ -321,7 +329,7 @@ export default function StationPage({ station }) {
       note = input.trim()
     } else {
       const confirmed = window.confirm(
-        `¿Aprobar la anulación solicitada para ${request.table_label || `Orden #${request.order_ref}`}?`,
+        `¿Aprobar la anulación solicitada para ${request.table_label || visibleOrderRef(request.order_ref)}?`,
       )
       if (!confirmed) return
     }
@@ -357,7 +365,7 @@ export default function StationPage({ station }) {
       orderId: order.id,
       orderLabel: order.tableIds?.length
         ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
-        : `Orden #${order.id}`,
+        : orderNumberLabel(order),
       item,
       pendingQuantity,
     })
@@ -423,7 +431,7 @@ export default function StationPage({ station }) {
       roundId: round.id,
       orderLabel: order.tableIds?.length
         ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
-        : `Orden #${order.id}`,
+        : orderNumberLabel(order),
       items: pendingItems,
       pendingUnits,
     })
@@ -538,17 +546,17 @@ export default function StationPage({ station }) {
                   order.tableIds?.length
                     ? order.tableIds.map((id) => tableLabel(id)).join(' + ')
                     : order.mode === 'delivery'
-                      ? `🚚 Domicilio · ${order.delivery?.customerName || `Orden #${order.id}`}`
+                      ? `🚚 Domicilio · ${order.delivery?.customerName || orderNumberLabel(order)}`
                       : order.mode === 'quick'
                         ? `⚡ ${quickServiceIdentity(order, { manual: manualQuickIdentity })}`
-                        : `Orden #${order.id}`
+                        : orderNumberLabel(order)
                 }</h3>
                 <small>
-                  Orden #{order.id} · Comanda {round.id} · {items.length} producto{items.length === 1 ? '' : 's'}
+                  {orderNumberLabel(order)} · Comanda {round.id} · {items.length} producto{items.length === 1 ? '' : 's'}
                   {order.mode === 'delivery' && order.delivery?.address ? ` · ${order.delivery.address}` : ''}
                 </small>
               </div>
-              <span className="badge">#{order.id} · C{round.id}</span>
+              <span className="badge">#{preparationOrderNumber(order) || order.id} · C{round.id}</span>
             </div>
 
             <div className={`time kds-state ${status === 'ready' ? 'ready' : status === 'preparing' ? 'preparing' : 'new'}`}>
@@ -835,7 +843,7 @@ export default function StationPage({ station }) {
                   <article className="kitchen-void-request" key={request.id}>
                     <div className="kitchen-void-request-copy">
                       <div className="kitchen-void-request-title">
-                        <b>{request.table_label || `Orden #${request.order_ref}`}</b>
+                        <b>{request.table_label || visibleOrderRef(request.order_ref)}</b>
                         <span>Solicita: {request.requester_name || 'Usuario'}</span>
                       </div>
 

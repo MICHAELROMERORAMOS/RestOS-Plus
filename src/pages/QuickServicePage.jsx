@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderTotal } from '../context/RestaurantContext.jsx'
 import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
+import { orderNumberLabel } from '../lib/orderNumber.js'
 
 function formatTime(value) {
   if (!value) return null
@@ -176,7 +177,7 @@ export default function QuickServicePage({ onStartQuickOrder, onOpenQuickOrder }
                     <div className="table-head quick-order-head">
                       <b>{identifier}</b>
                     </div>
-                    <small className="quick-order-number">Orden #{order.id}</small>
+                    <small className="quick-order-number">{orderNumberLabel(order)}</small>
                     <small className="table-time">
                       ◷ {openedAt ? `Abierto a las ${openedAt}` : 'Hora de apertura sin registrar'}
                     </small>

@@ -7,6 +7,8 @@ import InvoiceCustomerFields, {
 } from '../components/payments/InvoiceCustomerFields.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderPaidTotal, orderTotal } from '../context/RestaurantContext.jsx'
+import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
+import { orderNumberLabel } from '../lib/orderNumber.js'
 import {
   createKitchenVoidRequest,
   listMyKitchenVoidRequestsForOrders,
@@ -53,6 +55,7 @@ export default function CashierPage() {
 
   const restaurantId = auth.userContext?.membership?.restaurant_id || null
   const canRequestUnpaidVoid = auth.can('orders.void.request_unpaid')
+  const manualQuickIdentity = state.settings.allowPager !== false
 
   const [splitGroupKey, setSplitGroupKey] = useState(null)
   const [chargeGroupKey, setChargeGroupKey] = useState(null)
@@ -115,16 +118,16 @@ export default function CashierPage() {
           balance: orders.reduce((sum, order) => sum + orderBalance(order), 0),
           refundDue: orders.reduce((sum, order) => sum + Number(order.refundDue || 0), 0),
           tableText: group.tableIds.length
-            ? group.tableIds.map((id) => tableLabel(id)).join(' + ')
+            ? `${group.tableIds.map((id) => tableLabel(id)).join(' + ')} · ${orderNumberLabel(group.orders[0])}`
             : group.orders[0]?.mode === 'delivery'
-              ? `Domicilio · ${group.orders[0]?.delivery?.customerName || 'Sin cliente'}`
+              ? `Domicilio · ${group.orders[0]?.delivery?.customerName || 'Sin cliente'} · ${orderNumberLabel(group.orders[0])}`
               : group.orders[0]?.mode === 'quick'
-                ? `Servicio rápido · ${group.orders[0]?.pager ? `Pager ${group.orders[0].pager}` : group.orders[0]?.customerName || `Orden #${group.orders[0]?.id || ''}`}`
-                : `Orden #${group.orders[0]?.id || ''}`,
+                ? `Servicio rápido · ${quickServiceIdentity(group.orders[0], { manual: manualQuickIdentity })} · ${orderNumberLabel(group.orders[0])}`
+                : orderNumberLabel(group.orders[0]),
         }
       })
       .sort((a, b) => (a.orders[0]?.created || 0) - (b.orders[0]?.created || 0))
-  }, [state.orders, tableLabel])
+  }, [state.orders, tableLabel, manualQuickIdentity])
 
   const splitGroup = splitGroupKey
     ? groups.find((group) => group.key === splitGroupKey) || null

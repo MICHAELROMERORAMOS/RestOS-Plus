@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant, orderBalance, orderTotal } from '../context/RestaurantContext.jsx'
 import DeliveredOrderModal, { isPaidAndDelivered } from '../components/orders/DeliveredOrderModal.jsx'
+import { orderNumberLabel } from '../lib/orderNumber.js'
 import { loadOperationalHistory } from '../services/operationalService.js'
 import {
   findCustomerByPhone,
@@ -293,7 +294,7 @@ export default function DeliveriesPage({ onStartDelivery, onOpenDelivery }) {
                   </div>
 
                   <div className="delivery-card-meta">
-                    <span>Orden #{order.id}</span>
+                    <span>{orderNumberLabel(order)}</span>
                     <strong>{formatMoney(orderTotal(order))}</strong>
                     {balance > 0.005 && <small>Saldo {formatMoney(balance)}</small>}
                   </div>

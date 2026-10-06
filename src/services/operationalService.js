@@ -139,7 +139,10 @@ function applyOrderAllergyContext(orders, payload) {
 function mapOperationalOrders(payload) {
   const rawOrders = Array.isArray(payload?.orders) ? payload.orders : []
   const numberByServerId = new Map(
-    rawOrders.map((order) => [String(order.id), Number(order.order_number)]),
+    rawOrders.map((order) => [
+      String(order.id),
+      Number(order.preparation_order_number || order.order_number),
+    ]),
   )
 
   return rawOrders.map((raw) => {
@@ -212,6 +215,9 @@ function mapOperationalOrders(payload) {
 
     return {
       id: Number(raw.order_number),
+      displayOrderNumber: raw.preparation_order_number == null
+        ? null
+        : asNumber(raw.preparation_order_number),
       serverId: raw.id,
       mode: raw.service_mode === 'counter' ? 'quick' : raw.service_mode,
       customerId: raw.customer_id || null,

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { quickServiceIdentity } from '../lib/quickOrderIdentity.js'
+import { orderNumberLabel } from '../lib/orderNumber.js'
 
 const STATUS_META = {
   sent: { label: 'Enviados a preparación', detail: 'Enviado a preparación', accent: '#94a3b8' },
@@ -30,7 +31,7 @@ function displayStatus(order) {
 function pickupIdentity(order, tableLabel, manualQuickIdentity) {
   if (order.mode === 'table') {
     const labels = (order.tableIds || []).map((tableId) => tableLabel(tableId)).filter(Boolean)
-    return labels.length ? labels.join(' + ') : `Mesa · #${order.id}`
+    return labels.length ? labels.join(' + ') : `Mesa · ${orderNumberLabel(order)}`
   }
   return quickServiceIdentity(order, { manual: manualQuickIdentity })
 }
