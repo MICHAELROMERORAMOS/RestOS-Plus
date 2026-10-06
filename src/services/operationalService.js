@@ -1,3 +1,4 @@
+import { preparationStationMeta } from '../config/stations.js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 
 function requireSupabase() {
@@ -134,7 +135,7 @@ function mapOperationalOrders(payload) {
         name: item.product_name,
         price: asNumber(item.unit_price),
         taxRate: asNumber(item.tax_rate),
-        station: item.station_type === 'bar' ? 'bar' : 'kitchen',
+        station: preparationStationMeta(item.station_type).value,
         quantity: asNumber(item.quantity),
         servedQuantity: asNumber(item.served_quantity),
         note: item.note || '',
