@@ -28,6 +28,8 @@ export default function TablesPage({ onOpenTable }) {
     getTableDraftCount,
     canReleaseTableDraftSession,
     abandonTableDraftSession,
+    canReleaseSettledTable,
+    releaseSettledTable,
   } = useRestaurant()
 
   const [pendingTable, setPendingTable] = useState(null)
@@ -156,6 +158,27 @@ export default function TablesPage({ onOpenTable }) {
     }
   }
 
+  async function releaseClearTable(table) {
+    if (!canReleaseSettledTable(table.id)) {
+      window.alert('Esta mesa todavía tiene productos pendientes de entrega, saldo por cobrar o requiere revisión financiera.')
+      return
+    }
+
+    if (!window.confirm(
+      'Esta mesa ya no tiene productos pendientes de preparación o entrega ni saldo por cobrar. ¿Deseas liberarla?',
+    )) return
+
+    setReleasingTableId(table.id)
+    try {
+      const result = await releaseSettledTable(table.id)
+      if (!result?.ok) {
+        window.alert(result?.message || 'No se pudo liberar la mesa.')
+      }
+    } finally {
+      setReleasingTableId(null)
+    }
+  }
+
   async function confirmOpenTable() {
     if (!pendingTable || openingTable) return
     setOpeningTable(true)
@@ -207,6 +230,7 @@ export default function TablesPage({ onOpenTable }) {
                   const session = tableSessionForTable(table.id)
                   const blockedByOther = status === 'opening' && !session?.claimedByMe
                   const canReleaseDraft = status === 'opening' && canReleaseTableDraftSession(table.id)
+                  const canReleaseClear = status !== 'opening' && canReleaseSettledTable(table.id)
                   const responsible = shortName(session?.attendantName)
 
                   return (
@@ -243,10 +267,14 @@ export default function TablesPage({ onOpenTable }) {
                         )}
                       </button>
 
-                      {canReleaseDraft && (
+                      {(canReleaseDraft || canReleaseClear) && (
                         <button
                           className="table-release-btn"
-                          onClick={() => releaseMyTable(table)}
+                          onClick={() => (
+                            canReleaseDraft
+                              ? releaseMyTable(table)
+                              : releaseClearTable(table)
+                          )}
                           disabled={releasingTableId === table.id}
                         >
                           {releasingTableId === table.id ? 'Liberando…' : 'Liberar mesa'}

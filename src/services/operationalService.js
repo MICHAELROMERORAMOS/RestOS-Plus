@@ -406,6 +406,16 @@ export async function releaseTableOrderSession(tableId) {
   return Boolean(data)
 }
 
+export async function releaseTableIfClearRemote(tableId) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('release_table_if_clear', {
+    p_table_id: tableId,
+  })
+
+  if (error) throw error
+  return data || { ok: false, message: 'No se pudo liberar la mesa.' }
+}
+
 export async function createQuickOrderRemote({ restaurantId, locationId }) {
   const client = requireSupabase()
   const { data, error } = await client.rpc('create_quick_order', {

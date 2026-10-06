@@ -36,6 +36,7 @@ import {
   releaseEmptyQuickOrderRemote,
   releaseEmptyDeliveryOrderRemote,
   releaseTableOrderSession as releaseTableOrderSessionRemote,
+  releaseTableIfClearRemote,
   saveOrderAllergiesRemote,
   sendOrderRoundRemote,
   subscribeOperationalChanges,
@@ -1651,6 +1652,121 @@ export function RestaurantProvider({ children }) {
     releaseTableDraftSession,
     clearStoredTableDraft,
     currentTableId,
+  ])
+
+
+  const canReleaseSettledTable = useCallback((tableId) => {
+    const order = openOrderForTable(tableId)
+    if (!order) return false
+
+    const activeItems = (order.rounds || [])
+      .flatMap((round) => round.items || [])
+      .filter((item) => !item.voided)
+
+    if (activeItems.some((item) => item.prepStatus !== 'delivered')) return false
+    if (orderBalance(order) > 0.005) return false
+
+    if (
+      activeItems.length === 0
+      && orderPaidTotal(order) > 0.005
+      && Number(order.refundDue || 0) <= 0.005
+    ) {
+      return false
+    }
+
+    const session = tableSessionForTable(tableId)
+    return Boolean(
+      order.openedByMe
+      || session?.claimedByMe
+      || auth.can('tables.manage')
+    )
+  }, [
+    openOrderForTable,
+    tableSessionForTable,
+    auth.permissions,
+  ])
+
+  const releaseSettledTable = useCallback(async (tableId) => {
+    if (!tableId) return { ok: false, message: 'Mesa inválida.' }
+
+    if (auth.isDesignMode) {
+      const order = openOrderForTable(tableId)
+      if (!order) {
+        clearStoredTableDraft(tableId)
+        setTableOrderSessions((sessions) => sessions.filter((session) => session.tableId !== tableId))
+        return { ok: true, releasedOrders: 0 }
+      }
+
+      const activeItems = (order.rounds || [])
+        .flatMap((round) => round.items || [])
+        .filter((item) => !item.voided)
+
+      if (activeItems.some((item) => item.prepStatus !== 'delivered')) {
+        return { ok: false, message: 'La mesa todavía tiene productos pendientes de preparación o entrega.' }
+      }
+
+      if (orderBalance(order) > 0.005) {
+        return { ok: false, message: 'La mesa todavía tiene un saldo pendiente por cobrar.' }
+      }
+
+      updateState((previous) => ({
+        ...previous,
+        orders: previous.orders.map((candidate) => (
+          candidate.id === order.id
+            ? {
+              ...candidate,
+              status: activeItems.length ? 'closed' : 'cancelled',
+              closedAt: candidate.closedAt || Date.now(),
+            }
+            : candidate
+        )),
+        tables: previous.tables.map((table) => (
+          table.id === tableId
+            ? { ...table, status: 'free', openedAt: null, releasedAt: Date.now() }
+            : table
+        )),
+      }))
+      setTableOrderSessions((sessions) => sessions.filter((session) => session.tableId !== tableId))
+      clearStoredTableDraft(tableId)
+      return { ok: true, releasedOrders: 1 }
+    }
+
+    try {
+      const result = await releaseTableIfClearRemote(tableId)
+      if (!result?.ok) return result || { ok: false, message: 'No se pudo liberar la mesa.' }
+
+      clearStoredTableDraft(tableId)
+
+      if (currentTableId === tableId) {
+        draftContextTableIdRef.current = null
+        setCurrentTableId(null)
+        setCurrentOrderId(null)
+        setDraft([])
+        setPager('')
+        setCurrentDelivery(null)
+      }
+
+      await Promise.all([
+        refreshOperationalData(activeLocation),
+        refreshTableOrderSessions(activeLocation),
+      ])
+
+      return result
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || 'No se pudo liberar la mesa.',
+      }
+    }
+  }, [
+    auth.isDesignMode,
+    openOrderForTable,
+    updateState,
+    clearStoredTableDraft,
+    currentTableId,
+    refreshOperationalData,
+    refreshTableOrderSessions,
+    activeLocation,
   ])
 
   useEffect(() => {
@@ -3430,6 +3546,8 @@ export function RestaurantProvider({ children }) {
     releaseTableDraftSession,
     canReleaseTableDraftSession,
     abandonTableDraftSession,
+    canReleaseSettledTable,
+    releaseSettledTable,
     startQuickOrder,
     updateQuickOrderIdentity,
     releaseEmptyQuickOrder,
@@ -3478,7 +3596,7 @@ export function RestaurantProvider({ children }) {
     orderAllergies, saveCurrentOrderAllergies,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
     refreshOperationalSummary, refreshTableOrderSessions, currencyCode, formatMoney, setCurrency, setInventoryStockControl, setOperationalBehavior, orderMode, currentTableId, currentOrderId, currentOrder, currentDelivery, draft, pager, quickCustomerName,
-    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, releaseEmptyDeliveryOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
+    setOrderMode, openTable, touchTableDraftSession, releaseTableDraftSession, canReleaseTableDraftSession, abandonTableDraftSession, canReleaseSettledTable, releaseSettledTable, startQuickOrder, updateQuickOrderIdentity, releaseEmptyQuickOrder, releaseEmptyDeliveryOrder, startDelivery, openQuickOrder, openDelivery, startNewOrder, addProduct, changeDraftQuantity, removeDraft,
     updateDraftNote, sendDraft, applyKitchenApprovedVoidRequest, voidPaidTableAccount,
     advanceStationRound, markTableItemDelivered, markTableStationRoundDelivered, markRoundDelivered,
     transferCurrentTable, joinTable, tableLabel, getTableTransferStatus, getTableVisualStatus,
