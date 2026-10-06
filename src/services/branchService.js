@@ -76,3 +76,27 @@ export async function setBranchInvoicePrefix({ restaurantId, locationId, prefix 
   if (error) throw error
   return data
 }
+
+
+export async function requestBranchCapacity({ restaurantId, additionalBranches }) {
+  const client = requireSupabase()
+  const { data, error } = await client.functions.invoke('request-branch-capacity', {
+    body: { restaurantId, additionalBranches: Number(additionalBranches) },
+  })
+  if (error) {
+    const message = data?.error || error?.context?.error || error?.message || 'No se pudo enviar la solicitud.'
+    throw new Error(message)
+  }
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+export async function activateBranchCapacity({ restaurantId, code }) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('activate_branch_capacity', {
+    p_restaurant_id: restaurantId,
+    p_code: String(code || '').trim().toUpperCase(),
+  })
+  if (error) throw error
+  return data
+}

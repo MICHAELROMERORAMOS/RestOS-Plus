@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import {
+  activateBranchCapacity,
   loadCompanyBranches,
+  requestBranchCapacity,
   rotateCompanyJoinCode,
   saveCompanyBranch,
   setBranchInvoicePrefix,
@@ -48,6 +50,11 @@ export default function BranchesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
+  const [capacityDialog, setCapacityDialog] = useState(null)
+  const [capacityBusy, setCapacityBusy] = useState(false)
+  const [additionalBranches, setAdditionalBranches] = useState('1')
+  const [activationCode, setActivationCode] = useState('')
+  const [capacityMessage, setCapacityMessage] = useState('')
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.active !== false),
@@ -81,10 +88,83 @@ export default function BranchesPage() {
 
   function openNew() {
     if (branchLimitReached) {
-      window.alert(`La empresa ya tiene ${activeBranches.length} de ${allowedBranchCount} sucursales activas permitidas. El límite solo puede ampliarse desde el portal admin de RestOS+.`)
+      setCapacityMessage('')
+      setCapacityDialog('limit')
       return
     }
     setEditing({ ...emptyBranch })
+  }
+
+  function openCapacityRequest() {
+    setCapacityMessage('')
+    setAdditionalBranches('1')
+    setCapacityDialog('request')
+  }
+
+  function openCapacityActivation() {
+    setCapacityMessage('')
+    setActivationCode('')
+    setCapacityDialog('activate')
+  }
+
+  async function submitCapacityRequest(event) {
+    event.preventDefault()
+    if (capacityBusy || !restaurantId) return
+    const quantity = Number(additionalBranches)
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      setCapacityMessage('Indica una cantidad válida entre 1 y 100 sucursales adicionales.')
+      return
+    }
+
+    setCapacityBusy(true)
+    setCapacityMessage('')
+    try {
+      await requestBranchCapacity({ restaurantId, additionalBranches: quantity })
+      await refresh()
+      setCapacityDialog('success')
+      setCapacityMessage(
+        `Solicitud enviada correctamente por ${quantity} sucursal${quantity === 1 ? '' : 'es'} adicional${quantity === 1 ? '' : 'es'}. El desarrollador recibirá la solicitud por correo. Cuando se confirme el pago, el administrador principal recibirá el código de activación.`,
+      )
+    } catch (err) {
+      const message = String(err?.message || '')
+      setCapacityMessage(
+        message.includes('Open branch capacity request already exists')
+          ? 'Ya existe una solicitud de ampliación pendiente para esta empresa.'
+          : (message || 'No se pudo enviar la solicitud.'),
+      )
+    } finally {
+      setCapacityBusy(false)
+    }
+  }
+
+  async function submitCapacityActivation(event) {
+    event.preventDefault()
+    if (capacityBusy || !restaurantId) return
+    const code = activationCode.trim().toUpperCase()
+    if (!/^[A-Z0-9]{8}$/.test(code)) {
+      setCapacityMessage('Ingresa el código de activación de 8 caracteres recibido por correo.')
+      return
+    }
+
+    setCapacityBusy(true)
+    setCapacityMessage('')
+    try {
+      const result = await activateBranchCapacity({ restaurantId, code })
+      await Promise.all([refresh(), restaurant.refreshRemoteData()])
+      setCapacityDialog('success')
+      setCapacityMessage(
+        `Activación completada. La empresa ahora puede tener hasta ${result?.newAllowedBranchCount || 'más'} sucursales activas.`,
+      )
+    } catch (err) {
+      const message = String(err?.message || '')
+      setCapacityMessage(
+        message.includes('Invalid or unavailable activation code')
+          ? 'El código no es válido, ya fue utilizado o no corresponde a esta empresa.'
+          : (message || 'No se pudo activar la ampliación.'),
+      )
+    } finally {
+      setCapacityBusy(false)
+    }
   }
 
   function openEdit(branch) {
@@ -133,7 +213,13 @@ export default function BranchesPage() {
       setEditing(null)
       await Promise.all([refresh(), restaurant.refreshRemoteData()])
     } catch (err) {
-      window.alert(branchError(err))
+      const message = branchError(err)
+      if (message.includes('máximo de sucursales activas')) {
+        setCapacityMessage('')
+        setCapacityDialog('limit')
+      } else {
+        window.alert(message)
+      }
     } finally {
       setSaving(false)
     }
@@ -159,7 +245,13 @@ export default function BranchesPage() {
       })
       await Promise.all([refresh(), restaurant.refreshRemoteData()])
     } catch (err) {
-      window.alert(branchError(err))
+      const message = branchError(err)
+      if (message.includes('máximo de sucursales activas')) {
+        setCapacityMessage('')
+        setCapacityDialog('limit')
+      } else {
+        window.alert(message)
+      }
     } finally {
       setSaving(false)
     }
@@ -204,8 +296,8 @@ export default function BranchesPage() {
           <button
             className="btn primary"
             onClick={openNew}
-            disabled={saving || branchLimitReached}
-            title={branchLimitReached ? 'Límite de sucursales activas alcanzado.' : ''}
+            disabled={saving}
+            title={branchLimitReached ? 'Límite alcanzado · solicitar ampliación' : ''}
           >
             ＋ Nueva sucursal
           </button>
@@ -213,10 +305,35 @@ export default function BranchesPage() {
       </div>
 
       {error && <div className="notice warn">{error}</div>}
-      {branchLimitReached && (
-        <div className="notice warn branch-limit-notice">
-          Esta empresa alcanzó su límite de <b>{allowedBranchCount} sucursal{allowedBranchCount === 1 ? '' : 'es'} activa{allowedBranchCount === 1 ? '' : 's'}</b>.
-          Para crear o reactivar otra sucursal, el administrador de RestOS+ debe ampliar el límite desde el portal de plataforma.
+      {(branchLimitReached || company?.branchCapacityRequest) && (
+        <div className="branch-capacity-banner">
+          <div className="branch-capacity-icon">🏢</div>
+          <div className="branch-capacity-copy">
+            <strong>{branchLimitReached ? 'Límite de sucursales alcanzado' : 'Ampliación de sucursales en proceso'}</strong>
+            <p>
+              {branchLimitReached
+                ? <>Esta empresa tiene <b>{activeBranches.length} de {allowedBranchCount}</b> sucursales activas permitidas. </>
+                : <>La empresa tiene actualmente <b>{activeBranches.length} de {allowedBranchCount}</b> sucursales activas. </>}
+              Si necesitas ampliar la capacidad, puedes solicitar aquí el número de sucursales adicionales.
+              Después de confirmar el pago, el administrador principal recibirá por correo un código de activación.
+            </p>
+            {company?.branchCapacityRequest && (
+              <div className="branch-capacity-status">
+                {company.branchCapacityRequest.status === 'pending' && 'Solicitud enviada · pendiente de confirmación de pago'}
+                {company.branchCapacityRequest.status === 'paid' && 'Pago confirmado · código pendiente de envío o reenvío'}
+                {company.branchCapacityRequest.status === 'code_sent' && 'Código de activación enviado al correo del administrador principal'}
+                {' · +'}{company.branchCapacityRequest.additionalBranches} sucursal(es)
+              </div>
+            )}
+          </div>
+          {canManage && (
+            <div className="branch-capacity-actions">
+              {!company?.branchCapacityRequest && (
+                <button className="btn primary" onClick={openCapacityRequest}>Solicitar ampliación</button>
+              )}
+              <button className="btn" onClick={openCapacityActivation}>Activar código</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -352,6 +469,99 @@ export default function BranchesPage() {
         Los usuarios con acceso a <b>Todas las sucursales</b> reciben automáticamente acceso a nuevas sedes.
         Los usuarios limitados a sucursales específicas deben asignarse desde <b>Personal</b>.
       </div>
+
+      {capacityDialog && (
+        <div className="modal open branch-capacity-modal-backdrop" onClick={() => !capacityBusy && setCapacityDialog(null)}>
+          <div className="modal-card branch-capacity-modal" onClick={(event) => event.stopPropagation()}>
+            {capacityDialog === 'limit' && (
+              <>
+                <div className="branch-capacity-modal-icon">🏢</div>
+                <h3>Límite de sucursales alcanzado</h3>
+                <p>
+                  La empresa ya utiliza <b>{activeBranches.length} de {allowedBranchCount}</b> sucursales activas.
+                  Puedes solicitar una ampliación. La solicitud se enviará al desarrollador de RestOS+ y,
+                  después de confirmar el pago, el código de activación llegará al correo del administrador principal.
+                </p>
+                <div className="branch-capacity-modal-actions">
+                  <button className="btn" onClick={() => setCapacityDialog(null)}>Cerrar</button>
+                  <button className="btn" onClick={openCapacityActivation}>Tengo un código</button>
+                  {!company?.branchCapacityRequest && (
+                    <button className="btn primary" onClick={openCapacityRequest}>Solicitar ampliación</button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {capacityDialog === 'request' && (
+              <form onSubmit={submitCapacityRequest}>
+                <div className="section-title">
+                  <div>
+                    <span className="branch-capacity-kicker">AMPLIACIÓN DE CAPACIDAD</span>
+                    <h3>Solicitar más sucursales</h3>
+                    <p className="muted">La solicitud llegará directamente al desarrollador de RestOS+.</p>
+                  </div>
+                  <button type="button" className="btn" disabled={capacityBusy} onClick={() => setCapacityDialog(null)}>×</button>
+                </div>
+                <label className="field">
+                  <span>Sucursales adicionales solicitadas</span>
+                  <input type="number" min="1" max="100" step="1" value={additionalBranches}
+                    onChange={(event) => setAdditionalBranches(event.target.value)} required />
+                </label>
+                <div className="branch-capacity-process">
+                  <div><b>1</b><span>Envías la solicitud</span></div>
+                  <div><b>2</b><span>Se acuerda y confirma el pago</span></div>
+                  <div><b>3</b><span>Recibes el código por correo</span></div>
+                  <div><b>4</b><span>Activas la nueva capacidad</span></div>
+                </div>
+                {capacityMessage && <div className="notice warn">{capacityMessage}</div>}
+                <div className="branch-capacity-modal-actions">
+                  <button type="button" className="btn" disabled={capacityBusy} onClick={() => setCapacityDialog(null)}>Cancelar</button>
+                  <button type="submit" className="btn primary" disabled={capacityBusy}>
+                    {capacityBusy ? 'Enviando…' : 'Enviar solicitud'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {capacityDialog === 'activate' && (
+              <form onSubmit={submitCapacityActivation}>
+                <div className="section-title">
+                  <div>
+                    <span className="branch-capacity-kicker">CÓDIGO DE ACTIVACIÓN</span>
+                    <h3>Activar sucursales adicionales</h3>
+                    <p className="muted">Introduce el código enviado al correo del administrador principal después de confirmar el pago.</p>
+                  </div>
+                  <button type="button" className="btn" disabled={capacityBusy} onClick={() => setCapacityDialog(null)}>×</button>
+                </div>
+                <label className="field">
+                  <span>Código</span>
+                  <input className="branch-capacity-code-input" value={activationCode} maxLength={8}
+                    onChange={(event) => setActivationCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
+                    placeholder="ABCD1234" autoComplete="one-time-code" required />
+                </label>
+                {capacityMessage && <div className="notice warn">{capacityMessage}</div>}
+                <div className="branch-capacity-modal-actions">
+                  <button type="button" className="btn" disabled={capacityBusy} onClick={() => setCapacityDialog(null)}>Cancelar</button>
+                  <button type="submit" className="btn primary" disabled={capacityBusy}>
+                    {capacityBusy ? 'Activando…' : 'Activar ampliación'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {capacityDialog === 'success' && (
+              <>
+                <div className="branch-capacity-modal-icon success">✓</div>
+                <h3>Proceso actualizado</h3>
+                <p>{capacityMessage}</p>
+                <div className="branch-capacity-modal-actions single">
+                  <button className="btn primary" onClick={() => setCapacityDialog(null)}>Entendido</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="modal open" onClick={() => !saving && setEditing(null)}>

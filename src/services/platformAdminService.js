@@ -7,17 +7,20 @@ function requireSupabase() {
 
 export async function loadPlatformCompanies() {
   const client = requireSupabase()
-  const [requestsResult, companiesResult] = await Promise.all([
+  const [requestsResult, companiesResult, branchCapacityResult] = await Promise.all([
     client.rpc('list_platform_company_requests'),
     client.rpc('list_platform_companies'),
+    client.rpc('list_platform_branch_capacity_requests'),
   ])
 
   if (requestsResult.error) throw requestsResult.error
   if (companiesResult.error) throw companiesResult.error
+  if (branchCapacityResult.error) throw branchCapacityResult.error
 
   return {
     requests: Array.isArray(requestsResult.data) ? requestsResult.data : [],
     companies: Array.isArray(companiesResult.data) ? companiesResult.data : [],
+    branchCapacityRequests: Array.isArray(branchCapacityResult.data) ? branchCapacityResult.data : [],
   }
 }
 
@@ -51,4 +54,26 @@ export async function updatePlatformCompanySubscription({
   })
   if (error) throw error
   return data
+}
+
+
+export async function sendBranchCapacityActivationCode(requestId) {
+  const client = requireSupabase()
+  const { data, error } = await client.functions.invoke('send-branch-capacity-code', {
+    body: { requestId },
+  })
+  if (error) {
+    const message = data?.error || error?.context?.error || error?.message || 'No se pudo enviar el código de activación.'
+    throw new Error(message)
+  }
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+export async function cancelPlatformBranchCapacityRequest(requestId) {
+  const { data, error } = await requireSupabase().rpc('cancel_platform_branch_capacity_request', {
+    p_request_id: requestId,
+  })
+  if (error) throw error
+  return Boolean(data)
 }

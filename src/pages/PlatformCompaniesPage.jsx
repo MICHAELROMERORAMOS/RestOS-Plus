@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   approveCompanyRegistration,
+  cancelPlatformBranchCapacityRequest,
   loadPlatformCompanies,
   rejectCompanyRegistration,
+  sendBranchCapacityActivationCode,
   updatePlatformCompanySubscription,
 } from '../services/platformAdminService.js'
 
@@ -43,16 +45,24 @@ export default function PlatformCompaniesPage() {
   const auth = useAuth()
   const [requests, setRequests] = useState([])
   const [companies, setCompanies] = useState([])
+  const [branchCapacityRequests, setBranchCapacityRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('requests')
   const [editingCompany, setEditingCompany] = useState(null)
   const [subscriptionSaving, setSubscriptionSaving] = useState(false)
+  const [capacityBusyId, setCapacityBusyId] = useState(null)
+  const [actionMessage, setActionMessage] = useState('')
 
   const pending = useMemo(
     () => requests.filter((request) => request.status === 'pending'),
     [requests],
+  )
+
+  const openCapacityRequests = useMemo(
+    () => branchCapacityRequests.filter((request) => ['pending', 'paid', 'code_sent'].includes(request.status)),
+    [branchCapacityRequests],
   )
 
   async function refresh() {
@@ -67,6 +77,7 @@ export default function PlatformCompaniesPage() {
       const data = await loadPlatformCompanies()
       setRequests(data.requests)
       setCompanies(data.companies)
+      setBranchCapacityRequests(data.branchCapacityRequests || [])
     } catch (err) {
       setError(adminError(err))
     } finally {
@@ -116,6 +127,58 @@ export default function PlatformCompaniesPage() {
     } finally {
       setBusyId(null)
     }
+  }
+
+  async function sendCapacityCode(request) {
+    const confirmed = window.confirm(
+      request.status === 'pending'
+        ? `¿Confirmar que el pago de “${request.companyName}” fue recibido y enviar el código por correo al administrador principal?`
+        : `¿Generar y enviar un nuevo código de activación para “${request.companyName}”? El código anterior dejará de ser válido.`,
+    )
+    if (!confirmed) return
+
+    setCapacityBusyId(request.id)
+    setError('')
+    setActionMessage('')
+    try {
+      const result = await sendBranchCapacityActivationCode(request.id)
+      await refresh()
+      setActionMessage(
+        `Código enviado correctamente a ${result?.ownerEmail || request.ownerEmail}. La ampliación es de +${result?.additionalBranches || request.additionalBranches} sucursal(es).`,
+      )
+    } catch (err) {
+      setError(adminError(err))
+    } finally {
+      setCapacityBusyId(null)
+    }
+  }
+
+  async function cancelCapacityRequest(request) {
+    const confirmed = window.confirm(
+      `¿Cancelar la solicitud de ampliación de “${request.companyName}” por +${request.additionalBranches} sucursal(es)?`,
+    )
+    if (!confirmed) return
+
+    setCapacityBusyId(request.id)
+    setError('')
+    setActionMessage('')
+    try {
+      await cancelPlatformBranchCapacityRequest(request.id)
+      await refresh()
+      setActionMessage('Solicitud de ampliación cancelada.')
+    } catch (err) {
+      setError(adminError(err))
+    } finally {
+      setCapacityBusyId(null)
+    }
+  }
+
+  function capacityStatus(request) {
+    if (request.status === 'pending') return { label: 'PENDIENTE DE PAGO', className: 'warn-badge' }
+    if (request.status === 'paid') return { label: 'PAGO CONFIRMADO', className: 'warn-badge' }
+    if (request.status === 'code_sent') return { label: 'CÓDIGO ENVIADO', className: 'ok-badge' }
+    if (request.status === 'activated') return { label: 'ACTIVADA', className: 'ok-badge' }
+    return { label: 'CANCELADA', className: '' }
   }
 
   function openSubscriptionEditor(company) {
@@ -184,6 +247,7 @@ export default function PlatformCompaniesPage() {
       </div>
 
       {error && <div className="notice warn">{error}</div>}
+      {actionMessage && <div className="notice platform-action-success">{actionMessage}</div>}
 
       <div className="grid stats">
         <div className="card stat">
@@ -214,6 +278,9 @@ export default function PlatformCompaniesPage() {
         </button>
         <button className={tab === 'companies' ? 'active' : ''} onClick={() => setTab('companies')}>
           Empresas ({companies.length})
+        </button>
+        <button className={tab === 'capacity' ? 'active' : ''} onClick={() => setTab('capacity')}>
+          Ampliaciones {openCapacityRequests.length ? `(${openCapacityRequests.length})` : ''}
         </button>
       </div>
 
@@ -338,6 +405,67 @@ export default function PlatformCompaniesPage() {
             </div>
           ) : (
             <div className="empty-block">Todavía no hay empresas registradas.</div>
+          )}
+        </div>
+      )}
+
+      {tab === 'capacity' && (
+        <div className="card">
+          <div className="section-title">
+            <div>
+              <h3>Solicitudes de ampliación de sucursales</h3>
+              <p className="muted">
+                El cliente solicita la ampliación desde RestOS+. Confirma el pago aquí y el sistema enviará el código al correo del administrador principal.
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="empty-inline">Cargando solicitudes…</div>
+          ) : branchCapacityRequests.length ? (
+            <div className="platform-capacity-list">
+              {branchCapacityRequests.map((request) => {
+                const busy = capacityBusyId === request.id
+                const status = capacityStatus(request)
+                return (
+                  <article className="platform-capacity-card" key={request.id}>
+                    <div className="platform-request-head">
+                      <div>
+                        <h3>{request.companyName}</h3>
+                        <span>Solicitud de +{request.additionalBranches} sucursal(es)</span>
+                      </div>
+                      <span className={`badge ${status.className}`}>{status.label}</span>
+                    </div>
+
+                    <div className="platform-company-grid">
+                      <div><small>SOLICITADO POR</small><b>{request.requestedByName || '—'}</b><span>{request.requestedByEmail || '—'}</span></div>
+                      <div><small>ADMINISTRADOR PRINCIPAL</small><b>{request.ownerName || '—'}</b><span>{request.ownerEmail || '—'}</span></div>
+                      <div><small>CAPACIDAD SOLICITADA</small><b>+{request.additionalBranches}</b><span>{request.currentAllowedBranchCount} permitidas actualmente</span></div>
+                      <div><small>SUCURSALES ACTIVAS</small><b>{request.currentActiveBranchCount}</b><span>al momento de consultar</span></div>
+                      <div><small>SOLICITUD</small><b>{formatDateTime(request.createdAt)}</b><span>{request.requestEmailSentAt ? 'correo al desarrollador enviado' : 'correo pendiente'}</span></div>
+                      <div><small>ACTIVACIÓN</small><b>{request.activatedAt ? formatDateTime(request.activatedAt) : '—'}</b><span>{request.activationCodeSentAt ? `código enviado ${formatDateTime(request.activationCodeSentAt)}` : 'sin activar'}</span></div>
+                    </div>
+
+                    {['pending', 'paid', 'code_sent'].includes(request.status) && (
+                      <div className="platform-request-actions">
+                        <button className="btn danger-outline" disabled={busy} onClick={() => cancelCapacityRequest(request)}>
+                          Cancelar solicitud
+                        </button>
+                        <button className="btn primary" disabled={busy} onClick={() => sendCapacityCode(request)}>
+                          {busy
+                            ? 'Procesando…'
+                            : request.status === 'pending'
+                              ? '✓ Confirmar pago y enviar código'
+                              : '↻ Enviar nuevo código'}
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="empty-block">No hay solicitudes de ampliación de sucursales.</div>
           )}
         </div>
       )}
