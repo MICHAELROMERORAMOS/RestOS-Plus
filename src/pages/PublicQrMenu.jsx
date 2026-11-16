@@ -13,6 +13,8 @@ export default function PublicQrMenu() {
   const [tableError, setTableError] = useState('')
   const [cart, setCart] = useState({})
   const [accessCode, setAccessCode] = useState('')
+  const [tableOpened, setTableOpened] = useState(false)
+  const [opening, setOpening] = useState(false)
   const [sending, setSending] = useState(false)
   const [orderNotice, setOrderNotice] = useState('')
   const [orderError, setOrderError] = useState('')
@@ -61,14 +63,29 @@ export default function PublicQrMenu() {
     setCart(previous=>({...previous,[productId]:Math.min(20,Math.max(0,(previous[productId]||0)+step))}))
     setOrderNotice('');setOrderError('')
   }
+  async function openMyTable() {
+    if (!tableToken || !table || !/^[0-9]{4}$/.test(accessCode)) return
+    setOpening(true); setOrderError('')
+    const {data,error:err}=await supabase.rpc('claim_qr_guest_table',{
+      p_location_id:locationId,p_qr_token:tableToken,p_access_code:accessCode,
+    })
+    if (err || data?.ok!==true) setOrderError(err?.message || data?.message || 'No se pudo abrir la mesa.')
+    else { setTableOpened(true); setOrderNotice('Mesa abierta. Ya puedes solicitar productos.') }
+    setOpening(false)
+  }
+  async function refreshCatalog() {
+    const {data,error:err}=await supabase.rpc('get_public_qr_menu',{p_location_id:locationId})
+    if (!err && data) { setMenu(data); setCart(old=>Object.fromEntries(Object.entries(old).filter(([id])=>data.products.some(p=>p.id===id)))) }
+    else setOrderError('No fue posible actualizar las existencias.')
+  }
   async function submitGuestRequest() {
-    if (!tableToken || !table || !cartItems.length || !accessCode.trim()) return
+    if (!tableToken || !table || !tableOpened || !cartItems.length || !/^[0-9]{4}$/.test(accessCode)) return
     setSending(true);setOrderError('');setOrderNotice('')
     const {data,error:err}=await supabase.rpc('submit_qr_guest_request',{
       p_location_id:locationId,p_qr_token:tableToken,p_access_code:accessCode.trim(),
       p_items:cartItems.map(item=>({productId:item.id,quantity:item.quantity}))
     })
-    if(err)setOrderError(err.message||'No se pudo enviar la solicitud.')
+    if(err||data?.ok===false)setOrderError(err?.message||data?.message||'No se pudo enviar la solicitud.')
     else if(data?.ok){setCart({});setOrderNotice('Solicitud recibida. El personal revisará tu pedido antes de registrarlo en cocina.')}
     setSending(false)
   }
@@ -84,8 +101,8 @@ export default function PublicQrMenu() {
     </header>
     <div className="qr-content">
       {tableError && <div role="alert" className="qr-table-warning">{tableError}</div>}
-      {table && <div className="qr-table-info">Estás consultando el menú para <b>{table.tableName}</b>. Puedes seleccionar productos y solicitar al personal que los revise con un código temporal.</div>}
-      <div className="qr-heading"><div><small>DESCUBRE NUESTROS SABORES</small><h2>Nuestra carta</h2></div><span>RestOS+</span></div>
+      {table && <div className="qr-table-info">Mesa: <b>{table.tableName}</b>. {tableOpened ? 'Cuenta abierta. Tus solicitudes llegarán a esta mesa.' : 'Introduce el PIN de 4 dígitos que está sobre la mesa para abrir tu cuenta.'}</div>}
+      <div className="qr-heading"><div><small>DESCUBRE NUESTROS SABORES</small><h2>Nuestra carta</h2></div><button type="button" className="qr-refresh" onClick={refreshCatalog}>↻ Actualizar existencias</button></div>
       <label className="qr-search"><span aria-hidden="true">⌕</span><input placeholder="Buscar platos o bebidas" aria-label="Buscar productos" value={search} onChange={e => setSearch(e.target.value)} /></label>
       <div className="qr-categories" aria-label="Categorías">
         <button className={category === 'all' ? 'selected' : ''} onClick={() => setCategory('all')}>Todos</button>
@@ -104,13 +121,14 @@ export default function PublicQrMenu() {
         {!cartItems.length&&<p>Agrega productos del menú para preparar tu solicitud.</p>}
         {cartItems.map(item=><div key={item.id} className="qr-guest-line"><span>{item.quantity} × {item.name}</span><b>{price(item.price*item.quantity)}</b></div>)}
         <div className="qr-guest-total"><strong>Total estimado</strong><strong>{price(cartTotal)}</strong></div>
-        <label className="qr-guest-code">Código temporal entregado por el personal
-          <input value={accessCode} maxLength={16} autoComplete="off" onChange={e=>setAccessCode(e.target.value.toUpperCase().replace(/[^0-9A-F]/g,''))} placeholder="Código de autorización" />
+        <label className="qr-guest-code">PIN de 4 números de esta mesa
+          <input value={accessCode} maxLength={4} inputMode="numeric" pattern="[0-9]{4}" autoComplete="off" onChange={e=>{setAccessCode(e.target.value.replace(/[^0-9]/g,'').slice(0,4));setTableOpened(false);setOrderError('')}} placeholder="0000" />
         </label>
-        <button className="qr-submit" type="button" onClick={submitGuestRequest} disabled={!cartItems.length||accessCode.length!==16||sending}>{sending?'Enviando…':'Solicitar pedido al personal'}</button>
+        {!tableOpened ? <button className="qr-submit" type="button" onClick={openMyTable} disabled={accessCode.length!==4||opening}>{opening?'Abriendo…':'Abrir mi mesa'}</button>
+        : <button className="qr-submit" type="button" onClick={submitGuestRequest} disabled={!cartItems.length||sending}>{sending?'Enviando…':'Enviar solicitud de pedido'}</button>}
         {orderNotice&&<p role="status" className="qr-guest-success">{orderNotice}</p>}
         {orderError&&<p role="alert" className="qr-table-warning">{orderError}</p>}
-        <small>Esta solicitud no es una comanda confirmada. El personal debe revisarla y registrarla en RestOS+.</small>
+        <small>El personal debe confirmar la solicitud antes de que llegue a cocina. La disponibilidad puede cambiar hasta ese momento.</small>
       </section>}
       <footer className="qr-footer">Menú digital de {menu.restaurant.name} · Powered by RestOS+</footer>
     </div>
