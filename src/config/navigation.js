@@ -3,6 +3,7 @@ export const NAV_ITEMS = [
 
   { id: 'dashboard', path: '/', icon: '▦', label: 'Resumen', permission: 'dashboard.view', scope: 'branch' },
   { id: 'tables', path: '/mesas', icon: '▣', label: 'Mesas', permission: 'tables.view', scope: 'branch' },
+  { id: 'qr-orders', path: '/pedidos-qr', icon: '📱', label: 'Pedidos QR', scope: 'branch' },
   { id: 'quick-service', path: '/servicio-rapido', icon: '⚡', label: 'Servicio rápido', permission: 'orders.create', scope: 'branch' },
   { id: 'deliveries', path: '/domicilios', icon: '🚚', label: 'Domicilios', permission: 'orders.create', scope: 'branch' },
   { id: 'order', path: '/pedido', icon: '🧾', label: 'Pedido', permission: 'orders.create', hidden: true, scope: 'branch' },
