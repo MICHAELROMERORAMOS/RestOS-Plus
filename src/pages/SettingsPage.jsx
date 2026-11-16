@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import QrMenuSettings from '../components/QrMenuSettings.jsx'
 import { CURRENCY_OPTIONS } from '../lib/currency.js'
 import { loadCompanyProfile, saveCompanyProfile } from '../services/invoiceRegisterService.js'
 import {
@@ -247,6 +248,7 @@ export default function SettingsPage() {
   return (
     <section className="view active">
       <div className="hero"><div><h2>Configuración</h2><p>Restaurante, operación, salones/áreas, mesas, pagos e integraciones.</p></div></div>
+      <QrMenuSettings locationId={activeLocation?.id} canManage={canManageSettings} />
 
       <SettingsSection
         title="Operación e integraciones"
