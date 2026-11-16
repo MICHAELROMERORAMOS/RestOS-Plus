@@ -8,6 +8,9 @@ export default function PublicQrMenu() {
     return () => document.documentElement.classList.remove('qr-public-scroll')
   }, [])
   const locationId = window.location.pathname.match(/^\/menu\/([0-9a-f-]{36})\/?$/i)?.[1]
+  const tableToken = new URLSearchParams(window.location.search).get('t')
+  const [table, setTable] = useState(null)
+  const [tableError, setTableError] = useState('')
   const [menu, setMenu] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -21,15 +24,24 @@ export default function PublicQrMenu() {
         setLoading(false)
         return
       }
-      const { data, error: requestError } = await supabase.rpc('get_public_qr_menu', { p_location_id: locationId })
+      const [{ data, error: requestError }, tableResult] = await Promise.all([
+        supabase.rpc('get_public_qr_menu', { p_location_id: locationId }),
+        tableToken && /^[0-9a-f-]{36}$/i.test(tableToken)
+          ? supabase.rpc('resolve_public_qr_table', { p_location_id: locationId, p_token: tableToken })
+          : Promise.resolve(null),
+      ])
       if (!mounted) return
       setMenu(data || null)
+      if (tableToken) {
+        setTable(tableResult?.data || null)
+        setTableError(!tableResult?.data ? 'El código QR de esta mesa ya no es válido. Solicita al personal el código actualizado.' : '')
+      }
       setError(requestError ? 'No se pudo cargar el menú.' : !data ? 'Este menú todavía no está publicado.' : '')
       setLoading(false)
     }
     load()
     return () => { mounted = false }
-  }, [locationId])
+  }, [locationId, tableToken])
   const products = useMemo(() => (menu?.products || []).filter(product =>
     (category === 'all' || product.categoryId === category) &&
     (product.name + ' ' + (product.description || '')).toLocaleLowerCase().includes(search.toLocaleLowerCase())
@@ -46,8 +58,11 @@ export default function PublicQrMenu() {
       <p className="qr-eyebrow">BIENVENIDO A</p>
       <h1>{menu.restaurant.name}</h1>
       <p>{menu.location.name} · Menú digital</p>
+      {table && <p style={{fontWeight:800,fontSize:17}}>🍽️ {table.zoneName} · {table.tableName}</p>}
     </header>
     <div className="qr-content">
+      {tableError && <div role="alert" className="qr-table-warning">{tableError}</div>}
+      {table && <div className="qr-table-info">Estás consultando el menú para <b>{table.tableName}</b>. Los pedidos desde QR todavía no están habilitados.</div>}
       <div className="qr-heading"><div><small>DESCUBRE NUESTROS SABORES</small><h2>Nuestra carta</h2></div><span>RestOS+</span></div>
       <label className="qr-search"><span aria-hidden="true">⌕</span><input placeholder="Buscar platos o bebidas" aria-label="Buscar productos" value={search} onChange={e => setSearch(e.target.value)} /></label>
       <div className="qr-categories" aria-label="Categorías">
