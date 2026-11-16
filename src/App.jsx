@@ -26,6 +26,7 @@ import ReportsPage from './pages/ReportsPage.jsx'
 import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import QrOrdersPage from './pages/QrOrdersPage.jsx'
 import PublicQrMenu from './pages/PublicQrMenu.jsx'
 import { isLegacyPlatformPath, isPlatformAdminSurface } from './lib/appSurface.js'
 
@@ -35,6 +36,7 @@ function MainApplication() {
 
   const accessibleItems = useMemo(
     () => NAV_ITEMS.filter((item) => {
+      if (item.id === 'qr-orders' && !auth.can('orders.create') && !auth.can('tables.manage') && !auth.can('payments.create')) return false
       if (item.stationType) {
         const station = restaurant.menuStations.find((candidate) => (
           candidate.stationType === item.stationType && candidate.active !== false
@@ -194,6 +196,7 @@ function MainApplication() {
     'shift-close': <ShiftClosePage />,
     tv: <TvPage />,
     settings: <SettingsPage />,
+    'qr-orders': <QrOrdersPage />,
   }
 
   const activeViewAllowed = accessibleItems.some((item) => item.id === activeView)
