@@ -3,6 +3,10 @@ import { supabase } from '../lib/supabase.js'
 import './PublicQrMenu.css'
 
 export default function PublicQrMenu() {
+  useEffect(() => {
+    document.documentElement.classList.add('qr-public-scroll')
+    return () => document.documentElement.classList.remove('qr-public-scroll')
+  }, [])
   const locationId = window.location.pathname.match(/^\/menu\/([0-9a-f-]{36})\/?$/i)?.[1]
   const [menu, setMenu] = useState(null)
   const [loading, setLoading] = useState(true)
