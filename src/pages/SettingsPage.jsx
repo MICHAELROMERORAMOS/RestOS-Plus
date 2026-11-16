@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import QrMenuSettings from '../components/QrMenuSettings.jsx'
+import TableQrManager from '../components/TableQrManager.jsx'
 import { CURRENCY_OPTIONS } from '../lib/currency.js'
 import { loadCompanyProfile, saveCompanyProfile } from '../services/invoiceRegisterService.js'
 import {
@@ -543,6 +544,7 @@ export default function SettingsPage() {
           )
         }) : <div className="empty-inline">No hay mesas configuradas.</div>}
       </div>
+      <TableQrManager locationId={activeLocation?.id} tables={activeTables} canManage={canManageTables || canManageSettings} />
       </SettingsSection>
 
       <SettingsSection
