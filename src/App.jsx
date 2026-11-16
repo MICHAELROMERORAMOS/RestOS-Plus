@@ -26,6 +26,7 @@ import ReportsPage from './pages/ReportsPage.jsx'
 import ShiftClosePage from './pages/ShiftClosePage.jsx'
 import TvPage from './pages/TvPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import PublicQrMenu from './pages/PublicQrMenu.jsx'
 import { isLegacyPlatformPath, isPlatformAdminSurface } from './lib/appSurface.js'
 
 function MainApplication() {
@@ -267,6 +268,7 @@ function AuthenticatedApplication() {
 }
 
 export default function App() {
+  if (window.location.pathname.startsWith('/menu/')) return <PublicQrMenu />
   return (
     <AuthProvider>
       <AuthGateway>
