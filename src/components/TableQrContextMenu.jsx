@@ -47,8 +47,12 @@ export default function TableQrContextMenu({ table, locationId, position, onClos
 
   function copyPin() {
     if (!session?.code) return
-    navigator.clipboard?.writeText(session.code)
-      .catch(() => window.prompt('Copia el PIN', session.code))
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(session.code)
+        .catch(() => window.prompt('Copia el PIN', session.code))
+    } else {
+      window.prompt('Copia el PIN', session.code)
+    }
   }
 
   function printPin() {
