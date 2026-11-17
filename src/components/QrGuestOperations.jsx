@@ -144,7 +144,12 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
               {(Array.isArray(req.items) ? req.items : []).map((item, i) => (
                 <div className="qr-request-item" key={`${item.productId || 'p'}-${i}`}>
                   <span className="qr-request-quantity">{item.quantity} ×</span>
-                  <span>{item.name}</span>
+                  <div className="qr-request-item-detail">
+                    <span>{item.name}</span>
+                    {Array.isArray(item.declaredAllergies) && item.declaredAllergies.length > 0 && (
+                      <small className="qr-request-allergy-alert">⚠ Alergias declaradas: {item.declaredAllergies.map(allergen => allergen.nameEs || 'Alérgeno registrado').join(', ')}</small>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -207,7 +212,7 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
                 <p id="qr-request-confirm-description">
                   {confirmation.action === 'rejected'
                     ? 'La solicitud será rechazada y desaparecerá de los pedidos pendientes.'
-                    : 'Verifica los productos antes de enviarlos a sus estaciones de preparación.'}
+                    : 'Verifica los productos, las alergias declaradas y cualquier riesgo de contaminación cruzada antes de enviarlos a preparación.'}
                 </p>
               </div>
               <button
@@ -227,7 +232,12 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
                 {(Array.isArray(confirmation.req.items) ? confirmation.req.items : []).map((item, i) => (
                   <div key={`${item.productId || 'item'}-${i}`}>
                     <b>{item.quantity} ×</b>
-                    <span>{item.name}</span>
+                    <div className="qr-request-item-detail">
+                      <span>{item.name}</span>
+                      {Array.isArray(item.declaredAllergies) && item.declaredAllergies.length > 0 && (
+                        <small className="qr-request-allergy-alert">⚠ Alergias: {item.declaredAllergies.map(allergen => allergen.nameEs || 'Alérgeno registrado').join(', ')}</small>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
