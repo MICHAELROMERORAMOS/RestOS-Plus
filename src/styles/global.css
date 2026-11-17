@@ -7540,3 +7540,140 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
   .settings-table-tabs button{padding:7px 4px;font-size:10px;min-height:42px}
   .settings-table-button-grid{grid-template-columns:repeat(auto-fill,minmax(144px,1fr))}
 }
+
+
+/* RestOS+ settings design alignment: shared brand palette, consistent mini action buttons,
+   standard card border radius and comfortable tap targets. */
+.settings-compact-grid .settings-table-tabs{
+  gap:8px;
+  padding:5px;
+  background:var(--bg);
+  border:1px solid var(--line);
+  border-radius:14px;
+}
+.settings-compact-grid .settings-table-tabs button{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:6px;
+  min-height:43px;
+  padding:9px 13px;
+  border:1px solid transparent;
+  border-radius:11px;
+  background:transparent;
+  color:var(--muted);
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  transition:background-color .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+.settings-compact-grid .settings-table-tabs button:hover{
+  background:#fff;
+  color:var(--brand);
+  border-color:var(--line);
+}
+.settings-compact-grid .settings-table-tabs button.active,
+.settings-compact-grid .settings-table-tabs button[aria-selected="true"]{
+  background:var(--brand);
+  color:#fff;
+  border-color:var(--brand);
+  box-shadow:0 3px 9px #174c3626;
+}
+.settings-compact-grid .settings-table-tabs button.active:hover{background:#123e2c}
+.settings-compact-grid .settings-table-tabs button small{
+  color:inherit;
+  background:rgba(255,255,255,.16);
+  border-radius:999px;
+  padding:2px 7px;
+  font-size:11px;
+  line-height:1.35;
+}
+.settings-compact-grid .settings-table-button-grid{
+  grid-template-columns:repeat(auto-fill,minmax(235px,1fr));
+  gap:9px;
+}
+.settings-compact-grid .settings-table-button{
+  padding:12px 13px;
+  min-height:71px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:13px;
+  box-shadow:0 3px 12px #102f2408;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.settings-compact-grid .settings-table-button:hover{
+  border-color:#b9d1c2;
+  box-shadow:0 5px 16px #102f2411;
+}
+.settings-compact-grid .settings-table-button-copy{gap:4px}
+.settings-compact-grid .settings-table-button-copy>b{
+  font-size:15px;
+  font-weight:900;
+  color:var(--ink);
+}
+.settings-compact-grid .settings-table-button-copy>small{
+  font-size:11px;
+  color:var(--muted);
+}
+.settings-compact-grid .settings-table-button-actions{
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:6px;
+}
+.settings-compact-grid .settings-table-button-actions .mini{
+  flex:0 0 auto;
+  min-height:36px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#eef2ef;
+  color:var(--ink);
+  font:inherit;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.settings-compact-grid .settings-table-button-actions .mini:hover{
+  background:#e1ede5;
+  border-color:#a9c5b4;
+}
+.settings-compact-grid .settings-table-button-actions .mini.danger{
+  background:#fff0f0;
+  color:var(--danger);
+  border-color:#f2d8d8;
+  font-size:11px;
+}
+.settings-compact-grid .settings-table-button-actions .mini.danger:hover{
+  background:#ffe2e2;
+}
+.settings-compact-grid .settings-table-zones .mini,
+.settings-compact-grid .settings-table-qr .mini{
+  border-radius:9px;
+  min-height:36px;
+  font-size:11px;
+  font-weight:800;
+}
+.settings-compact-grid .settings-table-qr .table-qr-row{
+  padding:12px;
+  border-radius:13px;
+  background:#fff;
+  box-shadow:0 3px 12px #102f2408;
+}
+@media(max-width:530px){
+  .settings-compact-grid .settings-table-tabs{gap:4px}
+  .settings-compact-grid .settings-table-tabs button{
+    font-size:11px;
+    padding:8px 5px;
+  }
+  .settings-compact-grid .settings-table-button-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .settings-compact-grid .settings-table-button{
+    min-height:68px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .settings-compact-grid .settings-table-tabs button,
+  .settings-compact-grid .settings-table-button{transition:none}
+}
