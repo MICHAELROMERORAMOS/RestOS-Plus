@@ -167,3 +167,7 @@
   .qr-request-confirm-symbol{width:38px;height:38px}
   .qr-request-confirm-heading h3{font-size:16px}
 }
+
+.qr-request-item-detail{display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere}
+.qr-request-allergy-alert{display:block;width:100%;margin-top:2px;color:#854b12;background:#fff3df;border:1px solid #f3dbb7;border-radius:7px;padding:5px 7px;font-size:10px;line-height:1.35;font-weight:750}
+.qr-request-confirm-list .qr-request-allergy-alert{font-size:11px}
