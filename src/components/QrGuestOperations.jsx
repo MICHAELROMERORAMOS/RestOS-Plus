@@ -15,6 +15,7 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
   const [processingId, setProcessingId] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [confirmation, setConfirmation] = useState(null)
   const requestEpoch = useRef(0)
   const processingRef = useRef(false)
 
@@ -43,6 +44,7 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
     setQuery('')
     setNotice('')
     setError('')
+    setConfirmation(null)
     void loadRequests(true)
     const poll = () => {
       if (document.visibilityState === 'visible' && !processingRef.current) void loadRequests()
@@ -72,13 +74,18 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
     )
   }, [pending, query])
 
+  useEffect(() => {
+    if (!confirmation) return undefined
+    const onEscape = (event) => {
+      if (event.key === 'Escape' && !processingRef.current) setConfirmation(null)
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [confirmation])
+
   async function review(req, action) {
     if (processingRef.current) return
-    const confirmMessage = action === 'reviewed'
-      ? `¿Confirmar la solicitud de ${req.tableName} y enviar sus productos a preparación?`
-      : `¿Rechazar la solicitud de ${req.tableName}?`
-    if (!window.confirm(confirmMessage)) return
-
+    setConfirmation(null)
     processingRef.current = true
     setProcessingId(req.id)
     setError('')
@@ -146,10 +153,10 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
               <strong>{typeof formatMoney === 'function' ? formatMoney(Number(req.total || 0)) : req.total}</strong>
             </div>
             <div className="qr-request-actions">
-              <button type="button" className="btn" disabled={processingId !== null} onClick={() => review(req, 'rejected')}>
+              <button type="button" className="btn" disabled={processingId !== null} onClick={() => setConfirmation({ req, action: 'rejected' })}>
                 Rechazar
               </button>
-              <button type="button" className="btn primary" disabled={processingId !== null} onClick={() => review(req, 'reviewed')}>
+              <button type="button" className="btn primary" disabled={processingId !== null} onClick={() => setConfirmation({ req, action: 'reviewed' })}>
                 {processingId === req.id ? 'Procesando…' : 'Confirmar y enviar'}
               </button>
             </div>
@@ -173,6 +180,78 @@ export default function QrGuestOperations({ locationId, formatMoney }) {
       <p className="qr-requests-footnote">
         La autorización y el PIN se gestionan desde Mesas. Confirma los alérgenos antes de enviar cada solicitud a preparación.
       </p>
+
+      {confirmation && (
+        <div
+          className="modal open qr-request-confirm-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && processingId === null) setConfirmation(null)
+          }}
+        >
+          <div
+            className="modal-card qr-request-confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="qr-request-confirm-title"
+            aria-describedby="qr-request-confirm-description"
+          >
+            <div className="qr-request-confirm-heading">
+              <span className={`qr-request-confirm-symbol ${confirmation.action === 'rejected' ? 'is-reject' : ''}`} aria-hidden="true">
+                {confirmation.action === 'rejected' ? '!' : '✓'}
+              </span>
+              <div>
+                <h3 id="qr-request-confirm-title">
+                  {confirmation.action === 'rejected' ? 'Rechazar solicitud' : 'Confirmar pedido QR'}
+                </h3>
+                <p id="qr-request-confirm-description">
+                  {confirmation.action === 'rejected'
+                    ? 'La solicitud será rechazada y desaparecerá de los pedidos pendientes.'
+                    : 'Verifica los productos antes de enviarlos a sus estaciones de preparación.'}
+                </p>
+              </div>
+              <button
+                className="qr-request-confirm-close"
+                type="button"
+                aria-label="Cerrar confirmación"
+                disabled={processingId !== null}
+                onClick={() => setConfirmation(null)}
+              >×</button>
+            </div>
+            <div className="qr-request-confirm-details">
+              <div className="qr-request-confirm-table">
+                <strong>{confirmation.req.tableName || 'Mesa'}</strong>
+                <small>{formatRequestTime(confirmation.req.createdAt)}</small>
+              </div>
+              <div className="qr-request-confirm-list">
+                {(Array.isArray(confirmation.req.items) ? confirmation.req.items : []).map((item, i) => (
+                  <div key={`${item.productId || 'item'}-${i}`}>
+                    <b>{item.quantity} ×</b>
+                    <span>{item.name}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="qr-request-confirm-total">
+                <span>Total solicitado</span>
+                <strong>{typeof formatMoney === 'function' ? formatMoney(Number(confirmation.req.total || 0)) : confirmation.req.total}</strong>
+              </div>
+            </div>
+            <div className="qr-request-confirm-actions">
+              <button type="button" className="btn" disabled={processingId !== null} onClick={() => setConfirmation(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`btn ${confirmation.action === 'rejected' ? 'qr-request-reject-action' : 'primary'}`}
+                disabled={processingId !== null}
+                onClick={() => review(confirmation.req, confirmation.action)}
+              >
+                {processingId !== null ? 'Procesando…' : confirmation.action === 'rejected' ? 'Rechazar solicitud' : 'Confirmar y enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
