@@ -1,6 +1,7 @@
 import React from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import QrGuestOperations from '../components/QrGuestOperations.jsx'
+import QrAttentionStaff from '../components/QrAttentionStaff.jsx'
 
 export default function QrOrdersPage() {
   const restaurant = useRestaurant()
@@ -13,6 +14,7 @@ export default function QrOrdersPage() {
           <p>Revisa y confirma las solicitudes de los clientes. La generación de PIN se realiza directamente desde Mesas.</p>
         </div>
       </div>
+      <QrAttentionStaff locationId={activeLocation?.id} />
       <QrGuestOperations locationId={activeLocation?.id} formatMoney={formatMoney} />
     </section>
   )
