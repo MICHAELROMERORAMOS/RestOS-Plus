@@ -1,62 +1,178 @@
-import React,{useEffect,useState} from 'react'
-import {supabase} from '../lib/supabase.js'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase.js'
 import './QrGuestOperations.css'
-export default function QrGuestOperations({locationId,tables}){
- const [selected,setSelected]=useState('')
- const [session,setSession]=useState(null)
- const [requests,setRequests]=useState([])
- const [busy,setBusy]=useState(false)
- const [error,setError]=useState('')
- const [printPin,setPrintPin]=useState(false)
- useEffect(()=>{setSelected('');setSession(null);setRequests([])},[locationId])
- async function loadRequests(){
-  if(!locationId)return
-  const {data,error:err}=await supabase.rpc('manage_qr_guest_requests',{p_location_id:locationId})
-  if(err)setError(err.message);else setRequests(data?.requests||[])
- }
- useEffect(()=>{loadRequests();const timer=setInterval(loadRequests,15000);return ()=>clearInterval(timer)},[locationId])
- async function action(name){
-  if(!selected)return
-  setBusy(true);setError('')
-  const {data,error:err}=await supabase.rpc('manage_qr_guest_session',{p_table_id:selected,p_action:name})
-  if(err)setError(err.message);else setSession(data)
-  setBusy(false)
- }
- async function choose(id){
-  setSelected(id);setSession(null);setError('')
-  if(!id)return
-  const {data,error:err}=await supabase.rpc('manage_qr_guest_session',{p_table_id:id,p_action:'read'})
-  if(err)setError(err.message);else setSession(data)
- }
- function printAccessCode(){setPrintPin(true);setTimeout(()=>{window.print();setPrintPin(false)},150)}
- async function review(req,status){
-  setBusy(true);setError('')
-  const {error:err}=await supabase.rpc('manage_qr_guest_requests',{p_location_id:locationId,p_request_id:req.id,p_action:status})
-  if(err)setError(err.message)
-  await loadRequests();setBusy(false)
- }
- return <div className="card section-gap">
-  <h3>Pedidos solicitados mediante QR</h3>
-  <p className="muted">El personal prepara un PIN numérico de 4 dígitos para cada mesa libre y lo deja sobre la mesa. El cliente escanea su QR, introduce el PIN y abre la cuenta automáticamente. Las solicitudes llegan aquí para que las confirmes y se envíen a preparación.</p>
-  <div className="settings-form">
-   <label><span>Mesa</span><select value={selected} onChange={e=>choose(e.target.value)}><option value="">Selecciona la mesa</option>{tables.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-  </div>
-  {selected&&<div className="notice">
-   <b>{session?.active?(session.claimed?'Mesa abierta por el cliente':'PIN listo para entregar'):'Sesión QR inactiva'}</b>
-   {session?.active&&<div style={{marginTop:8}}>PIN para entregar al cliente: <strong style={{fontSize:20,letterSpacing:2}}>{session.code}</strong><br/><small>Expira: {new Date(session.expiresAt).toLocaleString()}</small></div>}
-   <div className="line-actions" style={{marginTop:10}}>
-    <button type="button" className="btn primary" disabled={busy||session?.active} onClick={()=>action('open')}>Generar PIN para esta mesa</button>
-    {session?.active && <button type="button" className="btn" onClick={printAccessCode}>Imprimir PIN</button>}
-    <button type="button" className="btn" disabled={busy||!session?.active} onClick={()=>action('close')}>Cerrar sesión QR</button>
-   </div>
-  </div>}
-  {printPin&&session?.active&&<div className="qr-pin-printable"><h2>{tables.find(t=>t.id===selected)?.name || 'Mesa'}</h2><p>PIN para abrir tu mesa</p><strong>{session.code}</strong><p>Escanea el QR impreso de tu mesa e introduce este PIN de 4 números.</p><small>Válido solo para el servicio actual · RestOS+</small></div>}
-  {error&&<div role="alert" className="notice warn">{error}</div>}
-  <div className="section-title section-gap"><h4>Solicitudes por revisar ({requests.length})</h4><button className="mini" onClick={loadRequests}>Actualizar</button></div>
-  <div className="list">{requests.map(req=><div className="row" key={req.id} style={{alignItems:'start',gap:12}}>
-   <div><b>{req.tableName}</b><small>{new Date(req.createdAt).toLocaleTimeString()}</small>{req.items.map((p,i)=><div key={i} style={{fontSize:13,marginTop:5}}>{p.quantity} × {p.name}</div>)}<strong>Total solicitado: {req.total}</strong></div>
-   <div className="line-actions"><button className="mini" disabled={busy} onClick={()=>review(req,'reviewed')}>Confirmar y enviar a preparación</button><button className="mini danger" disabled={busy} onClick={()=>review(req,'rejected')}>Rechazar</button></div>
-  </div>)}{!requests.length&&<p className="muted">Sin solicitudes pendientes.</p>}</div>
-  <div className="notice">Al confirmar, RestOS+ registra los productos en la cuenta de la mesa, envía la comanda a su estación de preparación y aplica el control de inventario. Comprueba los alérgenos con el cliente antes de confirmar.</div>
- </div>
+
+function formatRequestTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Hora no disponible'
+  return date.toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+export default function QrGuestOperations({ locationId, formatMoney }) {
+  const [requests, setRequests] = useState([])
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [processingId, setProcessingId] = useState(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const requestEpoch = useRef(0)
+  const processingRef = useRef(false)
+
+  const loadRequests = useCallback(async (showLoading = false) => {
+    const epoch = ++requestEpoch.current
+    if (!locationId || !supabase) {
+      setRequests([])
+      return
+    }
+    if (showLoading) setLoading(true)
+    const { data, error: fetchError } = await supabase.rpc('manage_qr_guest_requests', {
+      p_location_id: locationId,
+      p_action: 'list',
+    })
+    if (epoch !== requestEpoch.current) return
+    if (fetchError) setError(fetchError.message || 'No se pudieron cargar las solicitudes QR.')
+    else {
+      setRequests(Array.isArray(data?.requests) ? data.requests : [])
+      setError('')
+    }
+    if (showLoading) setLoading(false)
+  }, [locationId])
+
+  useEffect(() => {
+    setRequests([])
+    setQuery('')
+    setNotice('')
+    setError('')
+    void loadRequests(true)
+    const poll = () => {
+      if (document.visibilityState === 'visible' && !processingRef.current) void loadRequests()
+    }
+    const timer = window.setInterval(poll, 8000)
+    window.addEventListener('focus', poll)
+    return () => {
+      ++requestEpoch.current
+      window.clearInterval(timer)
+      window.removeEventListener('focus', poll)
+    }
+  }, [loadRequests])
+
+  const pending = useMemo(() =>
+    requests
+      .filter((req) => req.status === 'pending')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [requests],
+  )
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase('es')
+    if (!term) return pending
+    return pending.filter((req) =>
+      [req.tableName, ...(Array.isArray(req.items) ? req.items.map((item) => item.name) : [])]
+        .some((text) => String(text || '').toLocaleLowerCase('es').includes(term)),
+    )
+  }, [pending, query])
+
+  async function review(req, action) {
+    if (processingRef.current) return
+    const confirmMessage = action === 'reviewed'
+      ? `¿Confirmar la solicitud de ${req.tableName} y enviar sus productos a preparación?`
+      : `¿Rechazar la solicitud de ${req.tableName}?`
+    if (!window.confirm(confirmMessage)) return
+
+    processingRef.current = true
+    setProcessingId(req.id)
+    setError('')
+    setNotice('')
+    const { error: actionError } = await supabase.rpc('manage_qr_guest_requests', {
+      p_location_id: locationId,
+      p_request_id: req.id,
+      p_action: action,
+    })
+    if (actionError) {
+      setError(actionError.message || 'No se pudo procesar la solicitud.')
+    } else {
+      setNotice(action === 'reviewed'
+        ? `Pedido de ${req.tableName} confirmado y enviado a preparación.`
+        : `Solicitud de ${req.tableName} rechazada.`)
+    }
+    processingRef.current = false
+    setProcessingId(null)
+    await loadRequests()
+  }
+
+  return (
+    <div className="card section-gap qr-requests-workspace">
+      <div className="qr-requests-toolbar">
+        <div className="qr-requests-heading">
+          <h3>Solicitudes de clientes</h3>
+          <span className="badge">{pending.length} pendientes</span>
+        </div>
+        <button type="button" className="btn qr-requests-refresh" onClick={() => loadRequests(true)} disabled={loading || processingId !== null}>
+          {loading ? 'Actualizando…' : 'Actualizar'}
+        </button>
+      </div>
+
+      <div className="qr-requests-filters">
+        <label className="qr-requests-search">
+          <span className="sr-only">Buscar mesa o producto</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar mesa o producto…" autoComplete="off" />
+        </label>
+        <span className="qr-requests-status-label">Pendientes de confirmación</span>
+      </div>
+
+      {error && <div className="notice warn" role="alert">{error}</div>}
+      {notice && <div className="notice qr-requests-success" role="status">{notice}</div>}
+
+      <div className="qr-requests-grid">
+        {filtered.map((req) => (
+          <article className="qr-request-card" key={req.id}>
+            <div className="qr-request-head">
+              <div className="qr-request-table">
+                <strong>{req.tableName || 'Mesa'}</strong>
+                <small>{formatRequestTime(req.createdAt)}</small>
+              </div>
+              <span className="qr-request-status">Pendiente</span>
+            </div>
+            <div className="qr-request-items">
+              {(Array.isArray(req.items) ? req.items : []).map((item, i) => (
+                <div className="qr-request-item" key={`${item.productId || 'p'}-${i}`}>
+                  <span className="qr-request-quantity">{item.quantity} ×</span>
+                  <span>{item.name}</span>
+                </div>
+              ))}
+            </div>
+            <div className="qr-request-total">
+              <span>Total solicitado</span>
+              <strong>{typeof formatMoney === 'function' ? formatMoney(Number(req.total || 0)) : req.total}</strong>
+            </div>
+            <div className="qr-request-actions">
+              <button type="button" className="btn" disabled={processingId !== null} onClick={() => review(req, 'rejected')}>
+                Rechazar
+              </button>
+              <button type="button" className="btn primary" disabled={processingId !== null} onClick={() => review(req, 'reviewed')}>
+                {processingId === req.id ? 'Procesando…' : 'Confirmar y enviar'}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {!loading && pending.length === 0 && (
+        <div className="qr-requests-empty">
+          <span aria-hidden="true">✓</span>
+          <strong>Sin solicitudes pendientes</strong>
+          <p>Los pedidos enviados desde el menú QR aparecerán aquí automáticamente.</p>
+        </div>
+      )}
+      {!loading && pending.length > 0 && filtered.length === 0 && (
+        <div className="qr-requests-empty">
+          <strong>No hay solicitudes que coincidan.</strong>
+          <p>Prueba otro nombre de mesa o producto.</p>
+        </div>
+      )}
+      <p className="qr-requests-footnote">
+        La autorización y el PIN se gestionan desde Mesas. Confirma los alérgenos antes de enviar cada solicitud a preparación.
+      </p>
+    </div>
+  )
 }
