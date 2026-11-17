@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js'
 export default function QrMenuSettings({ locationId, canManage }) {
   const [enabled, setEnabled] = useState(false)
   const [authMode, setAuthMode] = useState('required')
+  const [attention, setAttention] = useState({enabled:false,call_waiter:true,request_drink:true,request_bill:true,order_status:true})
   const [ownerCanChange, setOwnerCanChange] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -14,9 +15,11 @@ export default function QrMenuSettings({ locationId, canManage }) {
     Promise.all([
       supabase.rpc('manage_qr_menu', { p_location_id: locationId }),
       supabase.rpc('manage_qr_customer_auth', { p_location_id: locationId }),
-    ]).then(([menuResult, authResult]) => {
+      supabase.rpc('manage_qr_attention_settings', { p_location_id: locationId }),
+    ]).then(([menuResult, authResult, attentionResult]) => {
       if (!active) return
-      setError(menuResult.error?.message || authResult.error?.message || '')
+      setError(menuResult.error?.message || authResult.error?.message || attentionResult.error?.message || '')
+      if (!attentionResult.error && attentionResult.data) setAttention(attentionResult.data)
       if (!menuResult.error) setEnabled(menuResult.data?.enabled === true)
       if (!authResult.error) {
         setAuthMode(authResult.data?.mode || 'required')
@@ -44,6 +47,16 @@ export default function QrMenuSettings({ locationId, canManage }) {
     })
     if (err) setError(err.message)
     else setAuthMode(data?.mode || 'required')
+    setBusy(false)
+  }
+  async function changeAttention(setting, value) {
+    if (!canManage || busy || !locationId) return
+    setBusy(true);setError('')
+    const { data, error: err } = await supabase.rpc('manage_qr_attention_settings', {
+      p_location_id: locationId, p_changes: {[setting]:value},
+    })
+    if (err) setError(err.message)
+    else if (data) setAttention(data)
     setBusy(false)
   }
   return <div className="card" style={{marginBottom:18}}>
@@ -74,6 +87,30 @@ export default function QrMenuSettings({ locationId, canManage }) {
       {authMode !== 'disabled' && <p className="qr-auth-provider-note">
         Google y Apple requieren configurar sus proveedores OAuth y las URL de retorno en Supabase Auth antes de que los clientes puedan utilizarlos.
       </p>}
+    </div>
+    <div className="qr-attention-settings-panel">
+      <div className="qr-auth-settings-head">
+        <b>🔔 Atención al cliente mediante QR</b>
+        <small>El cliente escanea el QR de su mesa e introduce un código numérico de seis cifras mostrado en la pantalla de la sucursal. El código cambia cada 20 minutos.</small>
+      </div>
+      <label className="toggle-row operational-setting-row">
+        <span><b>Activar ventana de solicitudes de atención</b><small>Se mostrará como primer paso al escanear la mesa. No sustituye el menú existente.</small></span>
+        <input type="checkbox" checked={attention.enabled} disabled={!locationId || !canManage || busy} onChange={event=>changeAttention('enabled',event.target.checked)}/>
+      </label>
+      {attention.enabled && <div className="qr-attention-feature-settings">
+        {[
+          ['call_waiter','🙋 Llamar al mesero','Envía una alerta al personal de sala'],
+          ['request_drink','🥤 Solicitar bebida','Avisa que el cliente quiere ordenar una bebida'],
+          ['request_bill','🧾 Pedir la cuenta','Avisa al personal; no realiza cobros'],
+          ['order_status','📋 Estado del pedido','Solo permite consultar solicitudes privadas del propio cliente'],
+        ].map(([key,label,description])=>(
+          <label className="toggle-row operational-setting-row" key={key}>
+            <span><b>{label}</b><small>{description}</small></span>
+            <input type="checkbox" checked={Boolean(attention[key])} disabled={!canManage || busy} onChange={event=>changeAttention(key,event.target.checked)}/>
+          </label>
+        ))}
+      </div>}
+      <p className="qr-auth-provider-note">La pantalla de códigos se abre desde «Pedidos QR» en la sucursal. El código es independiente del PIN de pedidos y solo autoriza estas funciones de atención.</p>
     </div>
     {error && <p role="alert" style={{color:'var(--danger)'}}>{error}</p>}
     {locationId && <div style={{overflowWrap:'anywhere',marginTop:15}}>
