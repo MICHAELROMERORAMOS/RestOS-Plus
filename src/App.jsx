@@ -168,7 +168,7 @@ function MainApplication() {
   const pages = {
     central: <CompanyControlPage onNavigate={navigate} onEnterBranch={enterBranch} />,
     dashboard: <DashboardPage onNavigate={navigate} onOpenTable={openTable} onNewOrder={() => navigate('tables')} />,
-    tables: <TablesPage onOpenTable={openTable} />,
+    tables: <TablesPage onOpenTable={openTable} onNavigate={navigate} />,
     'quick-service': (
       <QuickServicePage
         onStartQuickOrder={quickService}
