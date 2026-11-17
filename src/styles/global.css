@@ -7384,3 +7384,85 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
     padding-inline:7px;
   }
 }
+
+
+/* Compact branch configuration: short collapsed tiles, full-width expanded panels. */
+.settings-compact-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  align-items:start;
+}
+.settings-compact-grid>.settings-section{
+  margin:0;
+  min-width:0;
+  border-radius:13px;
+  box-shadow:0 3px 12px #102f2409;
+}
+.settings-compact-grid>.settings-section[open]{
+  grid-column:1 / -1;
+}
+.settings-compact-grid .settings-section-toggle{
+  padding:9px 12px;
+  gap:9px;
+  min-height:56px;
+}
+.settings-compact-grid .settings-section-icon{
+  width:31px;
+  height:31px;
+  border-radius:9px;
+  font-size:16px;
+}
+.settings-compact-grid .settings-section-copy{
+  gap:1px;
+}
+.settings-compact-grid .settings-section-copy>b{
+  font-size:14px;
+}
+.settings-compact-grid .settings-section-copy>small{
+  font-size:11px;
+  line-height:1.25;
+}
+.settings-compact-grid .settings-section-chevron{
+  font-size:19px;
+}
+.settings-compact-grid .settings-section-content{
+  padding:12px;
+}
+.settings-compact-grid .settings-section-content .card{
+  padding:14px;
+  border-radius:13px;
+  box-shadow:none;
+}
+.settings-compact-grid .settings-section-content .settings-form{
+  margin-top:9px;
+  gap:9px;
+}
+.settings-compact-grid .settings-section-content .section-gap{
+  margin-top:10px;
+}
+.settings-compact-grid .settings-section-content .grid{
+  gap:12px;
+}
+.settings-compact-grid .settings-section-content .settings-form .toggle-row{
+  padding:9px;
+}
+.settings-compact-grid .settings-section-content .settings-form input,
+.settings-compact-grid .settings-section-content .settings-form select{
+  height:41px;
+}
+.settings-compact-grid .settings-section-content .card>h3:first-child{
+  margin-top:0;
+}
+.settings-compact-grid .settings-section-content>.card:first-child{
+  margin-bottom:0 !important;
+}
+.settings-compact-grid .settings-section-badge{
+  font-size:10px;
+  padding:4px 7px;
+}
+@media(max-width:760px){
+  .settings-compact-grid{grid-template-columns:minmax(0,1fr);gap:8px}
+  .settings-compact-grid>.settings-section[open]{grid-column:auto}
+  .settings-compact-grid .settings-section-toggle{min-height:53px}
+}
