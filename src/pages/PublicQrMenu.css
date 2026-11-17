@@ -89,3 +89,17 @@ html.qr-public-scroll .qr-menu {
 @media(max-width:360px){.qr-allergy-grid{grid-template-columns:1fr}}
 
 .qr-new-visit{border:1px solid #bed3c3;background:#fff;color:#174c36;border-radius:11px;padding:10px 12px;font-size:12px;font-weight:800;margin:0 0 10px;min-height:40px}
+
+/* QR customer identity — consistent with the original RestOS+ menu palette. */
+.qr-customer-auth{background:#f8faf8;border:1px solid #d9e7dd;border-radius:14px;padding:14px;margin:15px 0}
+.qr-customer-auth-heading{display:grid;gap:5px;margin-bottom:12px}
+.qr-customer-auth-heading b{font-size:15px;color:#174c36}
+.qr-customer-auth-heading small{font-size:12px;line-height:1.45;color:#658071}
+.qr-customer-provider-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.qr-customer-provider{border:1px solid #c7d8ce;background:white;color:#173c2b;border-radius:11px;min-height:45px;padding:9px;font-size:13px;font-weight:800;cursor:pointer}
+.qr-customer-provider:hover{background:#ecf7f0;border-color:#8bab98}
+.qr-customer-provider:disabled{opacity:.5;cursor:wait}
+.qr-customer-profile{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12px;color:#174c36;overflow-wrap:anywhere}
+.qr-customer-profile button{border:1px solid #cad7cb;border-radius:9px;background:#fff;padding:7px 11px;font-weight:800;color:#174c36;min-height:35px}
+.qr-customer-auth .qr-table-warning{margin-bottom:0}
+@media(max-width:430px){.qr-customer-provider-actions{grid-template-columns:1fr}}
