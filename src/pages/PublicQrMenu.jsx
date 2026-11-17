@@ -307,10 +307,10 @@ export default function PublicQrMenu() {
 
   return <main className="qr-menu">
     <header className="qr-hero">
-      {menu?.restaurant?.logoUrl && <img className="qr-logo" src={menu.restaurant.logoUrl} alt="" />}
+      {(menu?.restaurant?.logoUrl || table?.restaurantLogoUrl) && <img className="qr-logo" src={menu?.restaurant?.logoUrl || table?.restaurantLogoUrl} alt="" />}
       <p className="qr-eyebrow">BIENVENIDO A</p>
-      <h1>{menu?.restaurant?.name || 'RestOS+'}</h1>
-      <p>{menu?.location?.name || ''} · Menú digital</p>
+      <h1>{menu?.restaurant?.name || table?.restaurantName || 'RestOS+'}</h1>
+      <p>{menu?.location?.name || table?.locationName || ''} · {attentionEnabled && !showMenuAfterAttention ? 'Atención al cliente' : 'Menú digital'}</p>
       {table && <p className="qr-table-title">🍽️ {table.zoneName} · {table.tableName}</p>}
     </header>
     <div className="qr-content">
