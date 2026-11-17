@@ -34,3 +34,6 @@ html.qr-public-scroll .qr-menu {
 .qr-table-warning{background:#fff0e8;border:1px solid #e3bd9e;border-radius:12px;padding:13px;color:#7f3d19;margin:14px 0}
 .qr-guest-success{background:#ecf8ee;border:1px solid #b9dec5;border-radius:12px;padding:13px;color:#206c39!important;margin:14px 0}
 .qr-table-info{background:#e9f3ed;border:1px solid #c4dacd;border-radius:12px;padding:13px;color:#23503a;margin-bottom:15px}
+
+.qr-refresh{align-self:center;border:1px solid #cbd9ce;border-radius:10px;background:#fff;color:#225c3a;font-size:12px;font-weight:800;padding:9px 12px;white-space:normal;text-align:center;max-width:150px}
+.qr-guest-code input{font-size:22px;letter-spacing:.25em;text-align:center;font-variant-numeric:tabular-nums}
