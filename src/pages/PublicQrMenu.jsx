@@ -267,6 +267,14 @@ export default function PublicQrMenu() {
             <button type="button" className="qr-refresh" onClick={() => refreshOrderStatus(viewToken)}>↻ Actualizar</button>
           </div>
           {orderSnapshot.orderClosed && <div className="qr-tracking-closed">Esta visita finalizó. Puedes consultar lo que pediste durante un máximo de 48 horas, pero ya no enviar nuevos pedidos.</div>}
+          {orderSnapshot.orderClosed && <button type="button" className="qr-new-visit" onClick={() => {
+            try { if (visitKey) window.localStorage.removeItem(visitKey) } catch {}
+            setOrderSnapshot(null)
+            setViewToken('')
+            setTableOpened(false)
+            setAccessCode('')
+            setOrderError('')
+          }}>Iniciar una nueva visita en esta mesa</button>}
           {!orderSnapshot.requests?.length && <p className="qr-tracking-empty">Todavía no has enviado solicitudes.</p>}
           {(orderSnapshot.requests || []).map(request => (
             <article className="qr-tracking-request" key={request.id}>
