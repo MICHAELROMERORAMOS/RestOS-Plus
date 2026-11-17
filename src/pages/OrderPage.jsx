@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import './OrderPageCompact.css'
 import SplitBillModal from '../components/payments/SplitBillModal.jsx'
 import PaymentMethodPicker, { paymentMethodLabel } from '../components/payments/PaymentMethodPicker.jsx'
 import DeliveryCourierSelector, {
@@ -1337,7 +1338,7 @@ export default function OrderPage({ onNavigate }) {
               )}
             </div>
 
-            <div className="order-cart-scroll">
+            <div className="order-cart-scroll order-cart-compact-list">
               {(currentOrder?.rounds || []).map((round) => (
                 <div className="sent-block" key={round.id}>
                   <div className="sent-head">
