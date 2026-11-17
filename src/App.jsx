@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext.jsx'
 import AuthGateway from './features/auth/AuthGateway.jsx'
@@ -60,6 +60,100 @@ function MainApplication() {
 
   const activeScope = scopeForView(activeView)
 
+  // Session storage is isolated per browser tab. Saved identities are checked against
+  // the authenticated restaurant, user and fully loaded branch before restoration.
+  const orderContextKey = 'restosplus:active-order-tab'
+  const resumeInFlightRef = useRef(false)
+  const [restoringOrder, setRestoringOrder] = useState(false)
+  function rememberOrderContext(mode, reference) {
+    if (!reference || !restaurant.activeLocation?.id) return
+    try {
+      window.sessionStorage.setItem(orderContextKey, JSON.stringify({
+        mode,
+        tableId: mode === 'table' ? String(reference) : null,
+        orderId: mode !== 'table' ? String(reference) : null,
+        restaurantId: auth.userContext?.membership?.restaurant_id || null,
+        userId: auth.userContext?.id || null,
+        locationId: restaurant.activeLocation.id,
+      }))
+    } catch {
+      // A disabled storage API must not prevent taking an order.
+    }
+  }
+
+  useEffect(() => {
+    // Don't restore from local cached tables: wait for the fresh server state.
+    if (activeView !== 'order') return
+    if (restaurant.currentTableId || restaurant.currentOrderId) return
+    if (resumeInFlightRef.current) return
+    if (!restaurant.activeLocation?.id || restaurant.operationalReadyLocationId !== restaurant.activeLocation.id) return
+    let saved = null
+    try { saved = JSON.parse(window.sessionStorage.getItem(orderContextKey) || 'null') } catch { saved = null }
+    const sameAccount = saved
+      && saved.restaurantId === (auth.userContext?.membership?.restaurant_id || null)
+      && saved.userId === (auth.userContext?.id || null)
+      && saved.locationId === restaurant.activeLocation.id
+    const validTable = saved?.mode === 'table'
+      && restaurant.state.tables.some((table) => table.id === saved.tableId && table.active !== false)
+    const existingTableAccount = validTable && restaurant.state.orders.some((order) =>
+      order.mode === 'table'
+      && (order.tableIds || []).includes(saved.tableId)
+      && !['closed', 'cancelled', 'merged'].includes(order.status))
+    const myActiveDraftSession = validTable && restaurant.tableSessionForTable(saved.tableId)?.claimedByMe
+    const validServiceOrder = ['quick', 'delivery'].includes(saved?.mode)
+      && restaurant.state.orders.some((order) =>
+        String(order.id) === String(saved.orderId)
+        && order.mode === saved.mode
+        && !['closed', 'cancelled', 'merged'].includes(order.status))
+
+    if (!sameAccount || !(existingTableAccount || myActiveDraftSession || validServiceOrder)) {
+      try { window.sessionStorage.removeItem(orderContextKey) } catch {}
+      window.history.replaceState({ view: 'tables' }, '', pathForView('tables'))
+      setActiveView('tables')
+      return
+    }
+
+    resumeInFlightRef.current = true
+    setRestoringOrder(true)
+    Promise.resolve(
+      saved.mode === 'table'
+        ? restaurant.openTable(saved.tableId)
+        : saved.mode === 'quick'
+          ? restaurant.openQuickOrder(Number(saved.orderId))
+          : restaurant.openDelivery(Number(saved.orderId)),
+    ).then((result) => {
+      if (!result?.ok) {
+        try { window.sessionStorage.removeItem(orderContextKey) } catch {}
+        window.history.replaceState({ view: 'tables' }, '', pathForView('tables'))
+        setActiveView('tables')
+      }
+    }).catch(() => {
+      try { window.sessionStorage.removeItem(orderContextKey) } catch {}
+      window.history.replaceState({ view: 'tables' }, '', pathForView('tables'))
+      setActiveView('tables')
+    }).finally(() => {
+      resumeInFlightRef.current = false
+      setRestoringOrder(false)
+    })
+  }, [
+    activeView, restaurant.activeLocation?.id, restaurant.operationalReadyLocationId,
+    restaurant.currentTableId, restaurant.currentOrderId, restaurant.state.orders,
+    restaurant.state.tables, restaurant.tableOrderSessions, auth.userContext?.id,
+  ])
+
+  useEffect(() => {
+    // Covers table transfers and order changes while staying on the order screen.
+    if (activeView !== 'order' || !restaurant.activeLocation?.id) return
+    if (restaurant.orderMode === 'table' && restaurant.currentTableId) {
+      rememberOrderContext('table', restaurant.currentTableId)
+    } else if (['quick', 'delivery'].includes(restaurant.orderMode) && restaurant.currentOrderId) {
+      rememberOrderContext(restaurant.orderMode, restaurant.currentOrderId)
+    }
+  }, [
+    activeView, restaurant.orderMode, restaurant.currentTableId, restaurant.currentOrderId,
+    restaurant.activeLocation?.id, auth.userContext?.id,
+  ])
+
   const visibleItems = useMemo(
     () => accessibleItems.filter((item) => !item.hidden && item.scope === activeScope),
     [accessibleItems, activeScope],
@@ -88,6 +182,9 @@ function MainApplication() {
   }, [])
 
   function navigate(view) {
+    if (view !== 'order') {
+      try { window.sessionStorage.removeItem(orderContextKey) } catch {}
+    }
     if (view === 'tv') {
       const tvUrl = new URL(pathForView('tv'), window.location.origin)
       if (restaurant.activeLocation?.id) tvUrl.searchParams.set('location', restaurant.activeLocation.id)
@@ -137,31 +234,32 @@ function MainApplication() {
       return result
     }
 
+    rememberOrderContext('table', tableId)
     navigate('order')
     return result
   }
 
   async function quickService() {
     const result = await restaurant.startQuickOrder()
-    if (result.ok) navigate('order')
+    if (result.ok) { rememberOrderContext('quick', result.orderId); navigate('order') }
     return result
   }
 
   function openQuickOrder(orderId) {
     const result = restaurant.openQuickOrder(orderId)
-    if (result.ok) navigate('order')
+    if (result.ok) { rememberOrderContext('quick', orderId); navigate('order') }
     return result
   }
 
   async function startDelivery(delivery) {
     const result = await restaurant.startDelivery(delivery)
-    if (result.ok) navigate('order')
+    if (result.ok) { rememberOrderContext('delivery', result.orderId); navigate('order') }
     return result
   }
 
   function openDelivery(orderId) {
     const result = restaurant.openDelivery(orderId)
-    if (result.ok) navigate('order')
+    if (result.ok) { rememberOrderContext('delivery', orderId); navigate('order') }
     return result
   }
 
@@ -176,7 +274,9 @@ function MainApplication() {
       />
     ),
     deliveries: <DeliveriesPage onStartDelivery={startDelivery} onOpenDelivery={openDelivery} />,
-    order: <OrderPage onNavigate={navigate} />,
+    order: restoringOrder || (!restaurant.currentTableId && !restaurant.currentOrderId) ? (
+      <div className="panel"><h2>Restaurando pedido…</h2><p>Verificando la mesa y sus comandas.</p></div>
+    ) : <OrderPage onNavigate={navigate} />,
     kitchen: <StationPage station="kitchen" />,
     bar: <StationPage station="bar" />,
     dessert: <StationPage station="dessert" />,
