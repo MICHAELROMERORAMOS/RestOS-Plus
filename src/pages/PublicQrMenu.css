@@ -37,3 +37,53 @@ html.qr-public-scroll .qr-menu {
 
 .qr-refresh{align-self:center;border:1px solid #cbd9ce;border-radius:10px;background:#fff;color:#225c3a;font-size:12px;font-weight:800;padding:9px 12px;white-space:normal;text-align:center;max-width:150px}
 .qr-guest-code input{font-size:22px;letter-spacing:.25em;text-align:center;font-variant-numeric:tabular-nums}
+
+
+/* Customer-facing QR menu: compact, accessible allergen filters and live status. */
+.qr-table-title{font-weight:850;font-size:17px}
+.qr-section-eyebrow{font-size:10px;letter-spacing:.13em;font-weight:900;color:#6a9981}
+.qr-allergy-filter{margin:12px 0 2px;background:#fff;border:1px solid #dce7dd;border-radius:14px;overflow:hidden}
+.qr-allergy-toggle{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;background:#f3f8f4;color:#1d4d36;border:0;padding:13px 16px;font-size:14px;font-weight:850;text-align:left;min-height:48px}
+.qr-allergy-options{padding:13px 14px 15px}
+.qr-allergy-options>p{margin:0 0 13px;font-size:12px;color:#526c5c;line-height:1.5}
+.qr-allergy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px}
+.qr-allergy-choice{min-width:0;background:#fafbf9;border:1px solid #e0e9e1;border-radius:12px;padding:10px}
+.qr-allergy-choice.selected{background:#ecf6f0;border-color:#a7c8b2}
+.qr-allergy-choice>label{display:flex;align-items:center;gap:7px;min-height:26px;font-size:12px;color:#233a2d;cursor:pointer}
+.qr-allergy-choice input{accent-color:#174c36;width:17px;height:17px;flex:0 0 auto}
+.qr-allergy-choice b{font-size:12px;overflow-wrap:anywhere}
+.qr-allergy-subtypes{border-top:1px solid #d6e7da;margin-top:9px;padding-top:7px;display:grid;gap:6px}
+.qr-allergy-subtypes small{font-size:10px;color:#66806f}
+.qr-allergy-subtypes label{display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.3}
+.qr-allergy-clear{border:1px solid #cadccd;background:#fff;color:#174c36;padding:9px 12px;border-radius:10px;margin-top:12px;font-size:12px;font-weight:750}
+.qr-allergy-options .qr-allergy-safety{margin:13px 0 0;padding:10px 11px;border-radius:10px;background:#fff7e8;color:#775922;font-size:11px;line-height:1.5}
+.qr-product-allergens{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px}
+.qr-product-allergens span{border:1px solid #ead2a9;background:#fff6e6;color:#75562b;font-size:10px;border-radius:7px;padding:4px 6px;line-height:1.3}
+.qr-product-allergens span.may-contain{background:#f2f3ed;border-color:#e3e5d8;color:#63705b}
+.qr-product-allergens small{font-size:10px;color:#78897e;font-style:italic}
+.qr-guest-allergy-notice{background:#fff7e9;border:1px solid #f0d39a;border-radius:11px;padding:10px;color:#725019!important;font-size:12px!important;line-height:1.45}
+.qr-order-tracking{margin:0 0 28px;padding:19px;background:#fff;border:1px solid #dce8df;border-radius:19px;box-shadow:0 8px 26px #243c2b0a}
+.qr-order-tracking-head{display:flex;align-items:start;justify-content:space-between;gap:10px;margin-bottom:12px}
+.qr-order-tracking-head h2{font-size:22px;margin:4px 0 0}
+.qr-tracking-closed{padding:10px 12px;background:#edf2ef;color:#53675a;font-size:12px;border-radius:10px;margin:12px 0;line-height:1.5}
+.qr-tracking-empty{font-size:13px;color:#6b8170}
+.qr-tracking-request{background:#fbfcfa;border:1px solid #e0e9e1;border-radius:13px;padding:13px;margin-top:9px}
+.qr-tracking-request-head{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #e7eee8;padding-bottom:10px}
+.qr-tracking-request-head b{color:#174c36;font-size:12px}
+.qr-tracking-request-head small{font-size:11px;color:#829185;white-space:nowrap}
+.qr-tracking-item{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:9px 0;border-bottom:1px dashed #e1e9e2;font-size:12px;line-height:1.4}
+.qr-tracking-item span{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:650}
+.qr-tracking-item small{text-align:right;max-width:42%;color:#8b6824;font-size:11px}
+.qr-tracking-item small.is-served{color:#147346;font-weight:750}
+.qr-tracking-total{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;font-size:12px}
+.qr-tracking-total b{color:#174c36;font-size:14px}
+.qr-tracking-privacy{display:block;color:#7b8c7e;font-size:10px;line-height:1.45;margin-top:12px}
+.qr-order-tracking .qr-refresh{border-radius:10px;min-height:36px;padding:8px 10px}
+@media(max-width:650px){
+ .qr-order-tracking{padding:13px;border-radius:15px}
+ .qr-order-tracking-head h2{font-size:19px}
+ .qr-allergy-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .qr-allergy-choice{padding:8px}
+ .qr-product-allergens{margin-bottom:8px}
+}
+@media(max-width:360px){.qr-allergy-grid{grid-template-columns:1fr}}
