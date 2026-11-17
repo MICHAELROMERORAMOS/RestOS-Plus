@@ -87,3 +87,5 @@ html.qr-public-scroll .qr-menu {
  .qr-product-allergens{margin-bottom:8px}
 }
 @media(max-width:360px){.qr-allergy-grid{grid-template-columns:1fr}}
+
+.qr-new-visit{border:1px solid #bed3c3;background:#fff;color:#174c36;border-radius:11px;padding:10px 12px;font-size:12px;font-weight:800;margin:0 0 10px;min-height:40px}
