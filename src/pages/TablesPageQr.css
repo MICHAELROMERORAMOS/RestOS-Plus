@@ -36,3 +36,12 @@
   .table-shell .table-qr-pending,.table-shell .table-qr-alert{animation:none}
   .table-shell .table-qr-pending{outline-color:#e7952c}
 }
+
+/* Keep the QR action out of the table's capacity label in every viewport. */
+.table-shell .table-head{
+  padding-right:42px;
+  gap:7px;
+}
+@media(hover:none){
+  .table-shell .table-head{padding-right:49px}
+}
