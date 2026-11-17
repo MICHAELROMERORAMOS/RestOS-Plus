@@ -118,18 +118,22 @@ export default function PublicQrMenu() {
         setLoading(false)
         return
       }
-      const [catalog, tableResult] = await Promise.all([
+      const [catalog, tableResult, attentionResult] = await Promise.all([
         supabase.rpc('get_public_qr_menu', { p_location_id: locationId }),
         tableToken && /^[0-9a-f-]{36}$/i.test(tableToken)
           ? supabase.rpc('resolve_public_qr_table', { p_location_id: locationId, p_token: tableToken })
+          : Promise.resolve(null),
+        tableToken && /^[0-9a-f-]{36}$/i.test(tableToken)
+          ? supabase.rpc('get_qr_attention_public_settings', { p_location_id: locationId, p_qr_token: tableToken })
           : Promise.resolve(null),
       ])
       if (!mounted) return
       setMenu(catalog.data || null)
       setTable(tableResult?.data || null)
+      setAttentionEnabled(attentionResult?.data?.enabled === true)
       setTableError(tableToken && !tableResult?.data
         ? 'El QR de esta mesa no es válido. Pide al personal el código actualizado.' : '')
-      setError(catalog.error ? 'No se pudo cargar el menú.' : !catalog.data ? 'Menú no publicado.' : '')
+      setError(attentionResult?.data?.enabled === true ? '' : catalog.error ? 'No se pudo cargar el menú.' : !catalog.data ? 'Menú no publicado.' : '')
       setLoading(false)
     }
     initialize()
@@ -147,15 +151,6 @@ export default function PublicQrMenu() {
       }
     } catch { /* The menu remains usable when storage is restricted. */ }
   }, [visitKey])
-
-  useEffect(() => {
-    if (!locationId || !tableToken || !table || !supabase) return
-    let active=true
-    supabase.rpc('get_qr_attention_public_settings', {
-      p_location_id:locationId, p_qr_token:tableToken,
-    }).then(({data})=>{if(active) setAttentionEnabled(data?.enabled === true)})
-    return ()=>{active=false}
-  }, [locationId,tableToken,table])
 
   const refreshOrderStatus = useCallback(async (token) => {
     if (!token || !locationId || !tableToken) return
