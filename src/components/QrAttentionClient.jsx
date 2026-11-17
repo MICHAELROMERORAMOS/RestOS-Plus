@@ -121,7 +121,12 @@ export default function QrAttentionClient({ locationId, qrToken, table, orderSna
           {showStatus && <div className="qr-attention-status">
             <b>Estado de tu pedido</b>
             {orderSnapshot?.requests?.length
-              ? <p>Consulta el seguimiento privado de tus solicitudes en la sección «Estado de tu pedido» de esta misma página.</p>
+              ? <div className="qr-attention-private-orders">
+                  {orderSnapshot.requests.map(request => <div key={request.id} className="qr-attention-private-order">
+                    <strong>{request.status === 'reviewed' ? 'En preparación' : request.status === 'rejected' ? 'Rechazado' : 'Pendiente de confirmación'}</strong>
+                    {(request.items || []).map((item, index) => <p key={index}>{item.quantity} × {item.name}: {item.status === 'served' ? 'Entregado' : item.status === 'ready' ? 'Listo' : item.status === 'preparing' ? 'Preparando' : item.status === 'sent' ? 'Enviado' : 'En proceso'}</p>)}
+                  </div>)}
+                </div>
               : <p>Para consultar un pedido debes haberlo realizado desde esta misma visita. El código general no permite consultar cuentas ajenas.</p>}
             <button type="button" onClick={() => setShowStatus(false)}>Entendido</button>
           </div>}
