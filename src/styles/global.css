@@ -7693,3 +7693,10 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
 .qr-auth-provider-note{font-size:11px;line-height:1.5;color:var(--muted);padding:10px 12px;background:var(--bg);border-radius:10px;margin:11px 0 0}
 @media(max-width:780px){.qr-auth-mode-options{grid-template-columns:1fr}.qr-auth-mode-card{padding:10px}}
 @media(prefers-reduced-motion:reduce){.qr-auth-mode-card{transition:none}}
+
+/* Branch QR assistance settings — same visual system as the QR authentication controls. */
+.qr-attention-settings-panel{margin-top:17px;border-top:1px solid var(--line);padding-top:17px;display:grid;gap:12px}
+.qr-attention-feature-settings{border-radius:13px;border:1px solid var(--line);padding:2px 12px;background:var(--surface,#fff)}
+.qr-attention-feature-settings .operational-setting-row{border-bottom:1px solid var(--line);padding:12px 3px;margin:0}
+.qr-attention-feature-settings .operational-setting-row:last-child{border-bottom:0}
+.qr-attention-feature-settings .operational-setting-row small{display:block;margin-top:3px}
