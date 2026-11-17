@@ -4,16 +4,16 @@ import QrGuestOperations from '../components/QrGuestOperations.jsx'
 
 export default function QrOrdersPage() {
   const restaurant = useRestaurant()
-  const tables = (restaurant.state?.tables || []).filter(table => table.active !== false)
+  const { activeLocation, formatMoney } = restaurant
   return (
     <section className="view active">
       <div className="hero">
         <div>
           <h2>Pedidos QR</h2>
-          <p>Entrega un PIN de 4 números, permite que el cliente abra la mesa desde el QR y confirma las solicitudes directamente a preparación.</p>
+          <p>Revisa y confirma las solicitudes de los clientes. La generación de PIN se realiza directamente desde Mesas.</p>
         </div>
       </div>
-      <QrGuestOperations locationId={restaurant.activeLocation?.id} tables={tables} />
+      <QrGuestOperations locationId={activeLocation?.id} formatMoney={formatMoney} />
     </section>
   )
 }
