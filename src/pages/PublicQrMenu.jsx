@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase.js'
+import { guestSupabase as supabase } from '../lib/guestSupabase.js'
 import './PublicQrMenu.css'
 
 const safeMoney = (value, currency) => {
@@ -27,6 +27,10 @@ export default function PublicQrMenu() {
   const tableToken = new URLSearchParams(window.location.search).get('t')
   const visitKey = locationId && tableToken ? `restosplus:qr-visit:${locationId}:${tableToken}` : null
 
+  const [customerUser, setCustomerUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authError, setAuthError] = useState('')
   const [menu, setMenu] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -50,6 +54,31 @@ export default function PublicQrMenu() {
     document.documentElement.classList.add('qr-public-scroll')
     return () => document.documentElement.classList.remove('qr-public-scroll')
   }, [])
+
+  useEffect(() => {
+    let active = true
+    if (!supabase) { setAuthLoading(false); return undefined }
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) { setCustomerUser(data?.session?.user || null); setAuthLoading(false) }
+    }).catch(() => { if (active) setAuthLoading(false) })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) { setCustomerUser(session?.user || null); setAuthLoading(false) }
+    })
+    return () => { active = false; listener?.subscription?.unsubscribe() }
+  }, [])
+
+  const authMode = menu?.authMode || 'required'
+  const mustSignIn = authMode === 'required'
+  const canOpenTable = !authLoading && (!mustSignIn || Boolean(customerUser))
+  async function signInCustomer(provider) {
+    if (authBusy || !supabase) return
+    setAuthBusy(true);setAuthError('')
+    const redirectTo = window.location.origin + window.location.pathname + window.location.search
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider, options: { redirectTo },
+    })
+    if (signInError) { setAuthError(signInError.message);setAuthBusy(false) }
+  }
 
   const loadCatalog = useCallback(async () => {
     if (!locationId || !supabase) return
@@ -191,6 +220,7 @@ export default function PublicQrMenu() {
   }
 
   async function openMyTable() {
+    if (!canOpenTable) { setOrderError('Debes iniciar sesión con Google o Apple para pedir.');return }
     if (!table || !tableToken || !/^[0-9]{4}$/.test(accessCode) || opening) return
     setOpening(true)
     setOrderError('')
@@ -220,12 +250,14 @@ export default function PublicQrMenu() {
   }
 
   async function submitGuestRequest() {
+    if (!canOpenTable) { setOrderError('Debes iniciar sesión para realizar pedidos.');return }
     if (!table || !tableToken || !tableOpened || !cartItems.length || !/^[0-9]{4}$/.test(accessCode) || sending) return
     setSending(true)
     setOrderNotice('')
     setOrderError('')
     const { data, error: submitError } = await supabase.rpc('submit_qr_guest_request', {
       p_location_id: locationId, p_qr_token: tableToken, p_access_code: accessCode,
+      p_view_token: viewToken,
       p_items: cartItems.map(item => ({
         productId: item.id,
         quantity: item.quantity,
@@ -364,13 +396,37 @@ export default function PublicQrMenu() {
           {allergySelection.length > 0 && <p className="qr-guest-allergy-notice">⚠ Se comunicarán al personal las alergias seleccionadas. Comprueba los ingredientes antes de consumir.</p>}
         </>}
         {!orderSnapshot?.orderClosed && <>
+          {authMode !== 'disabled' && (
+            <div className="qr-customer-auth">
+              <div className="qr-customer-auth-heading">
+                <b>{customerUser ? 'Identidad del cliente verificada' : mustSignIn ? 'Identifícate para hacer pedidos' : 'Identificación opcional'}</b>
+                <small>{mustSignIn ? 'Inicia sesión y utiliza el PIN para abrir la mesa.' : 'Puedes identificarte para asociar las solicitudes a tu cuenta o continuar con el PIN.'}</small>
+              </div>
+              {customerUser ? (
+                <div className="qr-customer-profile">
+                  <span>✓ {customerUser.email || 'Cuenta conectada'}</span>
+                  <button type="button" onClick={async () => {
+                    await supabase.auth.signOut()
+                    setCustomerUser(null);setTableOpened(false);setViewToken('');setOrderSnapshot(null)
+                    try {if (visitKey) window.localStorage.removeItem(visitKey)} catch {}
+                  }}>Salir</button>
+                </div>
+              ) : (
+                <div className="qr-customer-provider-actions">
+                  <button type="button" className="qr-customer-provider" disabled={authBusy || authLoading} onClick={() => signInCustomer('google')}>Continuar con Google</button>
+                  <button type="button" className="qr-customer-provider" disabled={authBusy || authLoading} onClick={() => signInCustomer('apple')}>Continuar con Apple</button>
+                </div>
+              )}
+              {authError && <p role="alert" className="qr-table-warning">{authError}</p>}
+            </div>
+          )}
           {!viewToken && <label className="qr-guest-code">PIN de 4 números entregado por el personal
             <input value={accessCode} maxLength={4} inputMode="numeric" pattern="[0-9]{4}" autoComplete="off"
               onChange={e => setAccessCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0000" />
           </label>}
           {!tableOpened
-            ? <button className="qr-submit" type="button" onClick={openMyTable} disabled={accessCode.length !== 4 || opening}>{opening ? 'Abriendo…' : 'Abrir mi mesa'}</button>
-            : <button className="qr-submit" type="button" onClick={submitGuestRequest} disabled={!cartItems.length || sending || !/^[0-9]{4}$/.test(accessCode)}>{sending ? 'Enviando…' : 'Solicitar productos'}</button>}
+            ? <button className="qr-submit" type="button" onClick={openMyTable} disabled={accessCode.length !== 4 || opening || !canOpenTable}>{opening ? 'Abriendo…' : 'Abrir mi mesa'}</button>
+            : <button className="qr-submit" type="button" onClick={submitGuestRequest} disabled={!cartItems.length || sending || !canOpenTable || !viewToken || !/^[0-9]{4}$/.test(accessCode)}>{sending ? 'Enviando…' : 'Solicitar productos'}</button>}
         </>}
         {viewToken && tableOpened && !accessCode && <p className="qr-tracking-privacy">Para agregar más productos después de actualizar la página, introduce de nuevo el PIN de esta mesa.</p>}
         {viewToken && tableOpened && !/^[0-9]{4}$/.test(accessCode) && <label className="qr-guest-code">PIN para solicitar nuevos productos
