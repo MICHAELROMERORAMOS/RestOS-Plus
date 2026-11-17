@@ -16,11 +16,10 @@ function SettingsSection({
   description,
   icon,
   children,
-  defaultOpen = false,
   badge = null,
 }) {
   return (
-    <details className="settings-section" open={defaultOpen || undefined}>
+    <details className="settings-section">
       <summary className="settings-section-toggle">
         <span className="settings-section-icon" aria-hidden="true">{icon}</span>
         <span className="settings-section-copy">
@@ -74,6 +73,7 @@ export default function SettingsPage() {
   const [tableCapacity, setTableCapacity] = useState(2)
   const [editingZone, setEditingZone] = useState(null)
   const [editingTable, setEditingTable] = useState(null)
+  const [tableSettingsTab, setTableSettingsTab] = useState('register')
   const [currencySaving, setCurrencySaving] = useState(false)
   const [inventoryControlSaving, setInventoryControlSaving] = useState(false)
   const [operationSaving, setOperationSaving] = useState(false)
@@ -370,7 +370,6 @@ export default function SettingsPage() {
         description="Activa únicamente las estaciones que usa esta sucursal y define si trabajan con pantalla o impresora."
         icon="🍳"
         badge={activeLocation ? `${stationSettings.filter((station) => station.active).length} activas` : 'Sin sucursal'}
-        defaultOpen
       >
         {!activeLocation ? (
           <div className="notice warn">Selecciona primero una sucursal para configurar sus estaciones.</div>
@@ -487,21 +486,45 @@ export default function SettingsPage() {
 
       <SettingsSection
         title="Salones, áreas y mesas"
-        description="Crea y administra la distribución física del restaurante."
+        description="Registro, edición y códigos QR organizados en fichas compactas."
         icon="▦"
         badge={`${activeTables.length} mesas`}
       >
-        {!canManageTables && (
-          <div className="notice section-gap">Tu rol puede consultar mesas, pero no crear ni modificar zonas o mesas.</div>
+        <div className="settings-table-tabs" role="tablist" aria-label="Administración de salones y mesas">
+          <button type="button" role="tab" aria-selected={tableSettingsTab === 'register'} className={tableSettingsTab === 'register' ? 'active' : ''} onClick={() => setTableSettingsTab('register')}>＋ Registrar</button>
+          <button type="button" role="tab" aria-selected={tableSettingsTab === 'manage'} className={tableSettingsTab === 'manage' ? 'active' : ''} onClick={() => setTableSettingsTab('manage')}>▦ Administrar <small>{activeTables.length}</small></button>
+          <button type="button" role="tab" aria-selected={tableSettingsTab === 'qr'} className={tableSettingsTab === 'qr' ? 'active' : ''} onClick={() => setTableSettingsTab('qr')}>▣ QR por mesa</button>
+        </div>
+        {!canManageTables && tableSettingsTab !== 'qr' && (
+          <div className="notice">Tu rol puede consultar mesas, pero no crear, modificar ni eliminar zonas o mesas.</div>
         )}
 
-        <div className="grid two section-gap">
+        {tableSettingsTab === 'register' && (
+          <div className="settings-table-register-grid">
         <div className="card">
           <div className="section-title"><div><h3>Salones / áreas</h3><p className="muted">Ej.: Terraza, Salón 1, Salón 2. El nombre del área no se puede repetir.</p></div><span className="badge">{activeZones.length} activas</span></div>
           <form className="settings-form" onSubmit={submitZone}>
             <label><span>Nueva área</span><input disabled={!canManageTables || remoteLoading} value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ej. Terraza" /></label>
             <button className="btn primary" type="submit" disabled={!canManageTables || remoteLoading}>＋ Agregar área</button>
           </form>
+        </div>
+        <div className="card">
+          <div className="section-title"><div><h3>Mesas</h3><p className="muted">El nombre puede repetirse en áreas diferentes. Cada mesa conserva un ID interno permanente.</p></div><span className="badge">{activeTables.length} activas</span></div>
+          <form className="settings-form" onSubmit={submitTable}>
+            <label><span>Área</span><select disabled={!canManageTables || remoteLoading} value={tableZoneId} onChange={(event) => setTableZoneId(event.target.value)}><option value="">Selecciona un área</option>{activeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label>
+            <label><span>Nombre o número de mesa</span><input disabled={!canManageTables || remoteLoading} value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="Ej. Mesa 3" /></label>
+            <label><span>Capacidad</span><input disabled={!canManageTables || remoteLoading} type="number" min="1" value={tableCapacity} onChange={(event) => setTableCapacity(event.target.value)} /></label>
+            <button className="btn primary" type="submit" disabled={!canManageTables || remoteLoading || !activeZones.length}>＋ Agregar mesa</button>
+          </form>
+          {!activeZones.length && <div className="notice warn">Crea primero un salón o área para poder agregar mesas.</div>}
+        </div>
+          </div>
+        )}
+
+        {tableSettingsTab === 'manage' && (
+          <div className="settings-table-manage">
+            <div className="settings-table-subtitle"><h3>Salones y áreas</h3><span className="badge">{activeZones.length} activas</span></div>
+            <div className="settings-table-zones">
           <div className="list section-gap">
             {activeZones.length ? activeZones.map((zone) => {
               const tableCount = activeTables.filter((table) => table.zoneId === zone.id).length
@@ -516,41 +539,41 @@ export default function SettingsPage() {
               )
             }) : <div className="empty-inline">Todavía no hay salones o áreas. Crea primero un área.</div>}
           </div>
-        </div>
 
-        <div className="card">
-          <div className="section-title"><div><h3>Mesas</h3><p className="muted">El nombre puede repetirse en áreas diferentes. Cada mesa conserva un ID interno permanente.</p></div><span className="badge">{activeTables.length} activas</span></div>
-          <form className="settings-form" onSubmit={submitTable}>
-            <label><span>Área</span><select disabled={!canManageTables || remoteLoading} value={tableZoneId} onChange={(event) => setTableZoneId(event.target.value)}><option value="">Selecciona un área</option>{activeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label>
-            <label><span>Nombre o número de mesa</span><input disabled={!canManageTables || remoteLoading} value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="Ej. Mesa 3" /></label>
-            <label><span>Capacidad</span><input disabled={!canManageTables || remoteLoading} type="number" min="1" value={tableCapacity} onChange={(event) => setTableCapacity(event.target.value)} /></label>
-            <button className="btn primary" type="submit" disabled={!canManageTables || remoteLoading || !activeZones.length}>＋ Agregar mesa</button>
-          </form>
-          {!activeZones.length && <div className="notice warn">Crea primero un salón o área para poder agregar mesas.</div>}
-        </div>
-      </div>
-
-      <div className="card section-gap">
-        <div className="section-title"><h3>Mesas configuradas</h3><span className="badge">Por área</span></div>
-        {activeZones.length ? activeZones.map((zone) => {
-          const zoneTables = activeTables.filter((table) => table.zoneId === zone.id)
-          return (
-            <div key={zone.id} className="section-gap">
-              <div className="sent-head"><span>{zone.name.toUpperCase()}</span><span>{zoneTables.length} MESAS</span></div>
-              {zoneTables.length ? <div className="list">{zoneTables.map((table) => (
-                <div className="row" key={table.id}>
-                  <div><b>{table.name}</b><small>{table.capacity} puestos · ID {table.id.slice(0, 8)}…</small></div>
-                  <div className="line-actions">
-                    {canManageTables && <button className="mini" onClick={() => setEditingTable({ ...table })}>Editar</button>}
-                    {canManageTables && <button className="mini danger" onClick={() => confirmDeleteTable(table)}>Eliminar</button>}
-                  </div>
-                </div>
-              ))}</div> : <div className="empty-inline">Esta área todavía no tiene mesas.</div>}
             </div>
-          )
-        }) : <div className="empty-inline">No hay mesas configuradas.</div>}
-      </div>
-      <TableQrManager locationId={activeLocation?.id} tables={activeTables} canManage={canManageTables || canManageSettings} />
+            <div className="settings-table-subtitle"><h3>Mesas configuradas</h3><span className="badge">{activeTables.length} mesas</span></div>
+            {activeZones.length ? activeZones.map((zone) => {
+              const zoneTables = activeTables.filter((table) => table.zoneId === zone.id)
+              return (
+                <div className="settings-table-area" key={zone.id}>
+                  <div className="settings-table-area-label"><b>{zone.name}</b><small>{zoneTables.length} mesas</small></div>
+                  {zoneTables.length ? (
+                    <div className="settings-table-button-grid">
+                      {zoneTables.map((table) => (
+                        <div className="settings-table-button" key={table.id}>
+                          <div className="settings-table-button-copy">
+                            <b title={table.name}>{table.name}</b>
+                            <small>{table.capacity} puestos</small>
+                          </div>
+                          {canManageTables && <div className="settings-table-button-actions">
+                            <button type="button" className="mini" onClick={() => setEditingTable({ ...table })} aria-label={`Editar ${table.name}`}>Editar</button>
+                            <button type="button" className="mini danger" onClick={() => confirmDeleteTable(table)} aria-label={`Eliminar ${table.name}`}>×</button>
+                          </div>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="muted settings-table-empty">Sin mesas registradas en esta área.</p>}
+                </div>
+              )
+            }) : <div className="empty-inline">Todavía no hay áreas registradas.</div>}
+          </div>
+        )}
+
+        {tableSettingsTab === 'qr' && (
+          <div className="settings-table-qr">
+            <TableQrManager locationId={activeLocation?.id} tables={activeTables} canManage={canManageTables || canManageSettings} />
+          </div>
+        )}
       </SettingsSection>
 
       <SettingsSection
