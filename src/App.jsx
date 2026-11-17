@@ -182,9 +182,6 @@ function MainApplication() {
   }, [])
 
   function navigate(view) {
-    if (view !== 'order') {
-      try { window.sessionStorage.removeItem(orderContextKey) } catch {}
-    }
     if (view === 'tv') {
       const tvUrl = new URL(pathForView('tv'), window.location.origin)
       if (restaurant.activeLocation?.id) tvUrl.searchParams.set('location', restaurant.activeLocation.id)
@@ -199,6 +196,9 @@ function MainApplication() {
       return false
     }
 
+    if (view !== 'order') {
+      try { window.sessionStorage.removeItem(orderContextKey) } catch {}
+    }
     setActiveView(view)
     const nextPath = pathForView(view)
     if (window.location.pathname !== nextPath) {
