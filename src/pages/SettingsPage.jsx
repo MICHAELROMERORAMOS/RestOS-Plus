@@ -491,9 +491,9 @@ export default function SettingsPage() {
         badge={`${activeTables.length} mesas`}
       >
         <div className="settings-table-tabs" role="tablist" aria-label="Administración de salones y mesas">
-          <button type="button" role="tab" aria-selected={tableSettingsTab === 'register'} className={tableSettingsTab === 'register' ? 'active' : ''} onClick={() => setTableSettingsTab('register')}>＋ Registrar</button>
-          <button type="button" role="tab" aria-selected={tableSettingsTab === 'manage'} className={tableSettingsTab === 'manage' ? 'active' : ''} onClick={() => setTableSettingsTab('manage')}>▦ Administrar <small>{activeTables.length}</small></button>
-          <button type="button" role="tab" aria-selected={tableSettingsTab === 'qr'} className={tableSettingsTab === 'qr' ? 'active' : ''} onClick={() => setTableSettingsTab('qr')}>▣ QR por mesa</button>
+          <button type="button" role="tab" aria-selected={tableSettingsTab === 'register'} className={tableSettingsTab === 'register' ? 'active' : ''} onClick={() => setTableSettingsTab('register')}>Registrar</button>
+          <button type="button" role="tab" aria-selected={tableSettingsTab === 'manage'} className={tableSettingsTab === 'manage' ? 'active' : ''} onClick={() => setTableSettingsTab('manage')}>Administrar <small>{activeTables.length}</small></button>
+          <button type="button" role="tab" aria-selected={tableSettingsTab === 'qr'} className={tableSettingsTab === 'qr' ? 'active' : ''} onClick={() => setTableSettingsTab('qr')}>QR por mesa</button>
         </div>
         {!canManageTables && tableSettingsTab !== 'qr' && (
           <div className="notice">Tu rol puede consultar mesas, pero no crear, modificar ni eliminar zonas o mesas.</div>
@@ -557,7 +557,7 @@ export default function SettingsPage() {
                           </div>
                           {canManageTables && <div className="settings-table-button-actions">
                             <button type="button" className="mini" onClick={() => setEditingTable({ ...table })} aria-label={`Editar ${table.name}`}>Editar</button>
-                            <button type="button" className="mini danger" onClick={() => confirmDeleteTable(table)} aria-label={`Eliminar ${table.name}`}>×</button>
+                            <button type="button" className="mini danger" onClick={() => confirmDeleteTable(table)} aria-label={`Eliminar ${table.name}`}>Eliminar</button>
                           </div>}
                         </div>
                       ))}
