@@ -1,15 +1,39 @@
-.qr-pin-printable{display:none}
-@media print{
- body:has(.qr-pin-printable) *{visibility:hidden!important}
- body:has(.qr-pin-printable) .qr-pin-printable,
- body:has(.qr-pin-printable) .qr-pin-printable *{visibility:visible!important}
- body:has(.qr-pin-printable) .qr-pin-printable{
-  display:block!important;position:fixed;inset:auto;top:25mm;left:50%;transform:translateX(-50%);
-  width:82mm;max-width:82mm;background:#fff;text-align:center;border:2px solid #174c36;
-  border-radius:9px;padding:14mm 5mm;font-family:Arial,sans-serif;color:#142a1c
- }
- .qr-pin-printable h2{font-size:23px;margin:0 0 8mm}
- .qr-pin-printable p{font-size:13px;line-height:1.4;margin:5mm 0}
- .qr-pin-printable strong{font-size:46px;letter-spacing:7px;font-weight:900;display:block}
- .qr-pin-printable small{font-size:10px}
+/* Solicitudes QR: compact RestOS+ operational inbox */
+.qr-requests-workspace{min-width:0}
+.qr-requests-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.qr-requests-heading{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.qr-requests-heading h3{margin:0;font-size:19px}
+.qr-requests-toolbar .qr-requests-refresh{width:auto;min-height:38px;padding:8px 13px;white-space:nowrap;font-size:12px}
+.qr-requests-filters{display:flex;align-items:center;gap:12px;margin:14px 0 16px;flex-wrap:wrap}
+.qr-requests-search{flex:1 1 250px;min-width:0}
+.qr-requests-search input{display:block;width:100%;height:42px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:0 13px;font:inherit;font-size:13px;color:var(--ink)}
+.qr-requests-search input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.qr-requests-status-label{padding:7px 11px;border-radius:999px;background:#eef2ef;color:var(--brand);font-size:11px;font-weight:800}
+.qr-requests-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,310px),1fr));gap:12px;align-items:start}
+.qr-request-card{display:flex;flex-direction:column;gap:12px;min-width:0;border:1px solid var(--line);border-radius:16px;background:#fff;padding:15px;box-shadow:0 5px 20px #102f240a}
+.qr-request-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.qr-request-table{display:grid;gap:4px;min-width:0}
+.qr-request-table strong{font-size:17px;font-weight:900;overflow-wrap:anywhere}
+.qr-request-table small{font-size:11px;color:var(--muted)}
+.qr-request-status{flex:0 0 auto;padding:5px 9px;border-radius:999px;background:#fff2dc;color:#8a5b1c;font-size:10px;font-weight:850}
+.qr-request-items{display:grid;gap:7px;min-width:0}
+.qr-request-item{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:8px;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.qr-request-quantity{font-weight:850;color:var(--brand);white-space:nowrap}
+.qr-request-total{display:flex;justify-content:space-between;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:11px;font-size:12px}
+.qr-request-total>span{color:var(--muted)}
+.qr-request-total>strong{font-size:16px;white-space:nowrap}
+.qr-request-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:8px}
+.qr-request-actions .btn{width:100%;min-width:0;min-height:40px;padding:9px 8px;font-size:11px;line-height:1.25;white-space:normal;border-radius:11px}
+.qr-requests-empty{text-align:center;border:1px dashed #cfdcd2;border-radius:15px;padding:38px 16px;color:var(--muted)}
+.qr-requests-empty>span{display:inline-grid;place-items:center;border-radius:50%;width:38px;height:38px;background:#e9f5ed;color:var(--brand);margin-bottom:12px;font-weight:900}
+.qr-requests-empty strong{display:block;color:var(--ink);font-size:15px}
+.qr-requests-empty p{font-size:12px;line-height:1.5;margin:7px 0 0}
+.qr-requests-footnote{font-size:11px;line-height:1.5;color:var(--muted);margin:16px 0 0}
+.qr-requests-success{background:#eff9f2;border-color:#c7e4d0;color:#22633e}
+@media(max-width:650px){
+ .qr-requests-heading h3{font-size:17px}
+ .qr-requests-filters{margin:12px 0}
+ .qr-request-card{padding:13px}
+ .qr-requests-grid{grid-template-columns:1fr}
 }
+@media(prefers-reduced-motion:reduce){.qr-requests-workspace *{scroll-behavior:auto}}
