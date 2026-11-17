@@ -1,0 +1,15 @@
+.qr-pin-printable{display:none}
+@media print{
+ body:has(.qr-pin-printable) *{visibility:hidden!important}
+ body:has(.qr-pin-printable) .qr-pin-printable,
+ body:has(.qr-pin-printable) .qr-pin-printable *{visibility:visible!important}
+ body:has(.qr-pin-printable) .qr-pin-printable{
+  display:block!important;position:fixed;inset:auto;top:25mm;left:50%;transform:translateX(-50%);
+  width:82mm;max-width:82mm;background:#fff;text-align:center;border:2px solid #174c36;
+  border-radius:9px;padding:14mm 5mm;font-family:Arial,sans-serif;color:#142a1c
+ }
+ .qr-pin-printable h2{font-size:23px;margin:0 0 8mm}
+ .qr-pin-printable p{font-size:13px;line-height:1.4;margin:5mm 0}
+ .qr-pin-printable strong{font-size:46px;letter-spacing:7px;font-weight:900;display:block}
+ .qr-pin-printable small{font-size:10px}
+}
