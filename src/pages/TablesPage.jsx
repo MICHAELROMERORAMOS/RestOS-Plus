@@ -1,5 +1,9 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
+import { supabase } from '../lib/supabase.js'
+import TableQrContextMenu from '../components/TableQrContextMenu.jsx'
+import './TablesPageQr.css'
 
 function formatTime(value) {
   if (!value) return null
@@ -18,9 +22,10 @@ function shortName(value) {
   return `${parts[0]} ${parts[1]}`
 }
 
-export default function TablesPage({ onOpenTable }) {
+export default function TablesPage({ onOpenTable, onNavigate }) {
   const {
     state,
+    activeLocation,
     getTableVisualStatus,
     formatMoney,
     orderTotal,
@@ -35,6 +40,46 @@ export default function TablesPage({ onOpenTable }) {
   const [pendingTable, setPendingTable] = useState(null)
   const [openingTable, setOpeningTable] = useState(false)
   const [releasingTableId, setReleasingTableId] = useState(null)
+
+  const auth = useAuth()
+  const canManageQr = auth.can('orders.create') || auth.can('tables.manage') || auth.can('payments.create') || auth.can('settings.manage')
+  const [qrContext, setQrContext] = useState(null)
+  const [qrPendingCounts, setQrPendingCounts] = useState({})
+
+  useEffect(() => {
+    let mounted = true
+    const locationId = activeLocation?.id
+    setQrPendingCounts({})
+    setQrContext(null)
+    if (!locationId || !supabase) return undefined
+
+    async function refreshQrCounts() {
+      if (document.visibilityState === 'hidden') return
+      const { data, error } = await supabase.rpc('get_table_qr_pending_counts', {
+        p_location_id: locationId,
+      })
+      if (mounted && !error) setQrPendingCounts(data?.pendingByTable || {})
+    }
+    refreshQrCounts()
+    const timer = window.setInterval(refreshQrCounts, 8000)
+    window.addEventListener('focus', refreshQrCounts)
+    return () => {
+      mounted = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshQrCounts)
+    }
+  }, [activeLocation?.id])
+
+  function showQrContext(table, x, y) {
+    if (!canManageQr) return
+    setQrContext({
+      table,
+      position: {
+        left: Math.max(12, Math.min(x, window.innerWidth - 335)),
+        top: Math.max(12, Math.min(y, window.innerHeight - 365)),
+      },
+    })
+  }
 
   const labels = {
     free: 'LIBRE',
@@ -199,7 +244,7 @@ export default function TablesPage({ onOpenTable }) {
       <div className="hero tables-hero">
         <div>
           <h2>Mesas y salones</h2>
-          <p>Selecciona una mesa para abrir o continuar su pedido.</p>
+          <p>Selecciona una mesa para abrir o continuar su pedido. Clic derecho o ⋮ para generar el PIN QR; las solicitudes pendientes parpadean sobre la mesa.</p>
         </div>
       </div>
 
@@ -232,13 +277,15 @@ export default function TablesPage({ onOpenTable }) {
                   const canReleaseDraft = status === 'opening' && canReleaseTableDraftSession(table.id)
                   const canReleaseClear = status !== 'opening' && canReleaseSettledTable(table.id)
                   const responsible = shortName(session?.attendantName)
+                  const qrPendingCount = Number(qrPendingCounts[table.id] || 0)
 
                   return (
                     <div className="table-shell" key={table.id}>
                       <button
-                        className={`table ${status}`}
+                        className={`table ${status} ${qrPendingCount > 0 ? 'table-qr-pending' : ''}`}
                         style={statusStyle(status)}
                         onClick={() => handleTableClick(table)}
+                        onContextMenu={(event) => { event.preventDefault(); showQrContext(table, event.clientX, event.clientY) }}
                         aria-label={blockedByOther ? `${table.name}, otro usuario está tomando el pedido` : table.name}
                       >
                         <div className="table-head">
@@ -267,6 +314,33 @@ export default function TablesPage({ onOpenTable }) {
                         )}
                       </button>
 
+                      {qrPendingCount > 0 && (
+                        <button
+                          type="button"
+                          className="table-qr-alert"
+                          aria-label={`${qrPendingCount} solicitudes QR pendientes para ${table.name}. Abrir pedidos QR.`}
+                          title="Ver pedidos QR pendientes"
+                          onClick={() => onNavigate?.('qr-orders')}
+                        >
+                          🔔 {qrPendingCount} QR
+                        </button>
+                      )}
+
+                      {canManageQr && (
+                        <button
+                          type="button"
+                          className="table-qr-more"
+                          aria-label={`Opciones QR de ${table.name}`}
+                          title="Generar o consultar PIN QR (clic derecho)"
+                          onClick={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            showQrContext(table, rect.left, rect.bottom + 6)
+                          }}
+                        >
+                          ⋮
+                        </button>
+                      )}
+
                       {(canReleaseDraft || canReleaseClear) && (
                         <button
                           className="table-release-btn"
@@ -290,6 +364,19 @@ export default function TablesPage({ onOpenTable }) {
           </div>
         )
       })}
+
+      {qrContext && (
+        <TableQrContextMenu
+          table={qrContext.table}
+          locationId={activeLocation?.id}
+          position={qrContext.position}
+          onClose={() => setQrContext(null)}
+          onGoToRequests={() => {
+            setQrContext(null)
+            onNavigate?.('qr-orders')
+          }}
+        />
+      )}
 
       <div className={`modal ${pendingTable ? 'open' : ''}`} onClick={() => !openingTable && setPendingTable(null)}>
         <div className="modal-card table-open-modal" onClick={(event) => event.stopPropagation()}>
