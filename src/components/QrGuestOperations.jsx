@@ -1,18 +1,20 @@
 import React,{useEffect,useState} from 'react'
 import {supabase} from '../lib/supabase.js'
+import './QrGuestOperations.css'
 export default function QrGuestOperations({locationId,tables}){
  const [selected,setSelected]=useState('')
  const [session,setSession]=useState(null)
  const [requests,setRequests]=useState([])
  const [busy,setBusy]=useState(false)
  const [error,setError]=useState('')
+ const [printPin,setPrintPin]=useState(false)
  useEffect(()=>{setSelected('');setSession(null);setRequests([])},[locationId])
  async function loadRequests(){
   if(!locationId)return
   const {data,error:err}=await supabase.rpc('manage_qr_guest_requests',{p_location_id:locationId})
   if(err)setError(err.message);else setRequests(data?.requests||[])
  }
- useEffect(()=>{loadRequests()},[locationId])
+ useEffect(()=>{loadRequests();const timer=setInterval(loadRequests,15000);return ()=>clearInterval(timer)},[locationId])
  async function action(name){
   if(!selected)return
   setBusy(true);setError('')
@@ -26,6 +28,7 @@ export default function QrGuestOperations({locationId,tables}){
   const {data,error:err}=await supabase.rpc('manage_qr_guest_session',{p_table_id:id,p_action:'read'})
   if(err)setError(err.message);else setSession(data)
  }
+ function printAccessCode(){setPrintPin(true);setTimeout(()=>{window.print();setPrintPin(false)},150)}
  async function review(req,status){
   setBusy(true);setError('')
   const {error:err}=await supabase.rpc('manage_qr_guest_requests',{p_location_id:locationId,p_request_id:req.id,p_action:status})
@@ -39,13 +42,15 @@ export default function QrGuestOperations({locationId,tables}){
    <label><span>Mesa</span><select value={selected} onChange={e=>choose(e.target.value)}><option value="">Selecciona la mesa</option>{tables.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
   </div>
   {selected&&<div className="notice">
-   <b>{session?.active?'Sesión QR habilitada':'Sesión QR inactiva'}</b>
+   <b>{session?.active?(session.claimed?'Mesa abierta por el cliente':'PIN listo para entregar'):'Sesión QR inactiva'}</b>
    {session?.active&&<div style={{marginTop:8}}>PIN para entregar al cliente: <strong style={{fontSize:20,letterSpacing:2}}>{session.code}</strong><br/><small>Expira: {new Date(session.expiresAt).toLocaleString()}</small></div>}
    <div className="line-actions" style={{marginTop:10}}>
     <button type="button" className="btn primary" disabled={busy||session?.active} onClick={()=>action('open')}>Generar PIN para esta mesa</button>
+    {session?.active && <button type="button" className="btn" onClick={printAccessCode}>Imprimir PIN</button>}
     <button type="button" className="btn" disabled={busy||!session?.active} onClick={()=>action('close')}>Cerrar sesión QR</button>
    </div>
   </div>}
+  {printPin&&session?.active&&<div className="qr-pin-printable"><h2>{tables.find(t=>t.id===selected)?.name || 'Mesa'}</h2><p>PIN para abrir tu mesa</p><strong>{session.code}</strong><p>Escanea el QR impreso de tu mesa e introduce este PIN de 4 números.</p><small>Válido solo para el servicio actual · RestOS+</small></div>}
   {error&&<div role="alert" className="notice warn">{error}</div>}
   <div className="section-title section-gap"><h4>Solicitudes por revisar ({requests.length})</h4><button className="mini" onClick={loadRequests}>Actualizar</button></div>
   <div className="list">{requests.map(req=><div className="row" key={req.id} style={{alignItems:'start',gap:12}}>
