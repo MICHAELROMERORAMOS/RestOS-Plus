@@ -52,3 +52,53 @@
     grid-template-columns:minmax(0,1fr);
   }
 }
+
+
+/* QR preview: keep the dialog inside the visible viewport and let its content scroll.
+   Scoped to this dialog so other RestOS+ modals retain their current behavior. */
+.table-qr-modal{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.table-qr-modal>.modal-card{
+  width:min(520px,100%);
+  max-height:calc(100vh - 40px);
+  max-height:calc(100dvh - 40px);
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.table-qr-modal .table-qr-modal-head{
+  position:sticky;
+  top:-22px;
+  z-index:2;
+  background:#fff;
+  padding:9px 0;
+}
+.table-qr-modal .table-qr-modal-head .btn{
+  flex:0 0 auto;
+}
+.table-qr-modal .table-qr-modal-actions{
+  flex-wrap:wrap;
+}
+@media(max-width:650px){
+  .table-qr-modal{padding:12px}
+  .table-qr-modal>.modal-card{
+    max-height:calc(100vh - 24px);
+    max-height:calc(100dvh - 24px);
+    padding:16px;
+  }
+  .table-qr-modal .table-qr-modal-head{top:-16px}
+  .table-qr-modal .table-qr-printable{padding:14px}
+  .table-qr-modal .table-qr-modal-actions .btn{flex:1 1 145px}
+}
+@media print{
+  .table-qr-modal{overflow:visible!important}
+  .table-qr-modal>.modal-card{
+    max-height:none!important;
+    overflow:visible!important;
+  }
+  .table-qr-modal .table-qr-modal-head{position:static}
+}
