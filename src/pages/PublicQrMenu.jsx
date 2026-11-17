@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { guestSupabase as supabase } from '../lib/guestSupabase.js'
+import { guestSupabase as supabase, getGuestOAuthProviders } from '../lib/guestSupabase.js'
 import './PublicQrMenu.css'
 
 const safeMoney = (value, currency) => {
@@ -31,6 +31,7 @@ export default function PublicQrMenu() {
   const [authLoading, setAuthLoading] = useState(true)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [providerAvailability, setProviderAvailability] = useState(null)
   const [menu, setMenu] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -67,17 +68,33 @@ export default function PublicQrMenu() {
     return () => { active = false; listener?.subscription?.unsubscribe() }
   }, [])
 
+  useEffect(() => {
+    let active = true
+    getGuestOAuthProviders().then(p => { if (active) setProviderAvailability(p) })
+      .catch(() => { if (active) setProviderAvailability(null) })
+    return () => { active = false }
+  }, [])
+
   const authMode = menu?.authMode || 'required'
   const mustSignIn = authMode === 'required'
   const canOpenTable = !authLoading && (!mustSignIn || Boolean(customerUser))
   async function signInCustomer(provider) {
     if (authBusy || !supabase) return
-    setAuthBusy(true);setAuthError('')
-    const redirectTo = window.location.origin + window.location.pathname + window.location.search
-    const { error: signInError } = await supabase.auth.signInWithOAuth({
-      provider, options: { redirectTo },
-    })
-    if (signInError) { setAuthError(signInError.message);setAuthBusy(false) }
+    setAuthBusy(true)
+    setAuthError('')
+    try {
+      const providers = await getGuestOAuthProviders()
+      setProviderAvailability(providers)
+      if (!providers[provider]) {
+        setAuthError('El acceso con ' + (provider === 'google' ? 'Google' : 'Apple') + ' aún no está configurado. Solicita ayuda al personal.')
+        return
+      }
+      const redirectTo = window.location.origin + window.location.pathname + window.location.search
+      const { error: signInError } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } })
+      if (signInError) setAuthError(signInError.message)
+    } catch {
+      setAuthError('No fue posible comprobar el inicio de sesión. Inténtalo nuevamente.')
+    } finally { setAuthBusy(false) }
   }
 
   const loadCatalog = useCallback(async () => {
@@ -413,9 +430,12 @@ export default function PublicQrMenu() {
                 </div>
               ) : (
                 <div className="qr-customer-provider-actions">
-                  <button type="button" className="qr-customer-provider" disabled={authBusy || authLoading} onClick={() => signInCustomer('google')}>Continuar con Google</button>
-                  <button type="button" className="qr-customer-provider" disabled={authBusy || authLoading} onClick={() => signInCustomer('apple')}>Continuar con Apple</button>
+                  <button type="button" className="qr-customer-provider" disabled={authBusy || authLoading || providerAvailability?.google === false} onClick={() => signInCustomer('google')}>Continuar con Google</button>
+                  <button type="button" className="qr-customer-provider" disabled={authBusy || authLoading || providerAvailability?.apple === false} onClick={() => signInCustomer('apple')}>Continuar con Apple</button>
                 </div>
+              )}
+              {providerAvailability && !providerAvailability.google && !providerAvailability.apple && (
+                <p role="status" className="qr-table-warning">Google y Apple todavía no están habilitados. El menú sigue disponible, pero para realizar pedidos con autenticación obligatoria el administrador debe configurar uno de estos accesos.</p>
               )}
               {authError && <p role="alert" className="qr-table-warning">{authError}</p>}
             </div>
