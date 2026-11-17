@@ -7466,3 +7466,77 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
   .settings-compact-grid>.settings-section[open]{grid-column:auto}
   .settings-compact-grid .settings-section-toggle{min-height:53px}
 }
+
+
+/* Compact three-tab management within the collapsed branch settings section */
+.settings-table-tabs{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;margin:0 0 12px;padding:4px;border-radius:13px;background:#eff3f0;
+}
+.settings-table-tabs button{
+  min-width:0;min-height:39px;padding:7px 9px;border:1px solid transparent;
+  border-radius:9px;background:transparent;color:#52645a;font-size:12px;font-weight:850;
+  cursor:pointer;white-space:normal;line-height:1.25;
+}
+.settings-table-tabs button.active{
+  border-color:#c8d9cd;background:white;color:#185439;box-shadow:0 2px 6px #102f2414;
+}
+.settings-table-tabs button small{
+  display:inline-block;margin-left:4px;padding:1px 6px;border-radius:10px;background:#e6f0e9;font-size:10px;
+}
+.settings-table-tabs button:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+.settings-table-register-grid{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start;
+}
+.settings-table-register-grid>.card{margin:0;min-width:0}
+.settings-table-register-grid .section-title{gap:7px}
+.settings-table-register-grid .section-title h3{font-size:15px}
+.settings-table-register-grid .section-title p{font-size:11px;line-height:1.3}
+.settings-table-register-grid .settings-form{gap:8px}
+.settings-table-register-grid .settings-form label{gap:4px}
+.settings-table-register-grid .settings-form label>span{font-size:11px}
+.settings-table-register-grid .btn{min-height:36px;padding:8px 11px;font-size:12px}
+.settings-table-manage{display:grid;gap:10px}
+.settings-table-subtitle{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:2px 0 0;padding-bottom:6px;border-bottom:1px solid var(--line);
+}
+.settings-table-subtitle h3{font-size:15px;margin:0}
+.settings-table-zones .list{margin:0;display:grid;gap:5px}
+.settings-table-zones .row{
+  display:flex;gap:10px;justify-content:space-between;align-items:center;
+  border:1px solid var(--line);border-radius:9px;padding:7px 9px;
+}
+.settings-table-zones .row small{display:block;font-size:11px}
+.settings-table-zones .line-actions{display:flex;gap:5px}
+.settings-table-zones .mini{font-size:11px;min-height:30px;padding:5px 8px}
+.settings-table-area{display:grid;gap:7px}
+.settings-table-area-label{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.settings-table-area-label b{font-size:12px}
+.settings-table-area-label small{font-size:10px;color:var(--muted)}
+.settings-table-button-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(164px,1fr));gap:7px}
+.settings-table-button{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  min-width:0;padding:7px 8px;border:1px solid #d9e5dc;border-radius:10px;background:#f9fbf9;
+}
+.settings-table-button-copy{display:grid;min-width:0;gap:2px}
+.settings-table-button-copy>b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.settings-table-button-copy>small{font-size:10px;color:var(--muted)}
+.settings-table-button-actions{display:flex;gap:4px;flex:0 0 auto}
+.settings-table-button-actions .mini{
+  border-radius:7px;min-height:29px;padding:4px 6px;font-size:10px;
+}
+.settings-table-button-actions .danger{font-size:16px;min-width:28px}
+.settings-table-empty{font-size:11px;margin:0 0 4px}
+.settings-table-qr>.table-qr-manager{margin:0}
+.settings-table-qr .table-qr-row{padding:7px 9px}
+.settings-table-qr .table-qr-actions{gap:5px}
+.settings-table-qr .table-qr-actions .mini{font-size:11px;padding:6px 8px}
+@media(max-width:850px){
+  .settings-table-register-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:480px){
+  .settings-table-tabs{gap:3px;padding:3px}
+  .settings-table-tabs button{padding:7px 4px;font-size:10px;min-height:42px}
+  .settings-table-button-grid{grid-template-columns:repeat(auto-fill,minmax(144px,1fr))}
+}
