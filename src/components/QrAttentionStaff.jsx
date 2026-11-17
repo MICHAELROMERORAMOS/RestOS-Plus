@@ -26,28 +26,22 @@ export default function QrAttentionStaff({ locationId }) {
     const {data,error:err} = await supabase.rpc('manage_qr_attention_requests',{p_location_id:locationId})
     if(epoch!==refreshId.current)return
     if(err)setError(err.message)
-    else {setRequests(data?.requests || []);setError('')}
-  },[locationId])
-  const loadSettings = useCallback(async () => {
-    if (!locationId) return
-    const {data,error:err}=await supabase.rpc('manage_qr_attention_settings',{p_location_id:locationId})
-    if(!err)setSettings(data)
+    else {setRequests(data?.requests || []);setSettings({enabled:data?.enabled === true});setError('')}
   },[locationId])
 
   useEffect(()=>{
     setRequests([]);setSettings(null);setDisplay(null);setNotice('')
     if(!locationId)return
     void refreshRequests()
-    void loadSettings()
     // Only staff screens subscribe. QR customer devices do not open Realtime sockets.
     const channel=supabase.channel('restos-attention-'+locationId)
       .on('postgres_changes',{event:'*',schema:'public',table:'qr_attention_requests',filter:'location_id=eq.'+locationId},
         ()=>{if(document.visibilityState==='visible') void refreshRequests()})
       .subscribe(status=>setConnected(status==='SUBSCRIBED'))
-    const onFocus=()=>{void refreshRequests();void loadSettings()}
+    const onFocus=()=>{void refreshRequests()}
     window.addEventListener('focus',onFocus)
     return ()=>{++refreshId.current;window.removeEventListener('focus',onFocus);void supabase.removeChannel(channel)}
-  },[locationId,refreshRequests,loadSettings])
+  },[locationId,refreshRequests])
 
   const refreshDisplay = useCallback(async () => {
     if(!locationId)return
