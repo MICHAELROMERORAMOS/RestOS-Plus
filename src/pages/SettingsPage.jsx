@@ -249,13 +249,19 @@ export default function SettingsPage() {
   return (
     <section className="view active">
       <div className="hero"><div><h2>Configuración</h2><p>Restaurante, operación, salones/áreas, mesas, pagos e integraciones.</p></div></div>
-      <QrMenuSettings locationId={activeLocation?.id} canManage={canManageSettings} />
+      <div className="settings-compact-grid">
+        <SettingsSection
+          title="Menú QR público"
+          description="Publicación y enlace del menú digital de esta sucursal."
+          icon="📱"
+        >
+          <QrMenuSettings locationId={activeLocation?.id} canManage={canManageSettings} />
+        </SettingsSection>
 
       <SettingsSection
         title="Operación e integraciones"
         description="Moneda, identificación de servicio rápido, preparación e inventario."
         icon="⚙️"
-        defaultOpen
       >
         <div className="grid two">
         <div className="card">
@@ -557,6 +563,7 @@ export default function SettingsPage() {
         <div className="card"><h3>Servicio rápido / Prepago</h3><p className="muted">Se cobra antes de preparar. Puede usar un número manual, turno automático o nombre del cliente según la configuración.</p></div>
       </div>
       </SettingsSection>
+      </div>
 
       {editingZone && (
         <div className="modal open">
