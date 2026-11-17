@@ -7677,3 +7677,19 @@ html[data-restos-surface="platform-admin"] .developer-console-header{
   .settings-compact-grid .settings-table-tabs button,
   .settings-compact-grid .settings-table-button{transition:none}
 }
+
+/* Customer QR authentication policy: native RestOS+ branch-settings cards */
+.qr-auth-settings{margin-top:14px;border-top:1px solid var(--line);padding-top:13px}
+.qr-auth-settings-head{display:grid;gap:4px;margin-bottom:11px}
+.qr-auth-settings-head b{font-size:14px;color:var(--ink)}
+.qr-auth-settings-head small{font-size:11px;color:var(--muted)}
+.qr-auth-mode-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.qr-auth-mode-card{display:flex;gap:9px;align-items:flex-start;min-width:0;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
+.qr-auth-mode-card.selected{border-color:var(--brand);background:#edf6f0}
+.qr-auth-mode-card input{accent-color:var(--brand);width:17px;height:17px;flex:0 0 auto;margin:2px 0 0}
+.qr-auth-mode-card span{display:grid;gap:5px}
+.qr-auth-mode-card b{font-size:12px;color:var(--ink)}
+.qr-auth-mode-card small{font-size:11px;color:var(--muted);line-height:1.35}
+.qr-auth-provider-note{font-size:11px;line-height:1.5;color:var(--muted);padding:10px 12px;background:var(--bg);border-radius:10px;margin:11px 0 0}
+@media(max-width:780px){.qr-auth-mode-options{grid-template-columns:1fr}.qr-auth-mode-card{padding:10px}}
+@media(prefers-reduced-motion:reduce){.qr-auth-mode-card{transition:none}}
