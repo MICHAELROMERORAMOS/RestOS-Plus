@@ -3684,7 +3684,7 @@ export function RestaurantProvider({ children }) {
     orderPaidTotal,
     orderBalance,
   }), [
-    state, products, menuCategories, menuStations, allergenCatalog, locations, activeLocation, switchLocation, remoteLoading, remoteError,
+    state, products, menuCategories, menuStations, allergenCatalog, locations, activeLocation, switchLocation, remoteLoading, operationalReadyLocationId, remoteError,
     operationalSummary, voidRequestsVersion, tableOrderSessions, tableDrafts, inventoryAvailability,
     orderAllergies, saveCurrentOrderAllergies,
     refreshMenu, refreshInventoryAvailability, refreshRemoteData, refreshOperationalData, refreshOperationalOrdersByIds,
