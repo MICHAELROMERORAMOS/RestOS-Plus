@@ -1,1 +1,54 @@
 .table-qr-manager .table-qr-list{display:grid;gap:9px;margin-top:14px}.table-qr-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:13px}.table-qr-ident{display:grid;gap:3px}.table-qr-ident small{color:var(--muted)}.table-qr-actions{display:flex;flex-wrap:wrap;gap:7px}.table-qr-printable{text-align:center;border:2px solid #174c36;border-radius:18px;background:#fff;padding:22px;max-width:350px;margin:auto}.table-qr-printable h2{font-size:32px;margin:14px 0 2px}.table-qr-printable p{color:#456052}.table-qr-printable img{display:block;max-width:100%;margin:16px auto}.table-qr-brand{letter-spacing:.14em;color:#174c36}.table-qr-modal-actions{display:flex;gap:10px;justify-content:center;margin-top:15px}@media(max-width:650px){.table-qr-row{align-items:flex-start;flex-direction:column}.table-qr-actions{width:100%}}@media print{body:has(.table-qr-modal) *{visibility:hidden!important}body:has(.table-qr-modal) .table-qr-printable,body:has(.table-qr-modal) .table-qr-printable *{visibility:visible!important}body:has(.table-qr-modal) .table-qr-printable{position:fixed;left:50%;top:30mm;transform:translateX(-50%);width:85mm;max-width:85mm;border:1px solid #174c36;box-shadow:none}body:has(.table-qr-modal) .table-qr-printable img{width:55mm;height:55mm}}
+
+/* Compact QR management cards under Settings > Salones, áreas y mesas > QR */
+.settings-table-qr .table-qr-manager .table-qr-list{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(245px,1fr));
+  gap:8px;
+  margin-top:10px;
+}
+.settings-table-qr .table-qr-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  align-items:start;
+  gap:8px;
+  min-width:0;
+  padding:10px;
+  border-radius:11px;
+}
+.settings-table-qr .table-qr-ident{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:5px;
+}
+.settings-table-qr .table-qr-ident b{font-size:13px}
+.settings-table-qr .table-qr-ident small{font-size:11px}
+.settings-table-qr .table-qr-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:5px;
+  width:100%;
+}
+.settings-table-qr .table-qr-actions .mini{
+  min-width:0;
+  min-height:31px;
+  font-size:10px;
+  line-height:1.2;
+  padding:5px;
+  white-space:normal;
+}
+.settings-table-qr .table-qr-manager .notice{
+  padding:9px 11px;
+  margin-top:8px;
+  font-size:11px;
+}
+.settings-table-qr .table-qr-manager .section-title{gap:8px}
+.settings-table-qr .table-qr-manager .section-title h3{font-size:15px}
+.settings-table-qr .table-qr-manager .section-title p{font-size:11px}
+@media(max-width:530px){
+  .settings-table-qr .table-qr-manager .table-qr-list{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
