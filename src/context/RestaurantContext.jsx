@@ -339,6 +339,7 @@ export function RestaurantProvider({ children }) {
   const [locations, setLocations] = useState([])
   const [activeLocation, setActiveLocation] = useState(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
+  const [operationalReadyLocationId, setOperationalReadyLocationId] = useState(null)
   const [remoteError, setRemoteError] = useState('')
   const [operationalSummary, setOperationalSummary] = useState({
     salesToday: 0,
@@ -845,11 +846,13 @@ export function RestaurantProvider({ children }) {
       setProducts(DEMO_PRODUCTS)
       setAllergenCatalog([])
       setRemoteError('')
+      setOperationalReadyLocationId(activeLocation?.id || 'design-location')
       return { ok: true }
     }
 
     if (auth.mode !== 'authenticated' || !restaurantId) return { ok: false }
 
+    setOperationalReadyLocationId(null)
     setRemoteLoading(true)
     setRemoteError('')
 
@@ -909,6 +912,7 @@ export function RestaurantProvider({ children }) {
         applyOperationalOrders([])
       }
 
+      setOperationalReadyLocationId(structure.location?.id || null)
       return { ok: true, location: structure.location, locations: structure.locations || [] }
     } catch (error) {
       const message = error?.message || 'No se pudieron cargar los datos operativos desde Supabase.'
@@ -3597,6 +3601,7 @@ export function RestaurantProvider({ children }) {
     activeLocation,
     switchLocation,
     remoteLoading,
+    operationalReadyLocationId,
     remoteError,
     operationalSummary,
     voidRequestsVersion,
