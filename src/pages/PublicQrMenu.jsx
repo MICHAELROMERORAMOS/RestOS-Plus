@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { guestSupabase as supabase, getGuestOAuthProviders } from '../lib/guestSupabase.js'
 import './PublicQrMenu.css'
+import QrAttentionClient from '../components/QrAttentionClient.jsx'
 
 const safeMoney = (value, currency) => {
   try {
@@ -27,6 +28,8 @@ export default function PublicQrMenu() {
   const tableToken = new URLSearchParams(window.location.search).get('t')
   const visitKey = locationId && tableToken ? `restosplus:qr-visit:${locationId}:${tableToken}` : null
 
+  const [showMenuAfterAttention, setShowMenuAfterAttention] = useState(false)
+  const [attentionEnabled, setAttentionEnabled] = useState(false)
   const [customerUser, setCustomerUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authBusy, setAuthBusy] = useState(false)
@@ -144,6 +147,15 @@ export default function PublicQrMenu() {
       }
     } catch { /* The menu remains usable when storage is restricted. */ }
   }, [visitKey])
+
+  useEffect(() => {
+    if (!locationId || !tableToken || !table || !supabase) return
+    let active=true
+    supabase.rpc('get_qr_attention_public_settings', {
+      p_location_id:locationId, p_qr_token:tableToken,
+    }).then(({data})=>{if(active) setAttentionEnabled(data?.enabled === true)})
+    return ()=>{active=false}
+  }, [locationId,tableToken,table])
 
   const refreshOrderStatus = useCallback(async (token) => {
     if (!token || !locationId || !tableToken) return
@@ -308,6 +320,17 @@ export default function PublicQrMenu() {
     </header>
     <div className="qr-content">
       {tableError && <div role="alert" className="qr-table-warning">{tableError}</div>}
+      {table && tableToken && attentionEnabled && (
+        <QrAttentionClient locationId={locationId} qrToken={tableToken} table={table}
+          orderSnapshot={orderSnapshot} onShowMenu={() => {
+            setShowMenuAfterAttention(true)
+            document.getElementById('qr-digital-menu')?.scrollIntoView({behavior:'smooth',block:'start'})
+          }} />
+      )}
+      {attentionEnabled && !showMenuAfterAttention && <div className="qr-attention-menu-intro">
+        <button type="button" className="qr-refresh" onClick={() => setShowMenuAfterAttention(true)}>Consultar la carta sin utilizar el servicio de atención</button>
+      </div>}
+      {(!attentionEnabled || showMenuAfterAttention) && <>
       {table && <div className="qr-table-info">Mesa: <b>{table.tableName}</b>. {tableOpened ? 'Tu cuenta está abierta.' : orderSnapshot?.orderClosed ? 'La cuenta de esta visita está cerrada.' : 'Introduce el PIN de la mesa para abrir tu cuenta.'}</div>}
       {viewToken && orderSnapshot?.authorized && (
         <section className="qr-order-tracking" id="estado-pedido" aria-live="polite">
@@ -343,7 +366,7 @@ export default function PublicQrMenu() {
           <small className="qr-tracking-privacy">Solo muestra las solicitudes asociadas a esta visita. No incluye pedidos de otros clientes de la mesa.</small>
         </section>
       )}
-      {menu && <>
+      {menu && <div id="qr-digital-menu">
         <div className="qr-heading"><div><small>DESCUBRE NUESTROS SABORES</small><h2>Nuestra carta</h2></div><button type="button" className="qr-refresh" onClick={loadCatalog}>↻ Actualizar existencias</button></div>
         <label className="qr-search"><span aria-hidden="true">⌕</span><input placeholder="Buscar platos o bebidas" aria-label="Buscar productos" value={search} onChange={e => setSearch(e.target.value)} /></label>
         <section className="qr-allergy-filter">
@@ -403,7 +426,7 @@ export default function PublicQrMenu() {
           </article>)}
         </div>
         {!products.length && <div className="qr-empty">No encontramos productos disponibles con estos filtros.</div>}
-      </>}
+      </div>}
       {table && <section className="qr-guest-checkout">
         <h2>{tableOpened ? 'Tu selección' : 'Acceso a tu mesa'}</h2>
         {tableOpened && <>
@@ -456,6 +479,7 @@ export default function PublicQrMenu() {
         {orderError && <p role="alert" className="qr-table-warning">{orderError}</p>}
         <small>El personal confirma cada solicitud antes de enviarla a cocina. La disponibilidad puede variar hasta ese momento.</small>
       </section>}
+      </>}
       <footer className="qr-footer">Menú digital de {menu?.restaurant?.name || 'RestOS+'} · Powered by RestOS+</footer>
     </div>
   </main>
