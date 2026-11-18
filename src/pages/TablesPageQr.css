@@ -1,13 +1,7 @@
 /* Scoped floor alerts: never overwrite existing POS table state colors. */
 .table-shell{position:relative}
-.table-shell .table-qr-more{
-  position:absolute;top:7px;right:7px;z-index:2;display:grid;place-items:center;
-  width:35px;height:35px;border:1px solid #d4ded7;border-radius:10px;
-  color:#244e3a;background:#ffffffed;font-size:24px;font-weight:700;line-height:1;
-  box-shadow:0 2px 8px #102f241a
-}
 .table-shell .table-qr-alert{
-  position:absolute;top:9px;right:48px;z-index:3;border:1px solid #e5a54a;
+  position:absolute;top:9px;right:7px;z-index:3;border:1px solid #e5a54a;
   border-radius:10px;background:#fff1d8;color:#793e00;font-weight:900;
   font-size:12px;line-height:1.25;padding:7px 9px;box-shadow:0 2px 8px #8c47002a;
   animation:tableQrBadgePulse 1.3s ease-in-out infinite
@@ -25,23 +19,19 @@
   0%,100%{background:#fff1d8}
   50%{background:#ffc86b}
 }
-.table-shell .table-qr-more:focus-visible,.table-shell .table-qr-alert:focus-visible{
+.table-shell .table-qr-alert:focus-visible{
   outline:3px solid #2563eb;outline-offset:2px
 }
 @media(hover:none){
-  .table-shell .table-qr-more{width:42px;height:42px;top:5px;right:5px}
-  .table-shell .table-qr-alert{right:52px;min-height:40px}
+  .table-shell .table-qr-alert{right:7px;min-height:40px}
 }
 @media(prefers-reduced-motion:reduce){
   .table-shell .table-qr-pending,.table-shell .table-qr-alert{animation:none}
   .table-shell .table-qr-pending{outline-color:#e7952c}
 }
 
-/* Keep the QR action out of the table's capacity label in every viewport. */
-.table-shell .table-head{
-  padding-right:42px;
-  gap:7px;
-}
-@media(hover:none){
-  .table-shell .table-head{padding-right:49px}
-}
+
+/* The table is the touch target; hold for 850ms to access its options. */
+.table-shell .table{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.table-qr-disabled-label{display:block;background:#f4e8e7;color:#923c35!important;border-radius:6px;padding:3px 5px;font-size:10px;font-weight:800;text-align:center}
+@media(prefers-reduced-motion:reduce){.table-qr-disabled-label{animation:none}}
