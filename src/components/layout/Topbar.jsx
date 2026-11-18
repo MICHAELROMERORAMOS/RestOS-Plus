@@ -12,6 +12,8 @@ export default function Topbar({
   onLocationChange,
   workspaceMode = 'branch',
   canCompanyControl = false,
+  canViewQrCode = false,
+  onShowQrCode,
   onEnterCentral,
   onEnterBranch,
   onLogout,
@@ -139,6 +141,7 @@ export default function Topbar({
             <button className="btn" onClick={onEnterCentral}>🏢 Control central</button>
           )}
 
+          {isBranch && canViewQrCode && <button className="btn" type="button" onClick={onShowQrCode} title="Mostrar el código de seis dígitos para solicitar atención">🔐 Código QR</button>}
           {isBranch && canKitchen && <button className="btn" onClick={onKitchen}>🍳 Cocina</button>}
           {isBranch && canOrder && <button className="btn primary" onClick={onNewOrder}>＋ Nuevo pedido</button>}
         </div>
