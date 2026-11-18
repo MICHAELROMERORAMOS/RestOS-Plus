@@ -9,7 +9,7 @@ const ACTIONS = [
   { id: 'order_status', icon: '📋', title: 'Estado del pedido', text: 'Consultar mis pedidos' },
 ]
 
-export default function QrAttentionClient({ locationId, qrToken, table, orderSnapshot, onShowMenu, onAuthorized, onRequestOrder, canOrderProducts = false }) {
+export default function QrAttentionClient({ locationId, qrToken, table, orderSnapshot, onShowMenu, onAuthorized, onRequestOrder, canOrderProducts = false, menuAvailable = false }) {
   const [settings, setSettings] = useState(null)
   const [code, setCode] = useState('')
   const [token, setToken] = useState('')
@@ -149,7 +149,7 @@ export default function QrAttentionClient({ locationId, qrToken, table, orderSna
       )}
       {message && <p className="qr-attention-feedback success" role="status">{message}</p>}
       {error && <p className="qr-attention-feedback error" role="alert">{error}</p>}
-      {token && <button className="qr-attention-menu-link" type="button" onClick={onShowMenu}>Consultar la carta</button>}
+      {token && menuAvailable && <button className="qr-attention-menu-link" type="button" onClick={onShowMenu}>Consultar la carta</button>}
     </section>
   )
 }
