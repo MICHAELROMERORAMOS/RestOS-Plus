@@ -9,7 +9,7 @@ const ACTIONS = [
   { id: 'order_status', icon: '📋', title: 'Estado del pedido', text: 'Consultar mis pedidos' },
 ]
 
-export default function QrAttentionClient({ locationId, qrToken, table, orderSnapshot, onShowMenu }) {
+export default function QrAttentionClient({ locationId, qrToken, table, orderSnapshot, onShowMenu, onAuthorized, onRequestOrder, canOrderProducts = false }) {
   const [settings, setSettings] = useState(null)
   const [code, setCode] = useState('')
   const [token, setToken] = useState('')
@@ -32,7 +32,8 @@ export default function QrAttentionClient({ locationId, qrToken, table, orderSna
     }
     setSettings(previous => ({ ...previous, ...data.actions, enabled: true }))
     setRequests(data.requests || [])
-  }, [locationId, qrToken, key])
+    onAuthorized?.(sessionToken)
+  }, [locationId, qrToken, key, onAuthorized])
 
   useEffect(() => {
     let active = true
@@ -67,6 +68,7 @@ export default function QrAttentionClient({ locationId, qrToken, table, orderSna
     if (requestError || !data?.ok) setError(data?.message || 'No pudimos verificar el código. Inténtalo de nuevo.')
     else {
       setToken(data.token)
+      onAuthorized?.(data.token)
       setSettings(previous => ({ ...previous, ...data.actions, enabled: true }))
       setCode('')
       try { sessionStorage.setItem(key, JSON.stringify({token:data.token,expiresAt:Date.now()+4*60*60*1000})) } catch {}
@@ -111,6 +113,11 @@ export default function QrAttentionClient({ locationId, qrToken, table, orderSna
         <>
           <div className="qr-attention-welcome"><div><h2>¿En qué podemos ayudarte?</h2><p>Selecciona una opción. Nuestro personal recibirá tu solicitud.</p></div><span aria-label="Acceso válido">✓</span></div>
           <div className="qr-attention-actions">
+            {canOrderProducts && <button type="button" className="qr-attention-action qr-attention-order-action"
+              disabled={busy} onClick={() => onRequestOrder?.(token)}>
+              <span className="qr-attention-action-icon" aria-hidden="true">🍽️</span>
+              <b>Realizar pedido</b><small>Seleccionar productos de nuestra carta</small>
+            </button>}
             {ACTIONS.filter(a => settings[a.id]).map(action => (
               <button key={action.id} type="button" className="qr-attention-action" disabled={busy} onClick={() => requestAction(action.id)}>
                 <span className="qr-attention-action-icon" aria-hidden="true">{action.icon}</span>
@@ -142,7 +149,7 @@ export default function QrAttentionClient({ locationId, qrToken, table, orderSna
       )}
       {message && <p className="qr-attention-feedback success" role="status">{message}</p>}
       {error && <p className="qr-attention-feedback error" role="alert">{error}</p>}
-      <button className="qr-attention-menu-link" type="button" onClick={onShowMenu}>Ver menú y productos</button>
+      {token && <button className="qr-attention-menu-link" type="button" onClick={onShowMenu}>Consultar la carta</button>}
     </section>
   )
 }
