@@ -46,7 +46,7 @@ export default function PublicQrMenu() {
   const [allergySelection, setAllergySelection] = useState([])
   const [allergyExpanded, setAllergyExpanded] = useState(false)
   const [cart, setCart] = useState({})
-  const [accessCode, setAccessCode] = useState('')
+  const [attentionToken, setAttentionToken] = useState('')
   const [tableOpened, setTableOpened] = useState(false)
   const [opening, setOpening] = useState(false)
   const [sending, setSending] = useState(false)
@@ -248,46 +248,60 @@ export default function PublicQrMenu() {
     setOrderError('')
   }
 
-  async function openMyTable() {
-    if (!tableQrOrdersAllowed) { setOrderError('Esta mesa no permite pedidos desde el celular. Solicita atención al mesero.');return }
-    if (!canOpenTable) { setOrderError('Debes iniciar sesión con Google o Apple para pedir.');return }
-    if (!table || !tableToken || !/^[0-9]{4}$/.test(accessCode) || opening) return
+  const onAttentionAuthorized = useCallback(token => {
+    setAttentionToken(current => current === token ? current : token)
+  }, [])
+
+  async function openMyTable(selectedToken = attentionToken) {
+    if (!tableQrOrdersAllowed || !menu) {
+      setOrderError('Los pedidos desde el celular no están habilitados para esta mesa.')
+      return
+    }
+    if (!attentionEnabled || !selectedToken) {
+      setOrderError('Introduce primero el código general de 6 dígitos del restaurante.')
+      return
+    }
+    setShowMenuAfterAttention(true)
+    if (!canOpenTable) {
+      setOrderError('Para realizar pedidos, inicia sesión con Google o Apple según la configuración de esta sucursal.')
+      return
+    }
+    if (!table || !tableToken || opening) return
     setOpening(true)
     setOrderError('')
     try {
-      const { data, error: claimError } = await supabase.rpc('claim_qr_guest_table', {
-        p_location_id: locationId, p_qr_token: tableToken, p_access_code: accessCode,
+      const { data, error: openError } = await supabase.rpc('open_qr_guest_order_with_attention', {
+        p_location_id: locationId, p_qr_token: tableToken, p_attention_token: selectedToken,
       })
-      if (claimError || !data?.ok) throw new Error(claimError?.message || data?.message || 'PIN incorrecto')
-      const { data: authorization, error: authError } = await supabase.rpc('authorize_qr_guest_view', {
-        p_location_id: locationId, p_qr_token: tableToken, p_access_code: accessCode,
-      })
-      if (authError || !authorization?.ok || !authorization.viewToken) {
-        throw new Error(authError?.message || authorization?.message || 'No se pudo habilitar el seguimiento')
+      if (openError || !data?.ok || !data.viewToken) {
+        throw new Error(openError?.message || data?.message || 'No fue posible abrir la mesa.')
       }
-      setViewToken(authorization.viewToken)
+      setViewToken(data.viewToken)
       setTableOpened(true)
-      setOrderNotice('Mesa abierta. Ya puedes solicitar productos y consultar el estado de tu pedido.')
+      setOrderNotice('Mesa habilitada para realizar solicitudes de productos. El personal confirmará cada pedido.')
       try {
         if (visitKey) window.localStorage.setItem(visitKey, JSON.stringify({
-          token: authorization.viewToken, expiresAt: Date.now() + 48 * 60 * 60 * 1000,
+          token: data.viewToken, expiresAt: Date.now() + 48 * 60 * 60 * 1000,
         }))
-      } catch { /* Keeping the page open still permits tracking this visit. */ }
-      void refreshOrderStatus(authorization.viewToken)
+      } catch { /* The active page can still track this order. */ }
+      void refreshOrderStatus(data.viewToken)
     } catch (exception) {
-      setOrderError(exception.message)
-    } finally { setOpening(false) }
+      setOrderError(exception.message || 'No se pudo abrir la mesa.')
+    } finally {
+      setOpening(false)
+    }
   }
 
   async function submitGuestRequest() {
     if (!tableQrOrdersAllowed) { setOrderError('El restaurante ha desactivado los pedidos QR en esta mesa.');return }
     if (!canOpenTable) { setOrderError('Debes iniciar sesión para realizar pedidos.');return }
-    if (!table || !tableToken || !tableOpened || !cartItems.length || !/^[0-9]{4}$/.test(accessCode) || sending) return
+    if (!table || !tableToken || !tableOpened || !cartItems.length || !viewToken || sending) return
+    if (!attentionToken) { setOrderError('Tu autorización QR expiró. Vuelve a introducir el código general de 6 dígitos.');return }
     setSending(true)
     setOrderNotice('')
     setOrderError('')
-    const { data, error: submitError } = await supabase.rpc('submit_qr_guest_request', {
-      p_location_id: locationId, p_qr_token: tableToken, p_access_code: accessCode,
+    const { data, error: submitError } = await supabase.rpc('submit_qr_guest_order_with_attention', {
+      p_location_id: locationId, p_qr_token: tableToken, p_attention_token: attentionToken,
       p_view_token: viewToken,
       p_items: cartItems.map(item => ({
         productId: item.id,
@@ -324,14 +338,12 @@ export default function PublicQrMenu() {
       {tableError && <div role="alert" className="qr-table-warning">{tableError}</div>}
       {table && tableToken && attentionEnabled && (
         <QrAttentionClient locationId={locationId} qrToken={tableToken} table={table}
-          orderSnapshot={orderSnapshot} onShowMenu={() => {
-            setShowMenuAfterAttention(true)
-            document.getElementById('qr-digital-menu')?.scrollIntoView({behavior:'smooth',block:'start'})
-          }} />
+          orderSnapshot={orderSnapshot}
+          canOrderProducts={Boolean(menu) && tableQrOrdersAllowed}
+          onAuthorized={onAttentionAuthorized}
+          onRequestOrder={token => { setAttentionToken(token); void openMyTable(token) }}
+          onShowMenu={() => setShowMenuAfterAttention(true)} />
       )}
-      {attentionEnabled && !showMenuAfterAttention && <div className="qr-attention-menu-intro">
-        <button type="button" className="qr-refresh" onClick={() => setShowMenuAfterAttention(true)}>Consultar la carta sin utilizar el servicio de atención</button>
-      </div>}
       {(!attentionEnabled || showMenuAfterAttention) && <>
       {table && <div className="qr-table-info">Mesa: <b>{table.tableName}</b>. {tableOpened ? 'Tu cuenta está abierta.' : orderSnapshot?.orderClosed ? 'La cuenta de esta visita está cerrada.' : 'Introduce el PIN de la mesa para abrir tu cuenta.'}</div>}
       {viewToken && orderSnapshot?.authorized && (
@@ -346,7 +358,6 @@ export default function PublicQrMenu() {
             setOrderSnapshot(null)
             setViewToken('')
             setTableOpened(false)
-            setAccessCode('')
             setOrderError('')
           }}>Iniciar una nueva visita en esta mesa</button>}
           {!orderSnapshot.requests?.length && <p className="qr-tracking-empty">Todavía no has enviado solicitudes.</p>}
@@ -430,7 +441,7 @@ export default function PublicQrMenu() {
         {!products.length && <div className="qr-empty">No encontramos productos disponibles con estos filtros.</div>}
       </div>}
       {table && !tableQrOrdersAllowed && <p className="qr-table-warning">🔒 Los pedidos de productos por QR están desactivados en esta mesa. Puedes consultar la carta y solicitar atención al personal.</p>}
-      {table && tableQrOrdersAllowed && <section className="qr-guest-checkout">
+      {table && tableQrOrdersAllowed && attentionEnabled && <section className="qr-guest-checkout">
         <h2>{tableOpened ? 'Tu selección' : 'Acceso a tu mesa'}</h2>
         {tableOpened && <>
           {!cartItems.length && <p>Agrega productos del menú para preparar tu solicitud.</p>}
@@ -443,7 +454,7 @@ export default function PublicQrMenu() {
             <div className="qr-customer-auth">
               <div className="qr-customer-auth-heading">
                 <b>{customerUser ? 'Identidad del cliente verificada' : mustSignIn ? 'Identifícate para hacer pedidos' : 'Identificación opcional'}</b>
-                <small>{mustSignIn ? 'Inicia sesión y utiliza el PIN para abrir la mesa.' : 'Puedes identificarte para asociar las solicitudes a tu cuenta o continuar con el PIN.'}</small>
+                <small>{mustSignIn ? 'Inicia sesión para realizar pedidos. Ya tienes acceso a la mesa con el código general de 6 dígitos.' : 'Puedes identificarte opcionalmente. Para pedir se usa la autorización general de 6 dígitos.'}</small>
               </div>
               {customerUser ? (
                 <div className="qr-customer-profile">
@@ -466,18 +477,16 @@ export default function PublicQrMenu() {
               {authError && <p role="alert" className="qr-table-warning">{authError}</p>}
             </div>
           )}
-          {!viewToken && <label className="qr-guest-code">PIN de 4 números entregado por el personal
-            <input value={accessCode} maxLength={4} inputMode="numeric" pattern="[0-9]{4}" autoComplete="off"
-              onChange={e => setAccessCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0000" />
-          </label>}
           {!tableOpened
-            ? <button className="qr-submit" type="button" onClick={openMyTable} disabled={accessCode.length !== 4 || opening || !canOpenTable}>{opening ? 'Abriendo…' : 'Abrir mi mesa'}</button>
-            : <button className="qr-submit" type="button" onClick={submitGuestRequest} disabled={!cartItems.length || sending || !canOpenTable || !viewToken || !/^[0-9]{4}$/.test(accessCode)}>{sending ? 'Enviando…' : 'Solicitar productos'}</button>}
+            ? <button className="qr-submit" type="button" onClick={() => openMyTable()} disabled={opening || !canOpenTable || !attentionToken}>
+                {opening ? 'Abriendo…' : 'Habilitar pedidos en mi mesa'}
+              </button>
+            : <button className="qr-submit" type="button" onClick={submitGuestRequest}
+                disabled={!cartItems.length || sending || !canOpenTable || !viewToken || !attentionToken}>
+                {sending ? 'Enviando…' : 'Solicitar productos'}
+              </button>}
         </>}
-        {viewToken && tableOpened && !accessCode && <p className="qr-tracking-privacy">Para agregar más productos después de actualizar la página, introduce de nuevo el PIN de esta mesa.</p>}
-        {viewToken && tableOpened && !/^[0-9]{4}$/.test(accessCode) && <label className="qr-guest-code">PIN para solicitar nuevos productos
-          <input value={accessCode} maxLength={4} inputMode="numeric" autoComplete="off" onChange={e => setAccessCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0000" />
-        </label>}
+        {!attentionToken && <p className="qr-tracking-privacy">Para realizar pedidos, introduce el código general de seis dígitos que aparece en la pantalla del restaurante.</p>}
         {orderNotice && <p role="status" className="qr-guest-success">{orderNotice}</p>}
         {orderError && <p role="alert" className="qr-table-warning">{orderError}</p>}
         <small>El personal confirma cada solicitud antes de enviarla a cocina. La disponibilidad puede variar hasta ese momento.</small>
