@@ -30,6 +30,7 @@ export default function PublicQrMenu() {
 
   const [showMenuAfterAttention, setShowMenuAfterAttention] = useState(false)
   const [attentionEnabled, setAttentionEnabled] = useState(false)
+  const [tableQrOrdersAllowed, setTableQrOrdersAllowed] = useState(true)
   const [customerUser, setCustomerUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authBusy, setAuthBusy] = useState(false)
@@ -118,7 +119,7 @@ export default function PublicQrMenu() {
         setLoading(false)
         return
       }
-      const [catalog, tableResult, attentionResult] = await Promise.all([
+      const [catalog, tableResult, attentionResult, permissionResult] = await Promise.all([
         supabase.rpc('get_public_qr_menu', { p_location_id: locationId }),
         tableToken && /^[0-9a-f-]{36}$/i.test(tableToken)
           ? supabase.rpc('resolve_public_qr_table', { p_location_id: locationId, p_token: tableToken })
@@ -126,11 +127,15 @@ export default function PublicQrMenu() {
         tableToken && /^[0-9a-f-]{36}$/i.test(tableToken)
           ? supabase.rpc('get_qr_attention_public_settings', { p_location_id: locationId, p_qr_token: tableToken })
           : Promise.resolve(null),
+        tableToken && /^[0-9a-f-]{36}$/i.test(tableToken)
+          ? supabase.rpc('get_public_qr_table_order_permission', { p_location_id: locationId, p_qr_token: tableToken })
+          : Promise.resolve(null),
       ])
       if (!mounted) return
       setMenu(catalog.data || null)
       setTable(tableResult?.data || null)
       setAttentionEnabled(attentionResult?.data?.enabled === true)
+      setTableQrOrdersAllowed(permissionResult?.data?.enabled !== false)
       setTableError(tableToken && !tableResult?.data
         ? 'El QR de esta mesa no es válido. Pide al personal el código actualizado.' : '')
       setError(attentionResult?.data?.enabled === true ? '' : catalog.error ? 'No se pudo cargar el menú.' : !catalog.data ? 'Menú no publicado.' : '')
@@ -244,6 +249,7 @@ export default function PublicQrMenu() {
   }
 
   async function openMyTable() {
+    if (!tableQrOrdersAllowed) { setOrderError('Esta mesa no permite pedidos desde el celular. Solicita atención al mesero.');return }
     if (!canOpenTable) { setOrderError('Debes iniciar sesión con Google o Apple para pedir.');return }
     if (!table || !tableToken || !/^[0-9]{4}$/.test(accessCode) || opening) return
     setOpening(true)
@@ -274,6 +280,7 @@ export default function PublicQrMenu() {
   }
 
   async function submitGuestRequest() {
+    if (!tableQrOrdersAllowed) { setOrderError('El restaurante ha desactivado los pedidos QR en esta mesa.');return }
     if (!canOpenTable) { setOrderError('Debes iniciar sesión para realizar pedidos.');return }
     if (!table || !tableToken || !tableOpened || !cartItems.length || !/^[0-9]{4}$/.test(accessCode) || sending) return
     setSending(true)
@@ -412,7 +419,7 @@ export default function PublicQrMenu() {
                   : <small>Alérgenos no declarados en la ficha</small>}
               </div>
               <strong>{price(product.price)}</strong>
-              {table && tableOpened && <div className="qr-cart-controls">
+              {table && tableOpened && tableQrOrdersAllowed && <div className="qr-cart-controls">
                 <button type="button" aria-label={'Quitar ' + product.name} onClick={() => adjust(product.id, -1)}>−</button>
                 <span>{cart[product.id] || 0}</span>
                 <button type="button" aria-label={'Agregar ' + product.name} onClick={() => adjust(product.id, 1)}>+</button>
@@ -422,7 +429,8 @@ export default function PublicQrMenu() {
         </div>
         {!products.length && <div className="qr-empty">No encontramos productos disponibles con estos filtros.</div>}
       </div>}
-      {table && <section className="qr-guest-checkout">
+      {table && !tableQrOrdersAllowed && <p className="qr-table-warning">🔒 Los pedidos de productos por QR están desactivados en esta mesa. Puedes consultar la carta y solicitar atención al personal.</p>}
+      {table && tableQrOrdersAllowed && <section className="qr-guest-checkout">
         <h2>{tableOpened ? 'Tu selección' : 'Acceso a tu mesa'}</h2>
         {tableOpened && <>
           {!cartItems.length && <p>Agrega productos del menú para preparar tu solicitud.</p>}
