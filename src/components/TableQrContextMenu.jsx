@@ -109,26 +109,26 @@ export default function TableQrContextMenu({ table, locationId, position, onClos
           </label>
         </div>
         {!orderEnabled && <p className="table-qr-hint">Esta mesa mantiene el menú digital y las solicitudes de atención QR cuando estén habilitadas. No acepta nuevos pedidos de productos desde el celular.</p>}
-        {session?.active ? (
+        {session?.active && orderEnabled ? (
           <div className="table-qr-pin">
             <small>{session.claimed ? 'Mesa abierta por el cliente' : 'PIN para entregar al cliente'}</small>
             <strong>{session.code}</strong>
             <small>Expira: {session.expiresAt ? new Date(session.expiresAt).toLocaleString('es') : '—'}</small>
           </div>
-        ) : (
+        ) : orderEnabled ? (
           <p className="table-qr-hint">Genera un PIN para que el cliente abra esta mesa escaneando su QR impreso.</p>
-        )}
-        {!session?.active && (
+        ) : null}
+        {!session?.active && orderEnabled && (
           <button type="button" className="btn primary table-qr-action" disabled={busy || !orderEnabled} onClick={() => action('open')}>
             Generar PIN de 4 dígitos
           </button>
         )}
         {session?.active && (
           <>
-            <div className="table-qr-context-actions">
+            {orderEnabled && <div className="table-qr-context-actions">
               <button type="button" className="btn" disabled={busy} onClick={copyPin}>Copiar PIN</button>
               <button type="button" className="btn" disabled={busy} onClick={printPin}>Imprimir PIN</button>
-            </div>
+            </div>}
             <button type="button" className="btn table-qr-action" disabled={busy} onClick={() => action('close')}>
               Desactivar PIN
             </button>
