@@ -340,6 +340,7 @@ export default function PublicQrMenu() {
         <QrAttentionClient locationId={locationId} qrToken={tableToken} table={table}
           orderSnapshot={orderSnapshot}
           canOrderProducts={Boolean(menu) && menu.customerOrderingEnabled !== false && tableQrOrdersAllowed}
+          menuAvailable={Boolean(menu)}
           onAuthorized={onAttentionAuthorized}
           onRequestOrder={token => { setAttentionToken(token); void openMyTable(token) }}
           onShowMenu={() => setShowMenuAfterAttention(true)} />
