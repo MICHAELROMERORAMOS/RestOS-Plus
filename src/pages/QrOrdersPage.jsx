@@ -11,7 +11,7 @@ export default function QrOrdersPage() {
       <div className="hero">
         <div>
           <h2>Pedidos QR</h2>
-          <p>Revisa y confirma las solicitudes de los clientes. La generación de PIN se realiza directamente desde Mesas.</p>
+          <p>Revisa pedidos y solicitudes de atención. El código único de seis dígitos de la sucursal se muestra desde «Código QR» en la barra superior.</p>
         </div>
       </div>
       <QrAttentionStaff locationId={activeLocation?.id} />
