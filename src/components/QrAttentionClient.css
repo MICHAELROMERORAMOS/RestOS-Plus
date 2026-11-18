@@ -18,3 +18,8 @@
 .qr-attention-sent,.qr-attention-status{background:#f2f7f3;padding:15px;border-radius:12px;margin-top:18px;font-size:13px}.qr-attention-sent>div{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #dbe7de;padding:9px 0}.qr-attention-sent button,.qr-attention-status button{padding:8px 0;color:#256b43;border:0;background:none;font-weight:700}
 @media(max-width:460px){.qr-attention-client{padding:15px;border-radius:16px}.qr-attention-actions{gap:8px}.qr-attention-action{min-height:130px}.qr-attention-welcome h2{font-size:19px}}
 @media(prefers-reduced-motion:reduce){.qr-attention-action{transition:none}}
+
+/* Primary action after the one-time six-digit table access. */
+.qr-attention-order-action{background:#e9f6ed;border-color:#85b99a;color:#155b38;box-shadow:inset 0 0 0 1px #b5dbc1}
+.qr-attention-order-action:hover{background:#def1e4;border-color:#288b5c}
+.qr-attention-order-action .qr-attention-action-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:#d4ebdc}
