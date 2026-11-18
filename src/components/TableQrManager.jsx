@@ -51,10 +51,10 @@ export default function TableQrManager({ locationId, tables, canManage }) {
   return <div className="card section-gap table-qr-manager">
     <div className="section-title"><div>
       <h3>QR por mesa</h3>
-      <p className="muted">Consulta, imprime o regenera el QR de cada mesa.</p>
+      <p className="muted">Consulta, imprime o regenera el QR permanente de cada mesa. El código de acceso es general para la sucursal.</p>
     </div><span className="badge">{visible.length} códigos</span></div>
     <div className="notice">
-      <b>Seguridad:</b> el QR identifica la mesa. Para abrirla y pedir, el cliente necesita el PIN temporal generado por el personal.
+      <b>Acceso unificado:</b> el QR identifica la mesa. El cliente introduce el código numérico de 6 dígitos que aparece en la pantalla de la sucursal para solicitar atención y, cuando esté permitido, realizar pedidos.
     </div>
     {!canManage && <p className="muted">Necesitas permisos para administrar mesas y sus códigos QR.</p>}
     {error && <p role="alert" className="notice warn">{error}</p>}
