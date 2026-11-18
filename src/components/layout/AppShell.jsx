@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import Sidebar from './Sidebar.jsx'
 import Topbar from './Topbar.jsx'
+import QrRotatingCodeQuickAccess from '../QrRotatingCodeQuickAccess.jsx'
 
 const SIDEBAR_STORAGE_KEY = 'restos-plus-sidebar-collapsed-v2'
 
@@ -28,11 +29,13 @@ export default function AppShell({
   onLocationChange,
   workspaceMode = 'branch',
   canCompanyControl = false,
+  canViewQrCode = false,
   onEnterCentral,
   onEnterBranch,
 }) {
   const current = navItems.find((item) => item.id === activeView)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarPreference)
+  const [qrCodeVisible, setQrCodeVisible] = useState(false)
 
   useEffect(() => {
     try {
@@ -79,10 +82,15 @@ export default function AppShell({
           onLocationChange={onLocationChange}
           workspaceMode={workspaceMode}
           canCompanyControl={canCompanyControl}
+          canViewQrCode={canViewQrCode}
+          onShowQrCode={() => setQrCodeVisible(true)}
           onEnterCentral={onEnterCentral}
           onEnterBranch={onEnterBranch}
           onLogout={onLogout}
         />
+        {qrCodeVisible && workspaceMode === 'branch' && activeLocation?.id && (
+          <QrRotatingCodeQuickAccess locationId={activeLocation.id} locationName={activeLocation.name} onClose={() => setQrCodeVisible(false)} />
+        )}
         <div className="content-scroll">
           <div className="content">{children}</div>
         </div>
