@@ -336,6 +336,7 @@ function MainApplication() {
       onLocationChange={restaurant.switchLocation}
       workspaceMode={activeScope}
       canCompanyControl={auth.can('company.control.view')}
+      canViewQrCode={auth.can('orders.create') || auth.can('tables.manage') || auth.can('payments.create') || auth.can('settings.manage')}
       onEnterCentral={() => navigate('central')}
       onEnterBranch={enterBranch}
     >
