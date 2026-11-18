@@ -3,6 +3,7 @@ import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { supabase } from '../lib/supabase.js'
 import TableQrContextMenu from '../components/TableQrContextMenu.jsx'
+import QrRotatingCodeQuickAccess from '../components/QrRotatingCodeQuickAccess.jsx'
 import './TablesPageQr.css'
 
 function formatTime(value) {
@@ -44,6 +45,7 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
   const auth = useAuth()
   const canManageQr = auth.can('orders.create') || auth.can('tables.manage') || auth.can('payments.create') || auth.can('settings.manage')
   const [qrContext, setQrContext] = useState(null)
+  const [qrCodeOpen, setQrCodeOpen] = useState(false)
   const [qrPendingCounts, setQrPendingCounts] = useState({})
   const [qrOrderPermissions, setQrOrderPermissions] = useState({})
   const longPressTimer = useRef(null)
@@ -414,6 +416,7 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
           onClose={() => setQrContext(null)}
           orderEnabled={qrOrderPermissions[qrContext.table.id] !== false}
           onPermissionChange={(tableId, enabled) => setQrOrderPermissions(previous => ({...previous, [tableId]: enabled}))}
+          onShowCode={() => setQrCodeOpen(true)}
           onGoToRequests={() => {
             setQrContext(null)
             onNavigate?.('qr-orders')
@@ -421,6 +424,10 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
         />
       )}
 
+      {qrCodeOpen && activeLocation?.id && (
+        <QrRotatingCodeQuickAccess locationId={activeLocation.id}
+          locationName={activeLocation.name} onClose={() => setQrCodeOpen(false)} />
+      )}
       <div className={`modal ${pendingTable ? 'open' : ''}`} onClick={() => !openingTable && setPendingTable(null)}>
         <div className="modal-card table-open-modal" onClick={(event) => event.stopPropagation()}>
           <div className="table-open-icon">🍽️</div>
