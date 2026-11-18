@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js'
 export default function QrMenuSettings({ locationId, canManage }) {
   const [enabled, setEnabled] = useState(false)
   const [authMode, setAuthMode] = useState('required')
+  const [customerOrderingEnabled, setCustomerOrderingEnabled] = useState(true)
   const [attention, setAttention] = useState({enabled:false,call_waiter:true,request_drink:true,request_bill:true,order_status:true})
   const [ownerCanChange, setOwnerCanChange] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -16,9 +17,11 @@ export default function QrMenuSettings({ locationId, canManage }) {
       supabase.rpc('manage_qr_menu', { p_location_id: locationId }),
       supabase.rpc('manage_qr_customer_auth', { p_location_id: locationId }),
       supabase.rpc('manage_qr_attention_settings', { p_location_id: locationId }),
-    ]).then(([menuResult, authResult, attentionResult]) => {
+      supabase.rpc('manage_qr_customer_ordering', { p_location_id: locationId }),
+    ]).then(([menuResult, authResult, attentionResult, orderingResult]) => {
       if (!active) return
-      setError(menuResult.error?.message || authResult.error?.message || attentionResult.error?.message || '')
+      setError(menuResult.error?.message || authResult.error?.message || attentionResult.error?.message || orderingResult.error?.message || '')
+      if (!orderingResult.error) setCustomerOrderingEnabled(orderingResult.data?.enabled !== false)
       if (!attentionResult.error && attentionResult.data) setAttention(attentionResult.data)
       if (!menuResult.error) setEnabled(menuResult.data?.enabled === true)
       if (!authResult.error) {
@@ -36,6 +39,16 @@ export default function QrMenuSettings({ locationId, canManage }) {
     const { data, error: err } = await supabase.rpc('manage_qr_menu', { p_location_id: locationId, p_enabled: next })
     if (err) setError(err.message)
     else setEnabled(data?.enabled === true)
+    setBusy(false)
+  }
+  async function changeCustomerOrdering(next) {
+    if (busy || !canManage || !locationId) return
+    setBusy(true);setError('')
+    const { data, error: changeError } = await supabase.rpc('manage_qr_customer_ordering', {
+      p_location_id: locationId, p_enabled: next,
+    })
+    if (changeError) setError(changeError.message)
+    else setCustomerOrderingEnabled(data?.enabled === true)
     setBusy(false)
   }
   async function changeAuthMode(mode) {
@@ -65,6 +78,13 @@ export default function QrMenuSettings({ locationId, canManage }) {
     <label className="toggle-row operational-setting-row">
       <span><b>Publicar menú de esta sucursal</b><small>Los productos activos y sus precios serán visibles públicamente.</small></span>
       <input type="checkbox" checked={enabled} disabled={!locationId || !canManage || busy} onChange={toggle} />
+    </label>
+    <label className="toggle-row operational-setting-row">
+      <span><b>Permitir pedidos de clientes desde el QR</b>
+        <small>Control general de esta sucursal. El botón «Realizar pedido» también requiere que la mesa esté habilitada y que el cliente introduzca el código de 6 dígitos.</small>
+      </span>
+      <input type="checkbox" checked={customerOrderingEnabled} disabled={!canManage || !locationId || busy}
+        onChange={event=>changeCustomerOrdering(event.target.checked)}/>
     </label>
     <div className="qr-auth-settings">
       <div className="qr-auth-settings-head">
