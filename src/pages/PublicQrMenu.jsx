@@ -441,7 +441,7 @@ export default function PublicQrMenu() {
         {!products.length && <div className="qr-empty">No encontramos productos disponibles con estos filtros.</div>}
       </div>}
       {table && !tableQrOrdersAllowed && <p className="qr-table-warning">🔒 Los pedidos de productos por QR están desactivados en esta mesa. Puedes consultar la carta y solicitar atención al personal.</p>}
-      {table && tableQrOrdersAllowed && attentionEnabled && <section className="qr-guest-checkout">
+      {table && menu && tableQrOrdersAllowed && attentionEnabled && <section className="qr-guest-checkout">
         <h2>{tableOpened ? 'Tu selección' : 'Acceso a tu mesa'}</h2>
         {tableOpened && <>
           {!cartItems.length && <p>Agrega productos del menú para preparar tu solicitud.</p>}
