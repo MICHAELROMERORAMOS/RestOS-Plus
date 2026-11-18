@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useRestaurant } from '../context/RestaurantContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { supabase } from '../lib/supabase.js'
@@ -45,6 +45,9 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
   const canManageQr = auth.can('orders.create') || auth.can('tables.manage') || auth.can('payments.create') || auth.can('settings.manage')
   const [qrContext, setQrContext] = useState(null)
   const [qrPendingCounts, setQrPendingCounts] = useState({})
+  const [qrOrderPermissions, setQrOrderPermissions] = useState({})
+  const longPressTimer = useRef(null)
+  const ignoreClickForTable = useRef(null)
 
   useEffect(() => {
     let mounted = true
@@ -69,6 +72,40 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
       window.removeEventListener('focus', refreshQrCounts)
     }
   }, [activeLocation?.id])
+
+  useEffect(() => {
+    let mounted = true
+    setQrOrderPermissions({})
+    const locationId = activeLocation?.id
+    if (!locationId || !canManageQr) return undefined
+    async function loadPermissions() {
+      const { data, error } = await supabase.rpc('manage_qr_table_order_setting', {
+        p_location_id: locationId,
+      })
+      if (mounted && !error) setQrOrderPermissions(data?.enabledByTable || {})
+    }
+    void loadPermissions()
+    window.addEventListener('focus', loadPermissions)
+    return () => { mounted = false; window.removeEventListener('focus', loadPermissions) }
+  }, [activeLocation?.id, canManageQr])
+
+  function cancelLongPress() {
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+
+  function startLongPress(table, event) {
+    if (!canManageQr || (event.pointerType === 'mouse' && event.button !== 0)) return
+    cancelLongPress()
+    const { clientX, clientY } = event
+    longPressTimer.current = window.setTimeout(() => {
+      ignoreClickForTable.current = table.id
+      showQrContext(table, clientX, clientY)
+      longPressTimer.current = null
+    }, 850)
+  }
+
+  useEffect(() => () => cancelLongPress(), [])
 
   function showQrContext(table, x, y) {
     if (!canManageQr) return
@@ -157,6 +194,10 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
   }
 
   function handleTableClick(table) {
+    if (ignoreClickForTable.current === table.id) {
+      ignoreClickForTable.current = null
+      return
+    }
     const status = getTableVisualStatus(table.id)
     const session = tableSessionForTable(table.id)
 
@@ -244,7 +285,7 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
       <div className="hero tables-hero">
         <div>
           <h2>Mesas y salones</h2>
-          <p>Selecciona una mesa para abrir o continuar su pedido. Clic derecho o ⋮ para generar el PIN QR; las solicitudes pendientes parpadean sobre la mesa.</p>
+          <p>Toca una mesa para abrir o continuar su pedido. Mantén presionada la mesa 1 segundo para abrir sus opciones y habilitar o bloquear pedidos QR del cliente.</p>
         </div>
       </div>
 
@@ -278,6 +319,7 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
                   const canReleaseClear = status !== 'opening' && canReleaseSettledTable(table.id)
                   const responsible = shortName(session?.attendantName)
                   const qrPendingCount = Number(qrPendingCounts[table.id] || 0)
+                  const qrCustomerOrderingEnabled = qrOrderPermissions[table.id] !== false
 
                   return (
                     <div className="table-shell" key={table.id}>
@@ -285,7 +327,18 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
                         className={`table ${status} ${qrPendingCount > 0 ? 'table-qr-pending' : ''}`}
                         style={statusStyle(status)}
                         onClick={() => handleTableClick(table)}
-                        onContextMenu={(event) => { event.preventDefault(); showQrContext(table, event.clientX, event.clientY) }}
+                        onPointerDown={event => startLongPress(table, event)}
+                        onPointerUp={cancelLongPress}
+                        onPointerCancel={cancelLongPress}
+                        onPointerLeave={cancelLongPress}
+                        onContextMenu={event => event.preventDefault()}
+                        onKeyDown={event => {
+                          if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
+                            event.preventDefault()
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            showQrContext(table, rect.left + rect.width / 2, rect.top + rect.height / 2)
+                          }
+                        }}
                         aria-label={blockedByOther ? `${table.name}, otro usuario está tomando el pedido` : table.name}
                       >
                         <div className="table-head">
@@ -306,6 +359,7 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
                         )}
 
                         <span className="table-status">{labels[status] || status}</span>
+                        {!qrCustomerOrderingEnabled && <small className="table-qr-disabled-label">🔒 Pedidos QR desactivados</small>}
 
                         {responsible && (
                           <small className="table-attendant" title={session?.attendantName}>
@@ -326,20 +380,6 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
                         </button>
                       )}
 
-                      {canManageQr && (
-                        <button
-                          type="button"
-                          className="table-qr-more"
-                          aria-label={`Opciones QR de ${table.name}`}
-                          title="Generar o consultar PIN QR (clic derecho)"
-                          onClick={(event) => {
-                            const rect = event.currentTarget.getBoundingClientRect()
-                            showQrContext(table, rect.left, rect.bottom + 6)
-                          }}
-                        >
-                          ⋮
-                        </button>
-                      )}
 
                       {(canReleaseDraft || canReleaseClear) && (
                         <button
@@ -371,6 +411,8 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
           locationId={activeLocation?.id}
           position={qrContext.position}
           onClose={() => setQrContext(null)}
+          orderEnabled={qrOrderPermissions[qrContext.table.id] !== false}
+          onPermissionChange={(tableId, enabled) => setQrOrderPermissions(previous => ({...previous, [tableId]: enabled}))}
           onGoToRequests={() => {
             setQrContext(null)
             onNavigate?.('qr-orders')
