@@ -113,9 +113,9 @@ export default function QrAttentionStaff({ locationId }) {
     {display && <div className="qr-attention-display" ref={screen} role="dialog" aria-modal="true" aria-label="Código de atención de la sucursal">
       <div className="qr-attention-display-content">
         <div className="qr-attention-display-brand">RestOS<span>+</span></div>
-        <div className="qr-attention-display-label">CÓDIGO PARA SOLICITAR ATENCIÓN</div>
+        <div className="qr-attention-display-label">CÓDIGO DE ACCESO A LA MESA</div>
         <div className="qr-attention-display-code">{display.enabled ? display.code : '— — —'}</div>
-        <p>{display.enabled ? 'Escanea el QR de tu mesa e introduce estos seis números.' : 'El servicio QR está desactivado.'}</p>
+        <p>{display.enabled ? 'Escanea el QR de tu mesa e introduce estos seis números para solicitar atención o realizar pedidos.' : 'El servicio QR está desactivado.'}</p>
         {display.enabled && <div className="qr-attention-display-timer">Nuevo código en <b>{String(Math.floor(remaining/60)).padStart(2,'0')}:{String(remaining%60).padStart(2,'0')}</b></div>}
         <button type="button" onClick={closeDisplay} className="qr-attention-display-close">Cerrar pantalla</button>
       </div>
