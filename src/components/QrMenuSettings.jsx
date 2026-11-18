@@ -73,9 +73,9 @@ export default function QrMenuSettings({ locationId, canManage }) {
       </div>
       <div className="qr-auth-mode-options" role="radiogroup" aria-label="Autenticación para realizar pedidos QR">
         {[
-          { value: 'required', label: 'Obligatoria', help: 'Google o Apple y PIN de mesa para pedir.' },
-          { value: 'optional', label: 'Opcional', help: 'El cliente puede iniciar sesión o pedir solo con el PIN.' },
-          { value: 'disabled', label: 'Desactivada', help: 'No se pide acceso con Google o Apple; se mantiene el PIN.' },
+          { value: 'required', label: 'Obligatoria', help: 'Código general de 6 dígitos y acceso con Google o Apple para pedir.' },
+          { value: 'optional', label: 'Opcional', help: 'El código de 6 dígitos siempre se utiliza; Google o Apple son opcionales.' },
+          { value: 'disabled', label: 'Desactivada', help: 'Solo se requiere el código general de 6 dígitos, sin Google ni Apple.' },
         ].map(item => (
           <label className={`qr-auth-mode-card ${authMode === item.value ? 'selected' : ''}`} key={item.value}>
             <input type="radio" name="qr-customer-auth-mode" checked={authMode === item.value}
@@ -90,11 +90,11 @@ export default function QrMenuSettings({ locationId, canManage }) {
     </div>
     <div className="qr-attention-settings-panel">
       <div className="qr-auth-settings-head">
-        <b>🔔 Atención al cliente mediante QR</b>
+        <b>🔔 Acceso QR único y funciones del cliente</b>
         <small>El cliente escanea el QR de su mesa e introduce un código numérico de seis cifras mostrado en la pantalla de la sucursal. El código cambia cada 20 minutos.</small>
       </div>
       <label className="toggle-row operational-setting-row">
-        <span><b>Activar ventana de solicitudes de atención</b><small>Se mostrará como primer paso al escanear la mesa. No sustituye el menú existente.</small></span>
+        <span><b>Activar acceso QR de 6 dígitos</b><small>Es necesario para solicitar atención y realizar pedidos desde el celular. El menú público sigue siendo consultable.</small></span>
         <input type="checkbox" checked={attention.enabled} disabled={!locationId || !canManage || busy} onChange={event=>changeAttention('enabled',event.target.checked)}/>
       </label>
       {attention.enabled && <div className="qr-attention-feature-settings">
@@ -110,7 +110,7 @@ export default function QrMenuSettings({ locationId, canManage }) {
           </label>
         ))}
       </div>}
-      <p className="qr-auth-provider-note">La pantalla de códigos se abre desde «Pedidos QR» en la sucursal. El código es independiente del PIN de pedidos y solo autoriza estas funciones de atención.</p>
+      <p className="qr-auth-provider-note">El mismo código abre las funciones de atención y «Realizar pedido» cuando el menú y la mesa lo permiten. Se consulta en «🔐 Código QR» desde Mesas, Caja y otras ventanas autorizadas. Ya no se utiliza un PIN diferente por mesa.</p>
     </div>
     {error && <p role="alert" style={{color:'var(--danger)'}}>{error}</p>}
     {locationId && <div style={{overflowWrap:'anywhere',marginTop:15}}>
