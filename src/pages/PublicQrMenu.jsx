@@ -253,7 +253,7 @@ export default function PublicQrMenu() {
   }, [])
 
   async function openMyTable(selectedToken = attentionToken) {
-    if (!tableQrOrdersAllowed || !menu) {
+    if (!tableQrOrdersAllowed || !menu || menu.customerOrderingEnabled === false) {
       setOrderError('Los pedidos desde el celular no están habilitados para esta mesa.')
       return
     }
@@ -293,7 +293,7 @@ export default function PublicQrMenu() {
   }
 
   async function submitGuestRequest() {
-    if (!tableQrOrdersAllowed) { setOrderError('El restaurante ha desactivado los pedidos QR en esta mesa.');return }
+    if (!tableQrOrdersAllowed || menu?.customerOrderingEnabled === false) { setOrderError('Los pedidos QR están desactivados para esta sucursal o mesa.');return }
     if (!canOpenTable) { setOrderError('Debes iniciar sesión para realizar pedidos.');return }
     if (!table || !tableToken || !tableOpened || !cartItems.length || !viewToken || sending) return
     if (!attentionToken) { setOrderError('Tu autorización QR expiró. Vuelve a introducir el código general de 6 dígitos.');return }
@@ -339,7 +339,7 @@ export default function PublicQrMenu() {
       {table && tableToken && attentionEnabled && (
         <QrAttentionClient locationId={locationId} qrToken={tableToken} table={table}
           orderSnapshot={orderSnapshot}
-          canOrderProducts={Boolean(menu) && tableQrOrdersAllowed}
+          canOrderProducts={Boolean(menu) && menu.customerOrderingEnabled !== false && tableQrOrdersAllowed}
           onAuthorized={onAttentionAuthorized}
           onRequestOrder={token => { setAttentionToken(token); void openMyTable(token) }}
           onShowMenu={() => setShowMenuAfterAttention(true)} />
@@ -440,8 +440,8 @@ export default function PublicQrMenu() {
         </div>
         {!products.length && <div className="qr-empty">No encontramos productos disponibles con estos filtros.</div>}
       </div>}
-      {table && !tableQrOrdersAllowed && <p className="qr-table-warning">🔒 Los pedidos de productos por QR están desactivados en esta mesa. Puedes consultar la carta y solicitar atención al personal.</p>}
-      {table && menu && tableQrOrdersAllowed && attentionEnabled && <section className="qr-guest-checkout">
+      {table && (!tableQrOrdersAllowed || menu?.customerOrderingEnabled === false) && <p className="qr-table-warning">🔒 Los pedidos de productos por QR están desactivados para esta sucursal o mesa. Puedes consultar la carta y solicitar atención al personal.</p>}
+      {table && menu && tableQrOrdersAllowed && menu.customerOrderingEnabled !== false && attentionEnabled && <section className="qr-guest-checkout">
         <h2>{tableOpened ? 'Tu selección' : 'Acceso a tu mesa'}</h2>
         {tableOpened && <>
           {!cartItems.length && <p>Agrega productos del menú para preparar tu solicitud.</p>}
