@@ -97,6 +97,7 @@ export default function TablesPage({ onOpenTable, onNavigate }) {
   function startLongPress(table, event) {
     if (!canManageQr || (event.pointerType === 'mouse' && event.button !== 0)) return
     cancelLongPress()
+    ignoreClickForTable.current = null
     const { clientX, clientY } = event
     longPressTimer.current = window.setTimeout(() => {
       ignoreClickForTable.current = table.id
