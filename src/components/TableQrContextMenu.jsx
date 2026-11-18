@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabase.js'
 import './TableQrContextMenu.css'
 
 // Kept separate from the table click handler, so regular table operations remain unchanged.
-export default function TableQrContextMenu({ table, locationId, position, onClose, onGoToRequests }) {
+export default function TableQrContextMenu({ table, locationId, position, onClose, onGoToRequests, orderEnabled = true, onPermissionChange }) {
   const [session, setSession] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [printing, setPrinting] = useState(false)
+  const [savingPermission, setSavingPermission] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -45,6 +46,20 @@ export default function TableQrContextMenu({ table, locationId, position, onClos
     setBusy(false)
   }
 
+  async function changePermission(next) {
+    if (busy || savingPermission || !locationId || !table?.id) return
+    setSavingPermission(true)
+    setError('')
+    const { data, error: changeError } = await supabase.rpc('manage_qr_table_order_setting', {
+      p_location_id: locationId, p_table_id: table.id, p_enabled: next,
+    })
+    if (changeError) setError(changeError.message)
+    else {
+      onPermissionChange?.(table.id, data?.enabledByTable?.[table.id] === true)
+    }
+    setSavingPermission(false)
+  }
+
   function copyPin() {
     if (!session?.code) return
     if (navigator.clipboard?.writeText) {
@@ -77,12 +92,23 @@ export default function TableQrContextMenu({ table, locationId, position, onClos
         <div className="table-qr-context-head">
           <div>
             <b>{table.name}</b>
-            <small>Autorización de pedidos QR</small>
+            <small>Mantén pulsada la mesa para gestionar las opciones QR</small>
           </div>
           <button type="button" className="table-qr-close" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
         {busy && <p className="table-qr-hint">Consultando mesa…</p>}
         {error && <p className="table-qr-error" role="alert">{error}</p>}
+        <div className="table-qr-order-permission">
+          <div>
+            <b>Permitir pedidos del cliente por QR</b>
+            <small>{orderEnabled ? 'Los clientes pueden enviar pedidos desde esta mesa.' : 'Bloqueado solo para clientes. El mesero puede tomar pedidos normalmente.'}</small>
+          </div>
+          <label className="table-qr-switch" aria-label="Habilitar pedidos QR para esta mesa">
+            <input type="checkbox" checked={orderEnabled} disabled={busy || savingPermission} onChange={event => changePermission(event.target.checked)} />
+            <span aria-hidden="true" />
+          </label>
+        </div>
+        {!orderEnabled && <p className="table-qr-hint">Esta mesa mantiene el menú digital y las solicitudes de atención QR cuando estén habilitadas. No acepta nuevos pedidos de productos desde el celular.</p>}
         {session?.active ? (
           <div className="table-qr-pin">
             <small>{session.claimed ? 'Mesa abierta por el cliente' : 'PIN para entregar al cliente'}</small>
@@ -93,7 +119,7 @@ export default function TableQrContextMenu({ table, locationId, position, onClos
           <p className="table-qr-hint">Genera un PIN para que el cliente abra esta mesa escaneando su QR impreso.</p>
         )}
         {!session?.active && (
-          <button type="button" className="btn primary table-qr-action" disabled={busy} onClick={() => action('open')}>
+          <button type="button" className="btn primary table-qr-action" disabled={busy || !orderEnabled} onClick={() => action('open')}>
             Generar PIN de 4 dígitos
           </button>
         )}
